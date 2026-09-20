@@ -1,0 +1,136 @@
+/** Core simulation types for LearnDVC. */
+
+export type FileKind = 'data' | 'code' | 'meta' | 'dvc' | 'yaml' | 'params' | 'metrics';
+
+export interface WorkspaceFile {
+  path: string;
+  kind: FileKind;
+  /** Stable content identity used like an md5 for simulation. */
+  contentId: string;
+  /** True when a `.dvc` pointer exists for this path. */
+  tracked: boolean;
+  /** md5 recorded in the `.dvc` file / last dvc commit for this path. */
+  pointerMd5?: string;
+  /** Workspace content differs from pointerMd5. */
+  dirty?: boolean;
+  /** Present in the working tree (false after `rm` when not pulled). */
+  present: boolean;
+  /** Listed in a .gitignore (data files after dvc add). */
+  gitignored: boolean;
+}
+
+export interface DvcPointer {
+  path: string;
+  md5: string;
+}
+
+export interface RemoteEntry {
+  name: string;
+  url: string;
+  isDefault: boolean;
+}
+
+export interface PipelineStage {
+  name: string;
+  deps: string[];
+  outs: string[];
+  cmd: string;
+  params: string[];
+  metrics: string[];
+  frozen: boolean;
+  /** Whether outs currently match last successful repro. */
+  upToDate: boolean;
+}
+
+export interface ExperimentRun {
+  id: string;
+  name?: string;
+  commitRef: string;
+  params: Record<string, string | number>;
+  metrics: Record<string, number>;
+}
+
+export interface GitCommit {
+  hash: string;
+  message: string;
+  /** Snapshot of .dvc pointers at this commit. */
+  pointers: Record<string, string>;
+  /** Snapshot of dvc.yaml stage names + frozen flags. */
+  pipelineSig: string;
+  params: Record<string, string | number>;
+  metrics: Record<string, number>;
+}
+
+export interface RepoState {
+  initialized: boolean;
+  remotes: RemoteEntry[];
+  /** path -> workspace file meta */
+  files: Record<string, WorkspaceFile>;
+  /** md5 present in .dvc/cache */
+  cache: string[];
+  /** md5 present in remote storage */
+  remoteObjects: string[];
+  pipeline: PipelineStage[];
+  params: Record<string, string | number>;
+  metrics: Record<string, number>;
+  experiments: ExperimentRun[];
+  gitCommits: GitCommit[];
+  gitStaged: string[];
+  /** Artificial data version counter for `edit` simulation. */
+  dataVersions: Record<string, number>;
+  /** Pipeline outputs currently materialized in workspace. */
+  generated: string[];
+}
+
+export interface CommandResult {
+  ok: boolean;
+  output: string;
+  error?: string;
+}
+
+export interface DialogSlide {
+  title?: string;
+  markdown: string;
+}
+
+export type GoalCheck =
+  | { kind: 'initialized'; value?: boolean }
+  | { kind: 'tracked'; paths: string[] }
+  | { kind: 'pointer'; path: string; md5?: string }
+  | { kind: 'cacheHas'; md5s: string[] }
+  | { kind: 'remoteConfigured'; name?: string; default?: boolean }
+  | { kind: 'remoteHas'; md5s: string[] }
+  | { kind: 'remoteLacks'; md5s: string[] }
+  | { kind: 'cacheLacks'; md5s: string[] }
+  | { kind: 'workspaceHas'; paths: string[] }
+  | { kind: 'workspaceMissing'; paths: string[] }
+  | { kind: 'stageExists'; name: string }
+  | { kind: 'stageUpToDate'; name: string }
+  | { kind: 'metricsAtLeast'; key: string; value: number }
+  | { kind: 'metricsExact'; key: string; value: number }
+  | { kind: 'paramsAt'; key: string; value: string | number }
+  | { kind: 'experimentCount'; min: number }
+  | { kind: 'gitCommitMessageIncludes'; text: string }
+  | { kind: 'notDirty' }
+  | { kind: 'allOf'; checks: GoalCheck[] };
+
+export interface LevelDef {
+  id: string;
+  series: string;
+  seriesTitle: string;
+  name: string;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  par: number;
+  hint: string;
+  objective: string;
+  startDialog: DialogSlide[];
+  startState: RepoState;
+  goal: GoalCheck;
+  solution: string[];
+  disabled?: string[];
+}
+
+export interface LevelProgress {
+  solved: boolean;
+  bestCommands?: number;
+}
