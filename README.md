@@ -2,6 +2,8 @@
 
 An interactive **DVC** visualizer, sandbox, and tutorial — the learnGitBranching product shape applied to Data Version Control.
 
+**Live:** https://alisadeghiaghili.github.io/learn-dvc/
+
 Git versions code well; datasets and models break that model. DVC stores data content in a cache/remote and versions small pointer files with Git. LearnDVC makes that material flow visible: **Workspace → Cache → Remote**.
 
 ## Features
@@ -19,6 +21,8 @@ Git versions code well; datasets and models break that model. DVC stores data co
 npm install
 npm run dev
 ```
+
+GitHub Pages deploys automatically from `main` via `.github/workflows/deploy-pages.yml` (build `dist/`, publish with Pages artifact).
 
 Production build:
 
