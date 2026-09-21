@@ -717,6 +717,15 @@ button.ghost {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
 }
 
+.modal:focus {
+  outline: none;
+}
+
+.modal:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--dvc) 55%, transparent);
+  outline-offset: 2px;
+}
+
 .modal h2 {
   margin: 0 0 8px;
 }

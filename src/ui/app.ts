@@ -463,6 +463,11 @@ export class App {
       this.undoStack.push(prev);
     }
 
+    // Celebration modal may open on solve — steal focus from the terminal
+    // input so a keyup Enter does not "click" a modal action.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     this.afterStateChange();
   }
 
@@ -599,7 +604,8 @@ export class App {
     });
 
     modal.el.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
         const kind = btn.dataset.share;
         const status = modal.el.querySelector<HTMLElement>('[data-share-status]');
         if (kind === 'linkedin') openShareWindow(share.linkedin);
@@ -620,6 +626,15 @@ export class App {
           status.textContent = 'Share window opened (popup blocked? allow popups for this site).';
         }
       });
+    });
+
+    // Keep the celebration on screen; ignore accidental Enter on dialog chrome.
+    modal.el.querySelector('.modal')?.addEventListener('keydown', (ev) => {
+      const key = (ev as KeyboardEvent).key;
+      if (key === 'Enter') {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
     });
   }
 }

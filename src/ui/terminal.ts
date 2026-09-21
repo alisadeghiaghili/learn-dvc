@@ -70,6 +70,9 @@ export class TerminalView {
 
   private onKey(e: KeyboardEvent): void {
     if (e.key === 'Enter') {
+      e.preventDefault();
+      // A celebration/dialog modal owns keyboard focus — do not steal Enter.
+      if (document.querySelector('.overlay .modal')) return;
       const value = this.inputEl.value;
       this.inputEl.value = '';
       this.onSubmit(value);

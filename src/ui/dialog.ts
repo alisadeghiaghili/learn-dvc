@@ -74,6 +74,12 @@ export function showModal(opts: {
     if (e.target === overlay) close();
   });
   document.body.appendChild(overlay);
-  (actionsEl.querySelector('button') as HTMLButtonElement | null)?.focus();
+  // Focus the dialog shell, not an action button: a trailing Enter from the
+  // terminal would otherwise activate "Stay here" and dismiss the celebration.
+  const modalEl = overlay.querySelector<HTMLElement>('.modal');
+  if (modalEl) {
+    modalEl.tabIndex = -1;
+    requestAnimationFrame(() => modalEl.focus());
+  }
   return { close, el: overlay };
 }
