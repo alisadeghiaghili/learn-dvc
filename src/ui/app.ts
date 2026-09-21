@@ -8,6 +8,7 @@ import { allLevels, getNextLevel, seriesOf } from '../levels';
 import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
+import { buildShareTargets, copySharePayload, openShareWindow } from './share';
 
 function escapeHtml(s: string): string {
   return s
@@ -506,31 +507,119 @@ export class App {
   private maybeOfferNext(): void {
     if (!this.level || this.offered) return;
     this.offered = true;
-    const next = getNextLevel(this.level.id);
-    if (!next) {
-      this.offered = false;
-      return;
-    }
-    showModal({
-      title: 'Level solved',
-      bodyHtml: renderMarkdown(
-        `**${this.level.name}** complete.\n\nCommand golf: ${this.golf.length || '—'} · par ${this.level.par}.\n\nNext up: **${next.id} — ${next.name}**.`,
-      ),
-      actions: [
-        { label: 'Stay', className: 'ghost', onClick: () => { this.offered = false; this.terminal.focus(); } },
-        {
-          label: `Next: ${next.id}`,
-          className: 'primary',
-          onClick: () => {
-            this.offered = false;
-            this.startLevel(next.id);
-          },
+
+    const level = this.level;
+    const next = getNextLevel(level.id);
+    const cmds = this.golf.length || null;
+    const share = buildShareTargets({
+      levelName: level.name,
+      levelId: level.id,
+      commands: cmds,
+      par: level.par,
+    });
+    const total = allLevels.length;
+    const solvedCount = Object.values(this.progress).filter((p) => p.solved).length;
+    const underPar = cmds !== null && cmds <= level.par;
+    const golfLine =
+      cmds === null
+        ? `Par for this level: ${level.par}`
+        : underPar
+          ? `You did it in **${cmds}** command${cmds === 1 ? '' : 's'} — at or under par (${level.par}).`
+          : `You did it in **${cmds}** command${cmds === 1 ? '' : 's'}. Par is ${level.par}.`;
+
+    const bodyHtml = `
+      <div class="celebrate" aria-live="polite">
+        <div class="celebrate-badge">SOLVED</div>
+        <h3 class="celebrate-title">${escapeHtml(level.name)}</h3>
+        <p class="celebrate-sub">${escapeHtml(level.seriesTitle)} · <code>${escapeHtml(level.id)}</code> · progress ${solvedCount}/${total}</p>
+        <p class="celebrate-msg">You finished this level. Share the win — teaching solidifies learning.</p>
+        <div class="celebrate-stats">${renderMarkdown(golfLine)}</div>
+        <div class="share-block">
+          <div class="next-title">Share this achievement</div>
+          <div class="share-row" role="group" aria-label="Share on social networks">
+            <button type="button" class="share-btn linkedin" data-share="linkedin">LinkedIn</button>
+            <button type="button" class="share-btn x" data-share="x">X / Twitter</button>
+            <button type="button" class="share-btn facebook" data-share="facebook">Facebook</button>
+            <button type="button" class="share-btn copy" data-share="copy">Copy text</button>
+          </div>
+          <div class="share-status" data-share-status hidden></div>
+        </div>
+        ${
+          next
+            ? `<div class="celebrate-next">Next up: <strong>${escapeHtml(next.id)}</strong> — ${escapeHtml(next.name)}</div>`
+            : `<div class="celebrate-next">That was the last level in this pack. Open <strong>Levels</strong> to replay or try another series.</div>`
+        }
+      </div>
+    `;
+
+    const actions = [
+      {
+        label: 'Stay here',
+        className: 'ghost',
+        onClick: () => {
+          this.offered = false;
+          this.terminal.focus();
         },
-      ],
+      },
+    ];
+    if (next) {
+      actions.push({
+        label: `Next level: ${next.id}`,
+        className: 'primary',
+        onClick: () => {
+          this.offered = false;
+          this.startLevel(next.id);
+        },
+      });
+    } else {
+      actions.push({
+        label: 'Browse levels',
+        className: 'primary',
+        onClick: () => {
+          this.offered = false;
+          this.openLevels();
+        },
+      });
+    }
+
+    const modal = showModal({
+      title: 'Level complete',
+      bodyHtml,
+      actions: actions.map((a) => ({
+        ...a,
+        onClick: () => {
+          modal.close();
+          a.onClick();
+        },
+      })),
       onClose: () => {
         this.offered = false;
         this.terminal.focus();
       },
+    });
+
+    modal.el.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const kind = btn.dataset.share;
+        const status = modal.el.querySelector<HTMLElement>('[data-share-status]');
+        if (kind === 'linkedin') openShareWindow(share.linkedin);
+        else if (kind === 'x') openShareWindow(share.x);
+        else if (kind === 'facebook') openShareWindow(share.facebook);
+        else if (kind === 'copy') {
+          const ok = await copySharePayload(share.text, share.url);
+          if (status) {
+            status.hidden = false;
+            status.textContent = ok
+              ? 'Copied. Paste it anywhere.'
+              : 'Could not copy — select the share text manually.';
+          }
+          return;
+        }
+        if (status && kind !== 'copy') {
+          status.hidden = false;
+          status.textContent = 'Share window opened (popup blocked? allow popups for this site).';
+        }
+      });
     });
   }
 }
