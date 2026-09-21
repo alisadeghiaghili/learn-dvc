@@ -114,7 +114,7 @@ function renderDag(state: RepoState): string {
       </div>`;
     })
     .join('');
-  return `<div class="dag"><h2>Pipeline · dvc.yaml</h2><div class="stages">${nodes}</div>
+  return `<div class="dag" data-help-id="dag"><h2>Pipeline · dvc.yaml</h2><div class="stages">${nodes}</div>
     ${
       Object.keys(state.metrics).length
         ? `<div class="flow-arrow">metrics: ${esc(
@@ -129,7 +129,7 @@ function renderDag(state: RepoState): string {
 
 export function renderBoardHtml(state: RepoState): string {
   return `
-    <div class="status-bar">
+    <div class="status-bar" data-help-id="status-pills">
       <div class="pill ${state.initialized ? 'ok' : 'err'}">dvc <strong>${state.initialized ? 'init' : 'not initialized'}</strong></div>
       <div class="pill">remotes <strong>${state.remotes.length}</strong></div>
       <div class="pill">cache <strong>${state.cache.length}</strong></div>
@@ -137,23 +137,23 @@ export function renderBoardHtml(state: RepoState): string {
       <div class="pill">experiments <strong>${state.experiments.length}</strong></div>
     </div>
     <div class="board">
-      <section class="zone workspace" aria-label="Workspace">
+      <section class="zone workspace" data-help-id="workspace-zone" aria-label="Workspace">
         <h2><span class="dot" style="color:var(--text)"></span> Workspace</h2>
         <p class="zone-hint">Working tree · pointers · code</p>
         ${renderWorkspace(state)}
       </section>
-      <section class="zone cache" aria-label="Cache">
+      <section class="zone cache" data-help-id="cache-zone" aria-label="Cache">
         <h2><span class="dot"></span> Cache</h2>
         <p class="zone-hint">.dvc/cache — content-addressed objects</p>
         ${renderCache(state)}
       </section>
-      <section class="zone remote" aria-label="Remote">
+      <section class="zone remote" data-help-id="remote-zone" aria-label="Remote">
         <h2><span class="dot"></span> Remote</h2>
         <p class="zone-hint">Shared storage for heavy data</p>
         ${renderRemote(state)}
       </section>
     </div>
-    <div class="flow-arrow">material flow: workspace ⇄ cache ⇄ remote</div>
+    <div class="flow-arrow" data-help-id="flow-arrow">material flow: workspace ⇄ cache ⇄ remote</div>
     ${renderDag(state)}
   `;
 }

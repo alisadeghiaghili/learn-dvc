@@ -11,6 +11,7 @@ import { renderMarkdown, showModal } from './dialog';
 import { buildShareTargets, copySharePayload, openShareWindow } from './share';
 import { launchConfetti, playFanfare } from './confetti';
 import { loadProgress, resumeLine, saveProgress, summarizeCurriculum } from './progress';
+import { formatUiHelpText, startUiTour, uiHelpModalHtml } from './ui-help';
 
 function escapeHtml(s: string): string {
   return s
@@ -60,9 +61,9 @@ export class App {
   private mount(): void {
     this.root.innerHTML = `
       <header class="toolbar">
-        <div class="brand">Learn<span>DVC</span></div>
-        <div class="level-title" id="level-title"></div>
-        <div class="toolbar-actions">
+        <div class="brand" data-help-id="brand">Learn<span>DVC</span></div>
+        <div class="level-title" id="level-title" data-help-id="level-title"></div>
+        <div class="toolbar-actions" data-help-id="toolbar">
           <button type="button" data-action="levels">Levels</button>
           <button type="button" data-action="goal">Goal</button>
           <button type="button" data-action="hint">Hint</button>
@@ -70,13 +71,14 @@ export class App {
           <button type="button" data-action="undo">Undo</button>
           <button type="button" data-action="reset">Reset</button>
           <button type="button" data-action="sandbox" class="ghost">Sandbox</button>
+          <button type="button" data-action="help" class="ghost" title="Explain UI elements">Help</button>
         </div>
       </header>
       <div class="stage no-dock" id="stage">
         <div class="board-wrap" id="board-wrap"></div>
-        <aside class="dock" id="dock" hidden></aside>
+        <aside class="dock" id="dock" data-help-id="dock" hidden></aside>
       </div>
-      <div class="terminal" id="terminal"></div>
+      <div class="terminal" id="terminal" data-help-id="term-log"></div>
     `;
     this.boardEl = this.root.querySelector('#board-wrap')!;
     this.dockEl = this.root.querySelector('#dock')!;
@@ -94,11 +96,34 @@ export class App {
         if (action === 'undo') this.handleCommand('undo');
         if (action === 'reset') this.handleCommand('reset');
         if (action === 'sandbox') this.handleCommand('sandbox');
+        if (action === 'help') this.openUiHelp(true);
         this.terminal.focus();
       });
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.goalOpen) this.toggleGoal(false);
+    });
+  }
+
+  /** Explain every on-screen region; optional highlight tour. */
+  private openUiHelp(runTour = false): void {
+    if (runTour) startUiTour(this.root);
+    const modal = showModal({
+      title: 'UI guide — what each part does',
+      bodyHtml: uiHelpModalHtml(),
+      actions: [
+        { label: 'Close', className: 'ghost', onClick: () => modal.close() },
+        {
+          label: 'Highlight regions',
+          className: 'primary',
+          onClick: () => {
+            startUiTour(this.root);
+            modal.close();
+            this.pushMeta('UI tour: board/toolbar/terminal briefly outlined. Press Help again for docs.');
+          },
+        },
+      ],
+      onClose: () => this.terminal.focus(),
     });
   }
 
@@ -456,8 +481,26 @@ export class App {
       this.terminal.clear();
       return;
     }
-    if (lower === 'help level') {
-      this.pushOut(this.level?.objective ?? 'No level.');
+    if (lower === 'help' || lower === '?' || lower === 'help ui' || lower === 'help page' || lower === 'tour') {
+      if (lower === 'help' || lower === '?') {
+        this.pushOut(
+          [
+            'help ui | tour     — explain every UI region (and highlight them)',
+            'help               — command list is in the engine help when in sandbox terminal path',
+            'curriculum         — learning outcomes',
+            'concepts           — DVC mental models glossary',
+            'levels             — challenge browser',
+          ].join('\n'),
+        );
+      }
+      if (lower === 'help ui' || lower === 'help page' || lower === 'tour' || lower === 'help') {
+        this.pushOut(formatUiHelpText());
+      }
+      if (lower === 'help ui' || lower === 'help page' || lower === 'tour') {
+        this.openUiHelp(true);
+      } else if (lower === 'help') {
+        this.openUiHelp(false);
+      }
       this.terminal.focus();
       return;
     }

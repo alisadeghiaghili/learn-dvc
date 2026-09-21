@@ -339,7 +339,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           '  stage, repro, dag, freeze, unfreeze, metrics, params, exp, remove, gc, diff, version',
           'Git (simulated): init, add, commit, log, status, checkout',
           'Workspace simulators: edit <path>, rm <path>, cat <path>, ls',
-          'Meta: levels, curriculum, concepts|glossary, steps, hint, show goal, show solution, reset, undo, sandbox, clear',
+          'Meta: levels, help/ui/tour, curriculum, concepts|glossary, steps, hint, show goal, show solution, reset, undo, sandbox, clear',
         ].join('\n'),
       ),
     };
