@@ -38,12 +38,14 @@ export function showModal(opts: {
   bodyHtml: string;
   actions?: ModalAction[];
   onClose?: () => void;
+  variant?: 'default' | 'celebrate';
 }): { close: () => void; el: HTMLElement } {
   const overlay = document.createElement('div');
-  overlay.className = 'overlay';
+  overlay.className = `overlay${opts.variant === 'celebrate' ? ' overlay-celebrate' : ''}`;
+  const titleClass = opts.variant === 'celebrate' ? ' class="visually-hidden"' : '';
   overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(opts.title)}">
-      <h2>${escapeHtml(opts.title)}</h2>
+    <div class="modal${opts.variant === 'celebrate' ? ' modal-celebrate' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(opts.title)}">
+      <h2${titleClass}>${escapeHtml(opts.title)}</h2>
       <div class="markdown">${opts.bodyHtml}</div>
       <div class="modal-actions"></div>
     </div>

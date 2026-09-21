@@ -9,6 +9,7 @@ import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
 import { buildShareTargets, copySharePayload, openShareWindow } from './share';
+import { launchConfetti, playFanfare } from './confetti';
 
 function escapeHtml(s: string): string {
   return s
@@ -157,13 +158,14 @@ export class App {
     const level = this.level;
     const steps = solutionProgress(this.state, level.solution);
     const solved = solutionComplete(this.state, level.solution);
-    // Declarative goal checks are secondary notes — solution is the checklist.
     const { statuses } = evaluateGoal(this.state, level.goal);
-    const items = steps.map((s) => {
-      return `<li class="${s.done ? 'met' : ''}${s.optional ? ' optional' : ''}">
-        <div class="g-label">${s.done ? '✓' : '○'} <code>${escapeHtml(s.command)}</code>${
+    const currentId = steps.findIndex((s) => !s.done && !s.optional);
+    const items = steps.map((s, i) => {
+      const isCurrent = !solved && !s.done && !s.optional && i === currentId;
+      return `<li class="${s.done ? 'met' : ''}${s.optional ? ' optional' : ''}${isCurrent ? ' current' : ''}">
+        <div class="g-label">${s.done ? '✓' : isCurrent ? '▶' : '○'} <code>${escapeHtml(s.command)}</code>${
           s.optional ? ' <span class="chip">optional</span>' : ''
-        }</div>
+        }${isCurrent ? ' <span class="chip current-chip">now</span>' : ''}</div>
         <div class="g-detail">${escapeHtml(s.note)}</div>
       </li>`;
     });
@@ -172,11 +174,11 @@ export class App {
     const nextBlock = solved
       ? `<div class="next-box met">All solution steps met.</div>`
       : `<div class="next-box">
-            <div class="next-title">Type next</div>
+            <div class="next-title">Type next — highlighted in orange</div>
             <div class="next-row"><span class="g-label">○ remaining</span>${
               firstNext ? `<code class="g-cmd">${escapeHtml(firstNext)}</code>` : ''
             }</div>
-            <div class="par-note">Checklist above is the official solution. Also: <code>steps</code> · <code>hint</code> · <code>show solution</code></div>
+            <div class="par-note">Wrong command? You stay here — progress is kept. History: ↑ / ↓</div>
           </div>`;
     const extra = statuses.filter((s) => !s.met);
     const prog = this.progress[level.id];
@@ -436,6 +438,7 @@ export class App {
     }
     if (lower === 'help level') {
       this.pushOut(this.level?.objective ?? 'No level.');
+      this.terminal.focus();
       return;
     }
 
@@ -447,12 +450,21 @@ export class App {
     this.lastWasSolution = opts.fromSolution;
     const prev = cloneState(this.state);
     const { state, result } = executeCommand(this.state, cmd);
-    this.state = state;
 
     if (result.error) {
+      // Wrong command: keep every completed step — never bounce the level.
+      this.state = prev;
       this.pushErr(result.error);
-    } else if (result.output) {
-      this.pushOut(result.output);
+      if (this.level) {
+        const steps = solutionProgress(this.state, this.level.solution);
+        const next = steps.find((s) => !s.done && !s.optional);
+        if (next?.command) {
+          this.pushMeta(`Progress kept. Still on: ${next.command}`);
+        }
+      }
+    } else {
+      this.state = state;
+      if (result.output) this.pushOut(result.output);
     }
 
     const counts = commandCountsForGolf(cmd) && !result.error;
@@ -463,12 +475,12 @@ export class App {
       this.undoStack.push(prev);
     }
 
-    // Celebration modal may open on solve — steal focus from the terminal
-    // input so a keyup Enter does not "click" a modal action.
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
     this.afterStateChange();
+
+    // Keep the caret in the terminal prompt unless a modal (celebration) took focus.
+    if (!document.querySelector('.overlay .modal')) {
+      this.terminal.focus();
+    }
   }
 
   private afterStateChange(): void {
@@ -482,10 +494,11 @@ export class App {
         this.progress[this.level.id] = { solved: true, bestCommands: nextBest };
         saveProgress(this.progress);
         this.pushOut('');
-        this.pushOut(`*** LEVEL SOLVED *** ${this.level.name}`);
+        this.pushOut('*** LEVEL SOLVED *** ' + this.level.name);
         this.pushOut(
           num > 0 ? `Commands used: ${num} (par ${this.level.par})` : `Par ${this.level.par}`,
         );
+        this.pushOut('*** PARTY MODE *** confetti incoming — share buttons below.');
         this.goalOpen = true;
       } else if (!solved && this.solvedFlash) {
         this.solvedFlash = false;
@@ -529,18 +542,35 @@ export class App {
       cmds === null
         ? `Par for this level: ${level.par}`
         : underPar
-          ? `You did it in **${cmds}** command${cmds === 1 ? '' : 's'} — at or under par (${level.par}).`
-          : `You did it in **${cmds}** command${cmds === 1 ? '' : 's'}. Par is ${level.par}.`;
+          ? `**${cmds}** command${cmds === 1 ? '' : 's'} — at or under par (${level.par}). Clean run.`
+          : `**${cmds}** command${cmds === 1 ? '' : 's'}. Par is ${level.par}. Still counts — you got there.`;
+
+    const cheers = [
+      'Nailed it. This concept is yours now.',
+      'Boom — another DVC skill banked.',
+      'You just earned that. Share it.',
+      'Pipeline of learning: stage solved.',
+      'Pointer committed. Confidence up.',
+    ];
+    const cheer = cheers[Math.floor(Math.random() * cheers.length)]!;
 
     const bodyHtml = `
       <div class="celebrate" aria-live="polite">
-        <div class="celebrate-badge">SOLVED</div>
+        <div class="celebrate-visual" aria-hidden="true">
+          <div class="celebrate-ring"></div>
+          <div class="celebrate-star">★</div>
+        </div>
+        <div class="celebrate-badge">LEVEL CLEARED</div>
         <h3 class="celebrate-title">${escapeHtml(level.name)}</h3>
-        <p class="celebrate-sub">${escapeHtml(level.seriesTitle)} · <code>${escapeHtml(level.id)}</code> · progress ${solvedCount}/${total}</p>
-        <p class="celebrate-msg">You finished this level. Share the win — teaching solidifies learning.</p>
+        <p class="celebrate-sub">${escapeHtml(level.seriesTitle)} · <code>${escapeHtml(level.id)}</code></p>
+        <p class="celebrate-cheer">${escapeHtml(cheer)}</p>
         <div class="celebrate-stats">${renderMarkdown(golfLine)}</div>
+        <div class="celebrate-progress">
+          <div class="prog-track"><div class="prog-fill" style="width:${Math.round((solvedCount / total) * 100)}%"></div></div>
+          <div class="par-note">${solvedCount} / ${total} levels solved</div>
+        </div>
         <div class="share-block">
-          <div class="next-title">Share this achievement</div>
+          <div class="next-title">Tell the world you learned something</div>
           <div class="share-row" role="group" aria-label="Share on social networks">
             <button type="button" class="share-btn linkedin" data-share="linkedin">LinkedIn</button>
             <button type="button" class="share-btn x" data-share="x">X / Twitter</button>
@@ -551,15 +581,15 @@ export class App {
         </div>
         ${
           next
-            ? `<div class="celebrate-next">Next up: <strong>${escapeHtml(next.id)}</strong> — ${escapeHtml(next.name)}</div>`
-            : `<div class="celebrate-next">That was the last level in this pack. Open <strong>Levels</strong> to replay or try another series.</div>`
+            ? `<div class="celebrate-next">Next celebration: <strong>${escapeHtml(next.id)}</strong> — ${escapeHtml(next.name)}</div>`
+            : `<div class="celebrate-next">Last level in this pack. Open <strong>Levels</strong> to keep the party going.</div>`
         }
       </div>
     `;
 
     const actions = [
       {
-        label: 'Stay here',
+        label: 'Bask in it',
         className: 'ghost',
         onClick: () => {
           this.offered = false;
@@ -569,7 +599,7 @@ export class App {
     ];
     if (next) {
       actions.push({
-        label: `Next level: ${next.id}`,
+        label: `Celebrate on: ${next.id}`,
         className: 'primary',
         onClick: () => {
           this.offered = false;
@@ -587,17 +617,25 @@ export class App {
       });
     }
 
+    // Party first — then the modal.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    const confetti = launchConfetti(4800);
+    playFanfare();
+
     const modal = showModal({
       title: 'Level complete',
       bodyHtml,
+      variant: 'celebrate',
       actions: actions.map((a) => ({
         ...a,
         onClick: () => {
+          confetti?.stop();
           modal.close();
           a.onClick();
         },
       })),
       onClose: () => {
+        confetti?.stop();
         this.offered = false;
         this.terminal.focus();
       },
@@ -628,7 +666,6 @@ export class App {
       });
     });
 
-    // Keep the celebration on screen; ignore accidental Enter on dialog chrome.
     modal.el.querySelector('.modal')?.addEventListener('keydown', (ev) => {
       const key = (ev as KeyboardEvent).key;
       if (key === 'Enter') {

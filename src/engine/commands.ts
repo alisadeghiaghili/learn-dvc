@@ -297,10 +297,11 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
     const outs: string[] = [];
     for (const part of parts) {
       const step = executeCommand(lastState, part);
-      lastState = step.state;
       if (step.result.error) {
-        return { state: lastState, result: step.result };
+        // Failed chains must not leave a half-applied reset-looking state.
+        return { state: prev, result: step.result };
       }
+      lastState = step.state;
       if (step.result.output) outs.push(step.result.output);
     }
     return { state: lastState, result: ok(outs.join('\n')) };

@@ -410,6 +410,54 @@ button.ghost {
   border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
 }
 
+.goal-list li.current {
+  border-color: #ff8c1a;
+  background: color-mix(in srgb, #ff8c1a 12%, var(--ink));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #ff8c1a 70%, transparent),
+    0 0 14px color-mix(in srgb, #ff8c1a 45%, transparent),
+    0 0 28px color-mix(in srgb, #ff8c1a 22%, transparent);
+  animation: neon-pulse 1.6s ease-in-out infinite;
+}
+
+.goal-list li.current code {
+  color: #ffd29a;
+}
+
+.goal-list li.current .g-detail {
+  color: #ffc07a;
+}
+
+.chip.current-chip {
+  color: #1a0d00;
+  background: #ff8c1a;
+  border-color: #ff8c1a;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+@keyframes neon-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, #ff8c1a 70%, transparent),
+      0 0 12px color-mix(in srgb, #ff8c1a 40%, transparent),
+      0 0 24px color-mix(in srgb, #ff8c1a 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, #ff8c1a 90%, transparent),
+      0 0 18px color-mix(in srgb, #ff8c1a 60%, transparent),
+      0 0 36px color-mix(in srgb, #ff8c1a 30%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-list li.current {
+    animation: none;
+  }
+}
+
 .goal-list li.optional {
   opacity: 0.72;
 }
@@ -478,32 +526,111 @@ button.ghost {
 }
 
 /* Level celebration + share */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.confetti-static {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background-image:
+    radial-gradient(circle at 12% 20%, var(--dvc) 0 3px, transparent 4px),
+    radial-gradient(circle at 78% 18%, var(--cache) 0 3px, transparent 4px),
+    radial-gradient(circle at 40% 72%, var(--remote) 0 3px, transparent 4px),
+    radial-gradient(circle at 88% 64%, var(--ok) 0 2px, transparent 3px),
+    radial-gradient(circle at 22% 80%, var(--code) 0 2px, transparent 3px);
+  opacity: 0.85;
+}
+
+.overlay-celebrate {
+  background: rgba(6, 10, 14, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.modal-celebrate {
+  width: min(520px, 100%);
+  text-align: center;
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ok) 20%, transparent),
+    0 24px 80px rgba(52, 211, 153, 0.12),
+    0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: celebrate-pop 420ms cubic-bezier(0.2, 0.9, 0.25, 1.2);
+}
+
 .celebrate {
   text-align: center;
-  padding: 6px 2px 2px;
+  padding: 4px 2px 2px;
+}
+
+.celebrate-visual {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 8px;
+  display: grid;
+  place-items: center;
+}
+
+.celebrate-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--ok) 55%, transparent);
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--ok) 22%, transparent), transparent 70%);
+  animation: ring-pulse 1.8s ease-out infinite;
+}
+
+.celebrate-star {
+  position: relative;
+  font-size: 42px;
+  line-height: 1;
+  color: var(--remote);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--remote) 55%, transparent);
+  animation: star-bounce 700ms cubic-bezier(0.2, 0.9, 0.3, 1.4);
 }
 
 .celebrate-badge {
   display: inline-block;
   font-family: var(--mono);
   font-size: 12px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   color: #062016;
-  background: var(--ok);
+  background: linear-gradient(135deg, var(--ok), var(--cache));
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 5px 14px;
   margin-bottom: 10px;
-  animation: pop-in 320ms ease;
+  font-weight: 700;
 }
 
 .celebrate-title {
   margin: 0 0 4px;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
 }
 
 .celebrate-sub {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: var(--haze);
   font-family: var(--mono);
   font-size: 12px;
@@ -513,13 +640,14 @@ button.ghost {
   font-family: var(--mono);
 }
 
-.celebrate-msg {
+.celebrate-cheer {
   margin: 0 0 12px;
   color: var(--text);
+  font-size: 15px;
 }
 
 .celebrate-stats {
-  margin: 0 auto 14px;
+  margin: 0 auto 12px;
   max-width: 420px;
   border: 1px solid var(--line);
   background: var(--ink);
@@ -530,6 +658,27 @@ button.ghost {
 
 .celebrate-stats p {
   margin: 0;
+}
+
+.celebrate-progress {
+  margin: 0 auto 14px;
+  max-width: 280px;
+}
+
+.prog-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--dvc), var(--cache));
+  border-radius: inherit;
+  transition: width 0.6s ease;
 }
 
 .share-block {
@@ -561,6 +710,7 @@ button.ghost {
 
 .share-btn:hover {
   filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 
 .share-btn:focus-visible {
@@ -603,22 +753,55 @@ button.ghost {
   font-size: 13px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes pop-in {
-    from {
-      opacity: 0;
-      transform: scale(0.92);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
+@keyframes celebrate-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ring-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.15);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes star-bounce {
+  0% {
+    transform: scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15) rotate(6deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .celebrate-badge {
+  .modal-celebrate,
+  .celebrate-badge,
+  .celebrate-ring,
+  .celebrate-star {
     animation: none;
+  }
+  .share-btn:hover {
+    transform: none;
   }
 }
 

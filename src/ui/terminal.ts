@@ -11,6 +11,7 @@ export class TerminalView {
   private lines: LogLine[] = [];
   private history: string[] = [];
   private historyIdx = -1;
+  private draft = '';
   private onSubmit: (cmd: string) => void;
 
   constructor(root: HTMLElement, onSubmit: (cmd: string) => void) {
@@ -29,7 +30,14 @@ export class TerminalView {
   }
 
   focus(): void {
+    if (document.querySelector('.overlay .modal')) return;
     this.inputEl.focus();
+    const len = this.inputEl.value.length;
+    try {
+      this.inputEl.setSelectionRange(len, len);
+    } catch {
+      // ignore unsupported input types
+    }
   }
 
   setLog(lines: LogLine[]): void {
@@ -75,12 +83,22 @@ export class TerminalView {
       if (document.querySelector('.overlay .modal')) return;
       const value = this.inputEl.value;
       this.inputEl.value = '';
+      const trimmed = value.trim();
+      if (trimmed) {
+        this.history.push(trimmed);
+        this.historyIdx = this.history.length;
+      }
       this.onSubmit(value);
+      // Keep the caret in the prompt like a real terminal.
+      this.focus();
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (!this.history.length) return;
+      if (this.historyIdx === this.history.length) {
+        this.draft = this.inputEl.value;
+      }
       this.historyIdx = Math.max(0, this.historyIdx - 1);
       this.inputEl.value = this.history[this.historyIdx] ?? '';
       return;
@@ -89,7 +107,8 @@ export class TerminalView {
       e.preventDefault();
       if (!this.history.length) return;
       this.historyIdx = Math.min(this.history.length, this.historyIdx + 1);
-      this.inputEl.value = this.history[this.historyIdx] ?? '';
+      this.inputEl.value =
+        this.historyIdx >= this.history.length ? this.draft : (this.history[this.historyIdx] ?? '');
     }
   }
 }
