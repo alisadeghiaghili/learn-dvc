@@ -136,6 +136,7 @@ export class App {
       ? `${this.level.id} · ${this.level.name} · par ${this.level.par}`
       : 'sandbox mode';
     this.renderDock();
+    this.syncTerminalHints();
     const stage = this.root.querySelector('#stage')!;
     if (this.goalOpen) {
       stage.classList.remove('no-dock');
@@ -144,6 +145,21 @@ export class App {
       stage.classList.add('no-dock');
       this.dockEl.hidden = true;
     }
+  }
+
+  private syncTerminalHints(): void {
+    if (!this.level) {
+      this.terminal.setHint('dvc add data/data.xml');
+      this.terminal.setExtraCompletions([]);
+      return;
+    }
+    const steps = solutionProgress(this.state, this.level.solution);
+    const next = steps.find((s) => !s.done && !s.optional);
+    this.terminal.setHint(next?.command ?? null);
+    this.terminal.setExtraCompletions([
+      ...this.level.solution,
+      ...this.level.hint.split(';').map((s) => s.trim()).filter(Boolean),
+    ]);
   }
 
   private renderDock(): void {
