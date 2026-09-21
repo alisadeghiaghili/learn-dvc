@@ -84,6 +84,8 @@ export interface RepoState {
   generated: string[];
   /** Set by `dvc exp apply` so goals can require promotion, not just a matching param. */
   lastAppliedExpId?: string;
+  /** Successful commands run this level — sticky checklist completion. */
+  commandHistory: string[];
 }
 
 export interface CommandResult {

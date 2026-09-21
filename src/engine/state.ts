@@ -16,6 +16,7 @@ export function emptyState(): RepoState {
     gitStaged: [],
     dataVersions: {},
     generated: [],
+    commandHistory: [],
   };
 }
 

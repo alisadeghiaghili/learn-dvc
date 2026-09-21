@@ -14,7 +14,7 @@ if (!params.has('NODEMO')) {
     title: 'LearnDVC',
     bodyHtml: renderMarkdown(
       [
-        'Interactive **Data Version Control** tutorial — sandbox + levels, in the spirit of learnGitBranching.',
+        'Interactive **Data Version Control** tutorial — sandbox + guided levels.',
         '',
         'The board shows **Workspace → Cache → Remote**. That is the material flow DVC manages.',
         '',

@@ -32,21 +32,37 @@ export function solutionProgress(state: RepoState, solution: string[]): Solution
   return solution.map((command) => stepStatus(state, command, solution));
 }
 
+function commandInHistory(state: RepoState, matcher: (cmd: string) => boolean): boolean {
+  return (state.commandHistory ?? []).some((c) => matcher(c.trim()));
+}
+
+function gitAddRanInHistory(state: RepoState, paths: string[]): boolean {
+  return commandInHistory(state, (c) => {
+    if (!/^git\s+add\b/.test(c)) return false;
+    const args = c.split(/\s+/).slice(2).filter((a) => !a.startsWith('-'));
+    if (!args.length) return false;
+    return paths.some((p) => pathInList(args, p));
+  });
+}
+
 function stepStatus(state: RepoState, command: string, solution: string[] = [command]): SolutionStepStatus {
   const cmd = command.trim();
   const fail = (note: string): SolutionStepStatus => ({ command: cmd, done: false, note });
   const ok = (note: string): SolutionStepStatus => ({ command: cmd, done: true, note });
 
   if (/^dvc\s+init\b/.test(cmd)) {
-    return state.initialized ? ok('DVC project initialized') : fail('run `dvc init`');
+    return state.initialized || commandInHistory(state, (c) => /^dvc\s+init\b/.test(c))
+      ? ok('DVC project initialized')
+      : fail('run `dvc init`');
   }
 
   if (/^git\s+add\b/.test(cmd)) {
     const paths = cmd.split(/\s+/).slice(2).filter((p) => !p.startsWith('-'));
+    // Sticky: once this exact staging command succeeded, do not "uncheck" it
+    // just because a later commit emptied the index.
+    if (gitAddRanInHistory(state, paths)) return ok('already staged this step');
     const stagedNow = paths.some((p) => pathInList(state.gitStaged, p));
     if (stagedNow) return ok('paths staged');
-    // Historical baseline commits may already contain these paths; only credit
-    // "git add" when the level's git commit step is also satisfied.
     const commitCmds = solution.filter((c) => /^git\s+commit\b/.test(c));
     const commitDone = commitCmds.every((c) => stepStatus(state, c).done);
     const inHistory = commitDone && state.gitCommits.some((c) => commitFilesMatch(c.files, paths.length ? paths : ['.dvc']));
@@ -57,8 +73,13 @@ function stepStatus(state: RepoState, command: string, solution: string[] = [com
   if (/^git\s+commit\b/.test(cmd)) {
     const msg = commitMessageOf(cmd);
     if (!msg) return fail(cmd);
+    const ranCorrect = commandInHistory(state, (c) => {
+      if (!/^git\s+commit\b/.test(c)) return false;
+      const m = commitMessageOf(c);
+      return m === msg || (m !== null && m.includes(msg));
+    });
     const hit = state.gitCommits.find((c) => c.message.includes(msg));
-    return hit ? ok(`committed (${hit.hash})`) : fail(`commit with message containing "${msg}"`);
+    return ranCorrect || hit ? ok(ranCorrect && !hit ? `commit command run (${msg})` : `committed (${hit?.hash ?? 'ok'})`) : fail(`commit with message containing "${msg}"`);
   }
 
   if (/^dvc\s+add\b/.test(cmd)) {

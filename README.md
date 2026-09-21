@@ -1,6 +1,6 @@
 # LearnDVC
 
-An interactive **DVC** visualizer, sandbox, and tutorial — the learnGitBranching product shape applied to Data Version Control.
+An interactive **DVC** visualizer, sandbox, and tutorial for Data Version Control.
 
 **Live:** https://alisadeghiaghili.github.io/learn-dvc/
 
@@ -66,10 +66,9 @@ tests/        # vitest coverage for engine + level solutions
 
 - This is a **teaching simulator**, not a real DVC binary. Hashes are deterministic fakes; remotes are abstract object stores.
 - Real-world DVC docs: [dvc.org/doc](https://dvc.org/doc)
-- Inspired by [learnGitBranching](https://github.com/pcottle/learnGitBranching)
 
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-This project is an independent teaching simulator. It is not affiliated with iterative/dvc or pcottle/learnGitBranching.
+This project is an independent teaching simulator. It is not affiliated with the DVC project maintainers.

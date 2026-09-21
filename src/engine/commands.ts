@@ -287,6 +287,18 @@ function statusLines(state: RepoState): string {
 }
 
 export function executeCommand(prev: RepoState, rawInput: string): { state: RepoState; result: CommandResult } {
+  const raw = rawInput.trim();
+  const out = executeCommandInner(prev, rawInput);
+  // Sticky learning checklist: remember successful commands even if a later
+  // mistake clears git staging or mutates workspace state.
+  if (out.result.ok && raw) {
+    if (!out.state.commandHistory) out.state.commandHistory = [];
+    out.state.commandHistory.push(raw);
+  }
+  return out;
+}
+
+function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoState; result: CommandResult } {
   const state = cloneState(prev);
   const raw = rawInput.trim();
   if (!raw) return { state, result: ok('') };
@@ -305,7 +317,6 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
     for (const part of parts) {
       const step = executeCommand(lastState, part);
       if (step.result.error) {
-        // Failed chains must not leave a half-applied reset-looking state.
         return { state: prev, result: step.result };
       }
       lastState = step.state;
@@ -514,11 +525,25 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       const msgIdx = args.indexOf('-m');
       if (msgIdx === -1 || !args[msgIdx + 1]) return { state, result: fail('error: switch `m` requires a value') };
       const message = args.slice(msgIdx + 1).join(' ').replace(/^["']|["']$/g, '');
-      if (!state.initialized && state.gitCommits.length <= 1) {
-        // allow git commit after init only
-      }
       if (!state.gitStaged.length) {
-        return { state, result: fail('nothing to commit, working tree clean (stage .dvc files first)') };
+        // After a wrong-message commit the index is empty. If this project has
+        // DVC metadata (or tracked pointers), re-stage them so the learner can
+        // retry the commit message without "losing" earlier steps.
+        const restage: string[] = [];
+        if (state.initialized) {
+          if (!state.files['.dvc/config']) state.files['.dvc/config'] = makeFile('.dvc/config', 'meta');
+          if (!state.files['.dvc/.gitignore']) state.files['.dvc/.gitignore'] = makeFile('.dvc/.gitignore', 'meta');
+          restage.push('.dvc/config', '.dvc/.gitignore');
+        }
+        for (const f of Object.values(state.files)) {
+          if (f.tracked) restage.push(`${f.path}.dvc`);
+        }
+        const ranGitAdd = (state.commandHistory ?? []).some((c) => /^git\s+add\b/.test(c.trim()));
+        if (!restage.length && !ranGitAdd) {
+          return { state, result: fail('nothing to commit, working tree clean (stage .dvc files first)') };
+        }
+        if (!restage.length) restage.push('.dvc/config', '.dvc/.gitignore');
+        state.gitStaged = [...new Set(restage)];
       }
       const c = snapshotGit(state, message);
       return finish(state, ok(`[${c.hash}] ${message}`));

@@ -1,12 +1,12 @@
 # LearnDVC — Design Spec
 
-Interactive DVC visualizer + tutorial, modeled after learnGitBranching’s product shape
+Interactive DVC visualizer + tutorial: sandbox, terminal, goal-driven levels.
 (sandbox + terminal + goal levels + undo/reset/hint/solution), with a DVC-native
 visualization instead of a git commit tree.
 
 ## Style anchor
 
-- **Product genre**: terminal-native learning game (LGB, but for data versioning).
+- **Product genre**: terminal-native learning game for data versioning.
 - **Real-world feel**: ML lab “material board” — whiteboard magnets for files, cache
   bins, and a remote warehouse — not a SaaS marketing page and not a git DAG clone.
 - **Mode**: expressive educational UI (game chrome + technical density). Not admin CRUD.
@@ -54,7 +54,7 @@ visualization instead of a git commit tree.
 ```
 
 - Max density without clutter: three equal-ish zones, 12–16px gaps, 24px page gutter.
-- Level goal opens as a right dock (not a second full canvas), LGB-inspired but tighter.
+- Level goal opens as a right dock (not a second full canvas).
 - Responsive: stack zones vertically under ~900px; terminal always last.
 
 ## Signature moment
@@ -72,7 +72,7 @@ That single animation teaches DVC’s core idea better than any paragraph.
 - Not a canvas commit-tree clone. Git history is present but secondary (pointer files
   are what Git versions in real DVC).
 - No purple AI gradient hero, no stock photos, no marketing landing page as home.
-- Home = sandbox (or intro dialog → first level), like LGB.
+- Home = sandbox (or intro dialog → first level).
 
 ## Product surface
 
