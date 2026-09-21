@@ -1,4 +1,4 @@
-import type { LevelDef, LevelProgress, RepoState } from '../engine/types';
+import type { LevelDef, RepoState } from '../engine/types';
 import { cloneState, sandboxState } from '../engine/state';
 import { commandCountsForGolf, executeCommand } from '../engine/commands';
 import { evaluateGoal } from '../engine/compare';
@@ -10,6 +10,7 @@ import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
 import { buildShareTargets, copySharePayload, openShareWindow } from './share';
 import { launchConfetti, playFanfare } from './confetti';
+import { loadProgress, resumeLine, saveProgress, summarizeCurriculum } from './progress';
 
 function escapeHtml(s: string): string {
   return s
@@ -17,26 +18,6 @@ function escapeHtml(s: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
-}
-
-const STORAGE_KEY = 'learn-dvc-progress-v1';
-
-interface Persist {
-  progress: Record<string, LevelProgress>;
-}
-
-function loadProgress(): Record<string, LevelProgress> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return (JSON.parse(raw) as Persist).progress ?? {};
-  } catch {
-    return {};
-  }
-}
-
-function saveProgress(progress: Record<string, LevelProgress>): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ progress }));
 }
 
 export class App {
@@ -66,7 +47,14 @@ export class App {
     this.pushMeta(
       'LearnDVC — interactive DVC sandbox. Type `help`, or `levels` to start the first tutorial.',
     );
-    this.pushMeta('Sandbox seeded with a DVC project and data/data.xml. Try `dvc add data/data.xml`.');
+    const summary = summarizeCurriculum(this.progress);
+    if (summary.solvedCount > 0) {
+      this.pushOut('');
+      this.pushOut(resumeLine(summary));
+    } else {
+      this.pushMeta('Sandbox seeded with a DVC project and data/data.xml. Try `dvc add data/data.xml`.');
+      this.pushMeta('Progress is saved in this browser (localStorage + cookie). Come back anytime.');
+    }
   }
 
   private mount(): void {
@@ -545,14 +533,16 @@ export class App {
     const level = this.level;
     const next = getNextLevel(level.id);
     const cmds = this.golf.length || null;
+    const curriculum = summarizeCurriculum(this.progress);
     const share = buildShareTargets({
       levelName: level.name,
       levelId: level.id,
       commands: cmds,
       par: level.par,
+      curriculum,
     });
     const total = allLevels.length;
-    const solvedCount = Object.values(this.progress).filter((p) => p.solved).length;
+    const solvedCount = curriculum.solvedCount;
     const underPar = cmds !== null && cmds <= level.par;
     const golfLine =
       cmds === null
@@ -570,6 +560,10 @@ export class App {
     ];
     const cheer = cheers[Math.floor(Math.random() * cheers.length)]!;
 
+    const learnedPreview = curriculum.learned
+      .map((l) => `<li>${escapeHtml(l.seriesTitle)}: ${escapeHtml(l.name)}</li>`)
+      .join('');
+
     const bodyHtml = `
       <div class="celebrate" aria-live="polite">
         <div class="celebrate-visual" aria-hidden="true">
@@ -582,16 +576,20 @@ export class App {
         <p class="celebrate-cheer">${escapeHtml(cheer)}</p>
         <div class="celebrate-stats">${renderMarkdown(golfLine)}</div>
         <div class="celebrate-progress">
-          <div class="prog-track"><div class="prog-fill" style="width:${Math.round((solvedCount / total) * 100)}%"></div></div>
-          <div class="par-note">${solvedCount} / ${total} levels solved</div>
+          <div class="prog-track"><div class="prog-fill" style="width:${curriculum.percent}%"></div></div>
+          <div class="par-note">${solvedCount} / ${total} levels solved · progress saved in this browser</div>
         </div>
         <div class="share-block">
-          <div class="next-title">Tell the world you learned something</div>
+          <div class="next-title">Share what you learned (includes your curriculum)</div>
+          <div class="learned-preview">
+            <div class="par-note">Sylist for the post:</div>
+            <ul>${learnedPreview || '<li>Solve more levels to grow this list</li>'}</ul>
+          </div>
           <div class="share-row" role="group" aria-label="Share on social networks">
             <button type="button" class="share-btn linkedin" data-share="linkedin">LinkedIn</button>
             <button type="button" class="share-btn x" data-share="x">X / Twitter</button>
             <button type="button" class="share-btn facebook" data-share="facebook">Facebook</button>
-            <button type="button" class="share-btn copy" data-share="copy">Copy text</button>
+            <button type="button" class="share-btn copy" data-share="copy">Copy post</button>
           </div>
           <div class="share-status" data-share-status hidden></div>
         </div>
@@ -670,7 +668,7 @@ export class App {
           if (status) {
             status.hidden = false;
             status.textContent = ok
-              ? 'Copied. Paste it anywhere.'
+              ? 'Copied full curriculum post (LinkedIn-ready).'
               : 'Could not copy — select the share text manually.';
           }
           return;

@@ -1,45 +1,117 @@
-export const LIVE_URL = 'https://alisadeghiaghili.github.io/learn-dvc/';
+import type { CurriculumSummary } from './progress';
 
-export function shareMessage(opts: {
+export const LIVE_URL = 'https://alisadeghiaghili.github.io/learn-dvc/';
+export const SHARE_URL = `${LIVE_URL}?NODEMO`;
+
+export interface ShareContext {
   levelName: string;
   levelId: string;
   commands: number | null;
   par: number;
-}): string {
-  const golf =
-    opts.commands !== null && opts.commands > 0
-      ? `${opts.commands} command${opts.commands === 1 ? '' : 's'} (par ${opts.par})`
-      : `par ${opts.par}`;
-  return `I just solved LearnDVC «${opts.levelName}» (${opts.levelId}) — ${golf}. Practicing Data Version Control interactively.`;
+  curriculum: CurriculumSummary;
+}
+
+function bulletList(items: { name: string; id: string; seriesTitle: string }[], limit?: number): string[] {
+  const list = limit ? items.slice(0, limit) : items;
+  const lines = list.map((l) => `• ${l.seriesTitle}: ${l.name}`);
+  if (limit && items.length > limit) {
+    lines.push(`• …and ${items.length - limit} more`);
+  }
+  return lines;
+}
+
+/** Long post for LinkedIn — full learned curriculum + link. */
+export function shareMessageLinkedIn(ctx: ShareContext): string {
+  const { curriculum: c, levelName, levelId } = ctx;
+  const headline =
+    c.solvedCount === 0
+      ? `I just started learning Data Version Control with LearnDVC.`
+      : `I'm learning Data Version Control (DVC) with LearnDVC — an interactive sandbox and tutorial.`;
+
+  const just =
+    c.solvedCount > 0
+      ? `Latest: “${levelName}” (${levelId})${
+          ctx.commands !== null
+            ? ` — solved in ${ctx.commands} command${ctx.commands === 1 ? '' : 's'} (par ${ctx.par})`
+            : ''
+        }.`
+      : `Working through ${c.total} hands-on levels.`;
+
+  const learned = c.learned.length
+    ? [``, `What I've learned so far (${c.solvedCount}/${c.total} levels):`, ...bulletList(c.learned)].join('\n')
+    : '';
+
+  const next = c.next ? `\n\nUp next: ${c.next.name} (${c.next.id})` : '';
+
+  return [
+    headline,
+    '',
+    just,
+    learned,
+    next,
+    '',
+    `Try it yourself (free, no login): ${SHARE_URL}`,
+  ]
+    .filter((part) => part !== undefined)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+/** Short post for X/Twitter — curriculum compressed to fit the limit. */
+export function shareMessageX(ctx: ShareContext): string {
+  const { curriculum: c } = ctx;
+  const head =
+    c.solvedCount > 0
+      ? `Learning DVC with LearnDVC — ${c.solvedCount}/${c.total} levels done.`
+      : `Starting DVC with LearnDVC.`;
+  const body = c.learned.length
+    ? bulletList(c.learned, 3).join('\n')
+    : `Interactive Data Version Control tutorial.`;
+  const url = LIVE_URL;
+  // Keep under ~280 including URL.
+  let text = `${head}\n${body}\n${url}`;
+  if (text.length > 279) {
+    const first = c.learned[0] ? `• ${c.learned[0].seriesTitle}: ${c.learned[0].name}` : '';
+    text = `${head}\n${first}\n${url}`.slice(0, 279);
+  }
+  return text;
+}
+
+export function shareMessageGeneric(ctx: ShareContext): string {
+  return shareMessageLinkedIn(ctx);
 }
 
 export interface ShareTargets {
   linkedin: string;
   x: string;
   facebook: string;
+  /** Full curriculum post (LinkedIn / copy). */
   text: string;
+  /** Short post (X). */
+  shortText: string;
   url: string;
+  /** Plain list for UI preview. */
+  learnedLines: string[];
 }
 
-export function buildShareTargets(opts: {
-  levelName: string;
-  levelId: string;
-  commands: number | null;
-  par: number;
-}): ShareTargets {
-  const text = shareMessage(opts);
-  const url = `${LIVE_URL}?NODEMO`;
+export function buildShareTargets(ctx: ShareContext): ShareTargets {
+  const longText = shareMessageLinkedIn(ctx);
+  const shortText = shareMessageX(ctx);
+  const url = SHARE_URL;
   return {
-    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
-    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`,
-    text,
+    // Prefill LinkedIn composer with the curriculum post.
+    linkedin: `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(longText)}`,
+    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shortText)}&url=${encodeURIComponent(url)}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(longText)}`,
+    text: longText,
+    shortText,
     url,
+    learnedLines: bulletList(ctx.curriculum.learned),
   };
 }
 
 export function openShareWindow(url: string): void {
-  window.open(url, '_blank', 'noopener,noreferrer,width=640,height=560');
+  window.open(url, '_blank', 'noopener,noreferrer,width=720,height=640');
 }
 
 export async function copySharePayload(text: string, url: string): Promise<boolean> {
@@ -50,7 +122,7 @@ export async function copySharePayload(text: string, url: string): Promise<boole
       return true;
     }
   } catch {
-    // fall through to legacy path
+    // fall through
   }
   try {
     const ta = document.createElement('textarea');

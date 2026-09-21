@@ -1,33 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { buildShareTargets, LIVE_URL, shareMessage } from '../src/ui/share';
+import { buildShareTargets, shareMessageLinkedIn, shareMessageX } from '../src/ui/share';
+import { summarizeCurriculum } from '../src/ui/progress';
+import { allLevels } from '../src/levels';
 
-describe('share payloads', () => {
-  it('builds LinkedIn, X, and Facebook targets with level details', () => {
-    const share = buildShareTargets({
+function fakeProgress(ids: string[]): Record<string, { solved: boolean; bestCommands?: number }> {
+  const p: Record<string, { solved: boolean; bestCommands?: number }> = {};
+  for (const id of ids) p[id] = { solved: true, bestCommands: 3 };
+  return p;
+}
+
+describe('curriculum share messages', () => {
+  it('lists learned levels in the LinkedIn post', () => {
+    const curriculum = summarizeCurriculum(fakeProgress(['basics-1', 'basics-2']));
+    const text = shareMessageLinkedIn({
+      levelName: 'Track a dataset',
+      levelId: 'basics-2',
+      commands: 3,
+      par: 3,
+      curriculum,
+    });
+    expect(text).toContain('I\'m learning Data Version Control');
+    expect(curriculum.solvedCount).toBe(2);
+    expect(curriculum.learned).toHaveLength(2);
+    expect(text).toContain('Basics: Initialize DVC');
+    expect(text).toContain('Basics: Track a dataset');
+    expect(text).toContain('What I\'ve learned so far (2/');
+    expect(text).toContain('learn-dvc');
+  });
+
+  it('X text stays short and mentions progress', () => {
+    const ids = allLevels.map((l) => l.id);
+    const curriculum = summarizeCurriculum(fakeProgress(ids.slice(0, 5)));
+    const short = shareMessageX({
+      levelName: 'x',
+      levelId: 'basics-3',
+      commands: 2,
+      par: 5,
+      curriculum,
+    });
+    expect(short).toContain('5/');
+    expect(short.length).toBeLessThanOrEqual(280);
+  });
+
+  it('share targets include curriculum in LinkedIn text param', () => {
+    const curriculum = summarizeCurriculum(fakeProgress(['basics-1']));
+    const targets = buildShareTargets({
       levelName: 'Initialize DVC',
       levelId: 'basics-1',
       commands: 3,
       par: 3,
+      curriculum,
     });
-    expect(share.text).toContain('Initialize DVC');
-    expect(share.text).toContain('basics-1');
-    expect(share.text).toContain('3 command');
-    expect(share.linkedin).toContain('linkedin.com/sharing');
-    expect(share.linkedin).toContain(encodeURIComponent(LIVE_URL));
-    expect(share.x).toContain('twitter.com/intent/tweet');
-    expect(share.x).toContain(encodeURIComponent(share.text));
-    expect(share.facebook).toContain('facebook.com/sharer');
-    expect(share.facebook).toContain(encodeURIComponent(LIVE_URL));
-  });
-
-  it('handles last-level message without command count', () => {
-    const text = shareMessage({
-      levelName: 'Apply',
-      levelId: 'exp-3',
-      commands: null,
-      par: 4,
-    });
-    expect(text).toContain('par 4');
-    expect(text).not.toContain('null');
+    expect(targets.linkedin).toContain('linkedin.com');
+    expect(decodeURIComponent(targets.linkedin)).toContain('Initialize DVC');
+    expect(targets.learnedLines.join(' ')).toContain('Initialize DVC');
   });
 });
