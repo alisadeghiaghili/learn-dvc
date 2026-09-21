@@ -16,6 +16,7 @@ function rawRepo(): RepoState {
     pipelineSig: '',
     params: {},
     metrics: {},
+    files: ['.dvc/config', '.dvc/.gitignore'],
   });
   s.gitStaged = [];
   return s;
@@ -55,6 +56,7 @@ function trackedDataRepo(
     pipelineSig: '',
     params: {},
     metrics: {},
+    files: [`${path}.dvc`, `${path.split('/')[0]}/.gitignore`],
   });
   return s;
 }
@@ -80,7 +82,7 @@ export const basicsLevels: LevelDef[] = [
     par: 3,
     hint: 'dvc init; git add .dvc; git commit -m "Initialize DVC"',
     objective:
-      'DVC extends Git for data. Initialize a DVC project, stage the internal `.dvc` metadata, and commit it with Git.',
+      'Initialize DVC, then stage and commit `.dvc` with Git. DVC is not a full VCS — Git versions the pointer/metadata files.',
     startDialog: [
       {
         title: 'Welcome to LearnDVC',
@@ -90,7 +92,7 @@ export const basicsLevels: LevelDef[] = [
       {
         title: 'Level goal',
         markdown:
-          'Run `dvc init`, stage `.dvc`, and commit.\n\nMeta commands: `levels`, `hint`, `show goal`, `reset`, `undo`, `help`.',
+          'After **`dvc init`**, you must record the `.dvc` metadata in Git:\n\n```\ngit add .dvc\ngit commit -m "Initialize DVC"\n```\n\nType `steps` anytime to see remaining goal commands. Meta: `levels`, `hint`, `show goal`, `reset`, `undo`.',
       },
     ],
     startState: emptyState(),
@@ -98,7 +100,11 @@ export const basicsLevels: LevelDef[] = [
       kind: 'allOf',
       checks: [
         { kind: 'initialized', value: true },
-        { kind: 'gitCommitMessageIncludes', text: 'Initialize DVC' },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'Initialize DVC',
+          requireFilesAny: ['.dvc'],
+        },
       ],
     },
     solution: ['dvc init', 'git add .dvc', 'git commit -m "Initialize DVC"'],
@@ -128,7 +134,11 @@ export const basicsLevels: LevelDef[] = [
         { kind: 'pointer', path: 'data/data.xml' },
         { kind: 'cacheHas', md5s: ['tracked:data/data.xml'] },
         { kind: 'workspaceHas', paths: ['data/data.xml'] },
-        { kind: 'gitCommitMessageIncludes', text: 'Add raw data' },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'Add raw data',
+          requireFilesAny: ['data/data.xml.dvc', 'data/.gitignore'],
+        },
       ],
     },
     solution: [
@@ -160,7 +170,11 @@ export const basicsLevels: LevelDef[] = [
       checks: [
         { kind: 'tracked', paths: ['data/data.xml'] },
         { kind: 'notDirty' },
-        { kind: 'gitCommitMessageIncludes', text: 'Dataset updates' },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'Dataset updates',
+          requireFilesAny: ['data/data.xml.dvc'],
+        },
         { kind: 'cacheHas', md5s: ['tracked:data/data.xml'] },
       ],
     },
@@ -385,6 +399,7 @@ export const pipelineLevels: LevelDef[] = [
         pipelineSig: 'prepare|python src/prepare.py|data/data.xml,src/prepare.py>data/prepared.csv|frozen=false;train|python src/train.py|data/prepared.csv,src/train.py>model.pkl|frozen=false',
         params: { ...s.params },
         metrics: { ...s.metrics },
+        files: ['dvc.yaml', 'dvc.lock', 'data/data.xml.dvc'],
       });
       return s;
     })(),

@@ -51,6 +51,7 @@ export function ensureGit(state: RepoState): void {
       pipelineSig: '',
       params: {},
       metrics: {},
+      files: [],
     });
   }
 }
@@ -121,6 +122,7 @@ export function sandboxState(): RepoState {
     pipelineSig: '',
     params: { ...state.params },
     metrics: {},
+    files: ['.dvc/config', '.dvc/.gitignore'],
   });
   state.gitStaged = [];
   return state;

@@ -44,13 +44,15 @@ function snapshotGit(state: RepoState, message: string): GitCommit {
   for (const f of Object.values(state.files)) {
     if (f.tracked && f.pointerMd5) pointers[f.path] = f.pointerMd5;
   }
+  const files = [...state.gitStaged];
   const commit: GitCommit = {
-    hash: commitHash(`${message}|${state.gitCommits.length}|${JSON.stringify(pointers)}`),
+    hash: commitHash(`${message}|${state.gitCommits.length}|${JSON.stringify(pointers)}|${files.join(',')}`),
     message,
     pointers,
     pipelineSig: pipelineSignature(state),
     params: { ...state.params },
     metrics: { ...state.metrics },
+    files,
   };
   state.gitCommits.push(commit);
   state.gitStaged = [];
@@ -317,7 +319,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
           '  stage, repro, dag, metrics, params, exp, remove, gc, version',
           'Git (simulated): init, add, commit, log, status, checkout',
           'Workspace simulators: edit <path>, rm <path>, cat <path>, ls',
-          'Meta: levels, hint, show goal, hide goal, show solution, reset, undo, sandbox, clear',
+          'Meta: levels, steps, hint, show goal, hide goal, show solution, reset, undo, sandbox, clear',
         ].join('\n'),
       ),
     };
@@ -415,8 +417,16 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
     }
     if (sub === 'status') {
       const staged = state.gitStaged.length ? state.gitStaged : [];
+      const committed = new Set(state.gitCommits.flatMap((c) => Object.keys(c.pointers)));
       const unstaged = Object.values(state.files)
         .filter((f) => f.present && !f.gitignored && !f.tracked)
+        .filter((f) => {
+          // hide .dvc meta once Initialize DVC is committed
+          if (f.path === '.dvc/config' || f.path === '.dvc/.gitignore') {
+            return !state.gitCommits.some((c) => c.message.includes('Initialize DVC'));
+          }
+          return !committed.has(f.path);
+        })
         .map((f) => f.path);
       const ptrModified = Object.values(state.files)
         .filter((f) => f.tracked && f.dirty)
@@ -426,9 +436,13 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
         result: ok(
           [
             'On branch main',
-            staged.length ? `Changes to be committed:\n  ${staged.join('\n  ')}` : 'No changes added to commit.',
+            staged.length
+              ? `Changes to be committed:\n${staged.map((s) => `\t${s}`).join('\n')}`
+              : 'No changes added to commit.',
             ptrModified.length ? `modified: ${ptrModified.join(', ')}` : null,
-            unstaged.length ? `Untracked files:\n  ${unstaged.join('\n  ')}` : null,
+            unstaged.length
+              ? `Untracked files:\n${unstaged.map((s) => `\t${s}`).join('\n')}\n\nNext: git add <file> && git commit -m "..."`
+              : null,
           ]
             .filter(Boolean)
             .join('\n'),
@@ -548,7 +562,16 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       result: ok(
         [
           'Initialized DVC local workspace.',
-          'Created .dvc/config and .dvc/.gitignore — stage them with git.',
+          '',
+          'Created:',
+          '  .dvc/config',
+          '  .dvc/.gitignore',
+          '',
+          'DVC alone is not enough for this level — Git must track the .dvc metadata:',
+          '  1) git add .dvc',
+          '  2) git commit -m "Initialize DVC"',
+          '',
+          'Tip: type `steps` to see remaining goal commands after every action.',
         ].join('\n'),
       ),
     };
@@ -993,6 +1016,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       if (!run) return { state, result: fail(`ERROR: experiment '${id}' not found.`) };
       state.params = { ...run.params };
       state.metrics = { ...run.metrics };
+      state.lastAppliedExpId = run.id;
       state.files['params.yaml'] = makeFile('params.yaml', 'params', {
         contentId: fakeMd5(`params:${JSON.stringify(state.params)}`),
       });

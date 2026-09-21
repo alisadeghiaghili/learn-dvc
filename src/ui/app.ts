@@ -1,11 +1,21 @@
 import type { LevelDef, LevelProgress, RepoState } from '../engine/types';
 import { cloneState, sandboxState } from '../engine/state';
 import { commandCountsForGolf, executeCommand } from '../engine/commands';
-import { evaluateGoal, flattenGoal } from '../engine/compare';
+import { evaluateGoal } from '../engine/compare';
+import { solutionComplete, solutionProgress } from '../engine/solution';
+import { coachLine, nextSteps } from '../engine/coach';
 import { allLevels, getNextLevel, seriesOf } from '../levels';
 import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
+
+function escapeHtml(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
 
 const STORAGE_KEY = 'learn-dvc-progress-v1';
 
@@ -42,6 +52,8 @@ export class App {
   private dockEl!: HTMLElement;
   private titleEl!: HTMLElement;
   private undoStack: RepoState[] = [];
+  private lastWasMeta = false;
+  private lastWasSolution = false;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -141,22 +153,41 @@ export class App {
         </ul>`;
       return;
     }
-    const { solved, statuses } = evaluateGoal(this.state, this.level.goal);
-    const items = flattenGoal(this.level.goal).map((_, i) => {
-      const s = statuses[i];
-      return `<li class="${s.met ? 'met' : ''}">
-        <div class="g-label">${s.met ? '✓' : '○'} ${s.label}</div>
-        <div class="g-detail">${s.detail}</div>
+    const level = this.level;
+    const steps = solutionProgress(this.state, level.solution);
+    const solved = solutionComplete(this.state, level.solution);
+    // Declarative goal checks are secondary notes — solution is the checklist.
+    const { statuses } = evaluateGoal(this.state, level.goal);
+    const items = steps.map((s) => {
+      return `<li class="${s.done ? 'met' : ''}${s.optional ? ' optional' : ''}">
+        <div class="g-label">${s.done ? '✓' : '○'} <code>${escapeHtml(s.command)}</code>${
+          s.optional ? ' <span class="chip">optional</span>' : ''
+        }</div>
+        <div class="g-detail">${escapeHtml(s.note)}</div>
       </li>`;
     });
-    const prog = this.progress[this.level.id];
-    const golfNote = prog?.bestCommands !== undefined ? `Best: ${prog.bestCommands} cmd · par ${this.level.par}` : `par ${this.level.par}`;
+    const remaining = nextSteps(this.state, level.goal, level);
+    const firstNext = remaining[0]?.command;
+    const nextBlock = solved
+      ? `<div class="next-box met">All solution steps met.</div>`
+      : `<div class="next-box">
+            <div class="next-title">Type next</div>
+            <div class="next-row"><span class="g-label">○ remaining</span>${
+              firstNext ? `<code class="g-cmd">${escapeHtml(firstNext)}</code>` : ''
+            }</div>
+            <div class="par-note">Checklist above is the official solution. Also: <code>steps</code> · <code>hint</code> · <code>show solution</code></div>
+          </div>`;
+    const extra = statuses.filter((s) => !s.met);
+    const prog = this.progress[level.id];
+    const golfNote = prog?.bestCommands !== undefined ? `Best: ${prog.bestCommands} cmd · par ${level.par}` : `par ${level.par}`;
     this.dockEl.innerHTML = `
-      <h2>${this.level.name}</h2>
-      <p class="objective">${this.level.objective}</p>
+      <h2>${level.name}</h2>
+      <p class="objective">${level.objective}</p>
       <div class="par-note">${golfNote}${solved ? ' · SOLVED' : ''}</div>
       ${this.solvedFlash ? `<div class="solved-banner">Level solved${this.golf.length ? ` in ${this.golf.length} command(s)` : ''}.</div>` : ''}
+      ${nextBlock}
       <ul class="goal-list">${items.join('')}</ul>
+      ${extra.length && !solved ? `<div class="par-note">State notes: ${extra.map((s) => escapeHtml(s.label)).join(' · ')}</div>` : ''}
     `;
   }
 
@@ -215,6 +246,8 @@ export class App {
     this.log = [];
     this.pushMeta(`Level ${level.id} — ${level.name}`);
     this.pushOut(level.objective);
+    const coach = coachLine(this.state, level);
+    if (coach) this.pushMeta(coach);
     this.renderAll();
     this.showIntro(level);
     this.goalOpen = true;
@@ -290,6 +323,10 @@ export class App {
     this.undoStack = [];
     this.solvedFlash = false;
     this.pushMeta(this.level ? `Reset level ${this.level.id}.` : 'Reset sandbox.');
+    if (this.level) {
+      const coach = coachLine(this.state, this.level);
+      if (coach) this.pushMeta(coach);
+    }
     this.renderAll();
     this.terminal.focus();
   }
@@ -331,6 +368,7 @@ export class App {
   private handleCommand(raw: string): void {
     const cmd = raw.trim();
     if (!cmd) return;
+    this.lastWasMeta = true;
     this.log.push({ kind: 'cmd', text: cmd });
     this.terminal.setLog(this.log);
 
@@ -346,6 +384,21 @@ export class App {
     }
     if (lower === 'hint') {
       this.pushOut(this.level?.hint ?? 'No hint in sandbox. Open Levels.');
+      if (this.level) {
+        const coach = coachLine(this.state, this.level);
+        if (coach) this.pushMeta(coach);
+      }
+      return;
+    }
+    if (lower === 'steps' || lower === 'next') {
+      if (!this.level) {
+        this.pushMeta('Sandbox has no goal. Open Levels for a challenge.');
+        return;
+      }
+      const coach = coachLine(this.state, this.level);
+      this.pushOut(coach ?? 'All solution steps are met.');
+      this.goalOpen = true;
+      this.renderAll();
       return;
     }
     if (lower === 'show goal' || lower === 'goal') {
@@ -389,6 +442,8 @@ export class App {
   }
 
   private runCommand(cmd: string, opts: { fromSolution: boolean }): void {
+    this.lastWasMeta = false;
+    this.lastWasSolution = opts.fromSolution;
     const prev = cloneState(this.state);
     const { state, result } = executeCommand(this.state, cmd);
     this.state = state;
@@ -412,8 +467,7 @@ export class App {
 
   private afterStateChange(): void {
     if (this.level) {
-      const { solved } = evaluateGoal(this.state, this.level.goal);
-      const already = this.progress[this.level.id]?.solved ?? false;
+      const solved = solutionComplete(this.state, this.level.solution);
       if (solved && !this.solvedFlash) {
         this.solvedFlash = true;
         const num = this.golf.length;
@@ -430,8 +484,17 @@ export class App {
       } else if (!solved && this.solvedFlash) {
         this.solvedFlash = false;
       }
-      if (solved && !already) {
-        // auto offer next
+      // After a real command in a level, always surface the next concrete step.
+      if (this.level && !solved && !this.lastWasMeta && !this.lastWasSolution) {
+        const coach = coachLine(this.state, this.level);
+        if (coach) {
+          const first = nextSteps(this.state, this.level.goal, this.level)[0];
+          if (first?.command) {
+            this.pushMeta(`Next: ${first.command}`);
+          } else {
+            this.pushMeta(coach.split('\n')[0] ?? 'Continue the level goal.');
+          }
+        }
       }
     }
     this.renderAll();

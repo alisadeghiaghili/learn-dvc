@@ -59,6 +59,8 @@ export interface GitCommit {
   pipelineSig: string;
   params: Record<string, string | number>;
   metrics: Record<string, number>;
+  /** Paths that were staged when this commit was created. */
+  files: string[];
 }
 
 export interface RepoState {
@@ -80,6 +82,8 @@ export interface RepoState {
   dataVersions: Record<string, number>;
   /** Pipeline outputs currently materialized in workspace. */
   generated: string[];
+  /** Set by `dvc exp apply` so goals can require promotion, not just a matching param. */
+  lastAppliedExpId?: string;
 }
 
 export interface CommandResult {
@@ -110,9 +114,18 @@ export type GoalCheck =
   | { kind: 'metricsExact'; key: string; value: number }
   | { kind: 'paramsAt'; key: string; value: string | number }
   | { kind: 'experimentCount'; min: number }
-  | { kind: 'gitCommitMessageIncludes'; text: string }
+  | { kind: 'gitCommitMessageIncludes'; text: string; requireFilesAny?: string[] }
+  | { kind: 'gitStagedIncludesAny'; paths: string[] }
   | { kind: 'notDirty' }
   | { kind: 'allOf'; checks: GoalCheck[] };
+
+export interface SolutionStepStatus {
+  command: string;
+  done: boolean;
+  note: string;
+  /** Inspect/help commands that do not block level completion. */
+  optional?: boolean;
+}
 
 export interface LevelDef {
   id: string;
@@ -125,7 +138,9 @@ export interface LevelDef {
   objective: string;
   startDialog: DialogSlide[];
   startState: RepoState;
+  /** State checks that mark the level solved — must mirror `solution` step effects. */
   goal: GoalCheck;
+  /** Ordered commands that solve the level; the Goal panel lists these verbatim. */
   solution: string[];
   disabled?: string[];
 }

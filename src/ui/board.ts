@@ -12,8 +12,9 @@ function esc(s: string): string {
 
 function renderWorkspace(state: RepoState): string {
   const dirty = new Set(computeDirtyPaths(state));
+  const staged = new Set(state.gitStaged);
   const files = Object.values(state.files)
-    .filter((f) => f.path !== '.dvc/config' && f.path !== '.dvc/.gitignore')
+    .filter((f) => f.present || f.tracked)
     .sort((a, b) => a.path.localeCompare(b.path));
 
   if (!files.length) {
@@ -23,12 +24,24 @@ function renderWorkspace(state: RepoState): string {
   const cards = files
     .map((f) => {
       const chips: string[] = [];
-      if (f.tracked) chips.push('<span class="chip dvc">.dvc</span>');
+      if (f.path.startsWith('.dvc/')) chips.push('<span class="chip dvc">dvc meta</span>');
+      if (f.tracked) chips.push('<span class="chip dvc">.dvc pointer</span>');
       if (f.gitignored) chips.push('<span class="chip">gitignored</span>');
       if (f.kind === 'code') chips.push('<span class="chip code">code</span>');
       if (f.kind === 'params') chips.push('<span class="chip code">params</span>');
       if (f.kind === 'yaml') chips.push('<span class="chip code">dvc.yaml</span>');
       if (f.kind === 'dvc') chips.push('<span class="chip dvc">pointer file</span>');
+      if (staged.has(f.path) || (f.tracked && staged.has(`${f.path}.dvc`))) {
+        chips.push('<span class="chip ok">git staged</span>');
+      } else if (
+        state.initialized &&
+        (f.path === '.dvc/config' || f.path === '.dvc/.gitignore') &&
+        !state.gitCommits.some((c) => c.message.includes('Initialize DVC'))
+      ) {
+        chips.push('<span class="chip warn">needs git commit</span>');
+      } else if (f.tracked && f.pointerMd5 && state.gitCommits.some((c) => c.pointers[f.path])) {
+        chips.push('<span class="chip ok">in git history</span>');
+      }
       if (dirty.has(f.path)) chips.push('<span class="chip warn">dirty</span>');
       if (f.tracked && f.pointerMd5 && !dirty.has(f.path) && f.present) {
         chips.push('<span class="chip ok">clean</span>');

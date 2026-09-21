@@ -410,6 +410,16 @@ button.ghost {
   border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
 }
 
+.goal-list li.optional {
+  opacity: 0.72;
+}
+
+.goal-list li code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
 .goal-list .g-label {
   font-family: var(--ui);
   color: var(--text);
@@ -423,6 +433,48 @@ button.ghost {
 
 .goal-list li.met .g-detail {
   color: var(--ok);
+}
+
+.g-cmd {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--code);
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 6px;
+  word-break: break-all;
+}
+
+.next-box {
+  border: 1px solid color-mix(in srgb, var(--dvc) 40%, var(--line));
+  background: color-mix(in srgb, var(--dvc) 10%, var(--ink));
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.next-box.met {
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--line));
+  background: color-mix(in srgb, var(--ok) 10%, var(--ink));
+}
+
+.next-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--haze);
+  margin-bottom: 6px;
+}
+
+.next-row {
+  margin-bottom: 6px;
+}
+
+.next-row .g-cmd {
+  margin-top: 4px;
 }
 
 /* Terminal */

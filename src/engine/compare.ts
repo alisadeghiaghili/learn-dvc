@@ -1,10 +1,17 @@
 import type { GoalCheck, RepoState } from './types';
 import { computeDirtyPaths } from './state';
 
+function pathInCommitFiles(files: string[] | undefined, pattern: string): boolean {
+  if (!files?.length) return false;
+  return files.some((f) => f === pattern || f.startsWith(pattern.endsWith('/') ? pattern : `${pattern}/`) || f.startsWith(pattern));
+}
+
 export interface GoalStatus {
   met: boolean;
   label: string;
   detail: string;
+  /** Optional concrete command learners can type next. */
+  command?: string;
 }
 
 function checkOne(state: RepoState, check: GoalCheck): GoalStatus {
@@ -16,6 +23,7 @@ function checkOne(state: RepoState, check: GoalCheck): GoalStatus {
         met,
         label: want ? 'DVC initialized' : 'DVC not initialized',
         detail: met ? 'ok' : want ? 'run `dvc init`' : 'DVC is already initialized',
+        command: want && !met ? 'dvc init' : undefined,
       };
     }
     case 'tracked': {
@@ -159,11 +167,35 @@ function checkOne(state: RepoState, check: GoalCheck): GoalStatus {
       };
     }
     case 'gitCommitMessageIncludes': {
-      const met = state.gitCommits.some((c) => c.message.includes(check.text));
+      const hit = state.gitCommits.find((c) => {
+        if (!c.message.includes(check.text)) return false;
+        if (check.requireFilesAny?.length) {
+          return check.requireFilesAny.some((p) => pathInCommitFiles(c.files, p));
+        }
+        return true;
+      });
+      return {
+        met: !!hit,
+        label: check.requireFilesAny?.length
+          ? `Commit "${check.text}" includes ${check.requireFilesAny.join(' / ')}`
+          : `Commit message contains "${check.text}"`,
+        detail: hit ? `ok (${hit.hash})` : `log: ${state.gitCommits.map((c) => c.message).join(' | ') || '(empty)'}`,
+      };
+    }
+    case 'gitStagedIncludesAny': {
+      const met = check.paths.some((p) =>
+        state.gitStaged.some(
+          (s) => s === p || s.startsWith(p.endsWith('/') ? p : `${p}/`) || s.startsWith(p),
+        ),
+      );
       return {
         met,
-        label: `Commit message contains "${check.text}"`,
-        detail: met ? 'ok' : `log: ${state.gitCommits.map((c) => c.message).join(' | ') || '(empty)'}`,
+        label: `Staged includes ${check.paths.join(' or ')}`,
+        detail: met
+          ? 'ok'
+          : state.gitStaged.length
+            ? `staged: ${state.gitStaged.join(', ')}`
+            : 'nothing staged',
       };
     }
     case 'notDirty': {
