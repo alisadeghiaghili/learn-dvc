@@ -9,9 +9,18 @@ export function teachBlock(title: string, lines: string[]): string {
   return ['', `── Why: ${title} ──`, ...lines.map((l) => `  ${l}`)].join('\n');
 }
 
-export function teachAfterCommand(raw: string, state: RepoState): string | null {
+export function teachAfterCommand(raw: string, _state: RepoState): string | null {
   const cmd = raw.trim();
   if (!cmd) return null;
+
+  if (/^git\s+checkout\b/.test(cmd)) {
+    return teachBlock('git checkout (data pointers)', [
+      'You are switching which data version the project intends to use.',
+      'Git updates the .dvc pointer; it does not download bytes by itself.',
+      'Follow with dvc checkout so the workspace matches that pointer.',
+      'Production rollback drill — practice before you need it at 2am.',
+    ]);
+  }
 
   if (/^dvc\s+init\b/.test(cmd)) {
     return teachBlock('dvc init', [
@@ -136,7 +145,23 @@ export function teachAfterCommand(raw: string, state: RepoState): string | null 
     ]);
   }
 
-  if (state.experiments.length && /^dvc\s+exp\s+show\b/.test(cmd)) {
+  if (/^dvc\s+freeze\b/.test(cmd) || /^dvc\s+unfreeze\b/.test(cmd)) {
+    return teachBlock(cmd.startsWith('dvc freeze') ? 'dvc freeze' : 'dvc unfreeze', [
+      'Freeze pins a pipeline stage so repro will not re-run it.',
+      'Use it to protect a production artifact while you experiment on params/data.',
+      'Unfreeze is an intentional act — pair it with review + repro + push.',
+    ]);
+  }
+
+  if (/^dvc\s+diff\b/.test(cmd)) {
+    return teachBlock('dvc diff', [
+      'Shows pointer/content drift for tracked data (hash-level, not text hunks).',
+      'Use before accepting a change: what md5 moved, and how much is on remote?',
+      'In production, pair with git show of the .dvc file for the narrative.',
+    ]);
+  }
+
+  if (/^dvc\s+exp\s+show\b/.test(cmd)) {
     return teachBlock('dvc exp show', [
       'Tabular comparison of experiments: params vs metrics side by side.',
       'You are choosing baselines with evidence, not memory.',

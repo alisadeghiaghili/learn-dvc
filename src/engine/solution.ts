@@ -63,6 +63,12 @@ function matchSolutionCommand(historyCmd: string, solutionCmd: string): boolean 
   if (h === s) return true;
   if (h.startsWith(`${s} `) || s.startsWith(`${h} `)) return true;
 
+  if (/^git\s+checkout\b/i.test(s) && /^git\s+checkout\b/i.test(h)) {
+    const sRef = parseArgs(s)[2] ?? '';
+    const hRef = parseArgs(h)[2] ?? '';
+    return sRef === hRef || h.startsWith(normalizeWs(s)) || s.startsWith(normalizeWs(h));
+  }
+
   const verb = (c: string) => c.split(' ').slice(0, 2).join(' ').toLowerCase();
 
   if (/^git\s+add\b/i.test(s) && /^git\s+add\b/i.test(h)) {
@@ -182,6 +188,13 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
     return state.initialized ? ok('DVC project initialized') : fail('run `dvc init`');
   }
 
+  if (/^git\s+checkout\b/.test(cmd)) {
+    // Version-switch drills: success = command ran (pointer materialization checked via dvc checkout / goals).
+    return commandInHistory(state, (h) => matchSolutionCommand(h, cmd))
+      ? ok('checkout command executed')
+      : fail(cmd);
+  }
+
   if (/^git\s+add\b/.test(cmd)) {
     const paths = parseArgs(cmd).slice(2).filter((p) => !p.startsWith('-'));
     const stagedNow = paths.some((p) => pathInList(state.gitStaged, p));
@@ -297,6 +310,18 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
     if (!applied) return fail(cmd);
     const paramsMatch = Object.entries(applied.params).every(([k, v]) => state.params[k] === v);
     return paramsMatch ? ok(`applied ${applied.id}`) : fail(cmd);
+  }
+
+  if (/^dvc\s+freeze\b/.test(cmd) || /^dvc\s+unfreeze\b/.test(cmd)) {
+    const name = flagValues(cmd, '-n')[0] ?? parseArgs(cmd)[2];
+    const freeze = /^dvc\s+freeze\b/.test(cmd);
+    const stage = state.pipeline.find((s) => s.name === name);
+    if (!stage) return fail(cmd);
+    return stage.frozen === freeze ? ok(`stage ${name} ${freeze ? 'frozen' : 'unfrozen'}`) : fail(cmd);
+  }
+
+  if (/^dvc\s+diff\b/.test(cmd)) {
+    return { command: cmd, done: true, note: 'inspect drift (does not block completion)', optional: true };
   }
 
   if (/^dvc\s+status\b/.test(cmd)) {

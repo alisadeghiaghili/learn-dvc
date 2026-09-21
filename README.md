@@ -9,7 +9,10 @@ Git versions code well; datasets and models break that model. DVC stores data co
 ## Features
 
 - **Sandbox** with a seeded DVC project
-- **Levels** across four packs: Basics, Remotes, Pipelines, Experiments
+- **Levels** across packs: Basics, Remotes, Pipelines, Experiments, Field practice
+- **Teaching**: multi-slide intros, “You are learning”, production **field notes**, post-command **Why** blocks
+- **`curriculum`** — outcomes you should own after the course
+- **`concepts` / `glossary`** — dense mental models (pointers, cache, dirty data, freeze, CI pattern…)
 - **Terminal** simulating core `dvc` and simplified `git` commands
 - **Goal panel** with live checks, hint, solution, undo/reset
 - **Command golf** (par per level) + progress in `localStorage`

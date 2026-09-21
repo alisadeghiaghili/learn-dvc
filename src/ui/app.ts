@@ -4,7 +4,7 @@ import { commandCountsForGolf, executeCommand } from '../engine/commands';
 import { evaluateGoal } from '../engine/compare';
 import { solutionComplete, solutionProgress } from '../engine/solution';
 import { coachLine, nextSteps } from '../engine/coach';
-import { allLevels, getNextLevel, seriesOf } from '../levels';
+import { allLevels, getNextLevel, seriesOf, curriculumOutcomes } from '../levels';
 import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
@@ -195,6 +195,14 @@ export class App {
           ? `<div class="learning-box">
               <div class="next-title">You are learning</div>
               <ul>${level.learning.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
+            </div>`
+          : ''
+      }
+      ${
+        level.fieldNotes?.length
+          ? `<div class="field-box">
+              <div class="next-title">In production</div>
+              <ul>${level.fieldNotes.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
             </div>`
           : ''
       }
@@ -450,6 +458,23 @@ export class App {
     }
     if (lower === 'help level') {
       this.pushOut(this.level?.objective ?? 'No level.');
+      this.terminal.focus();
+      return;
+    }
+
+    if (lower === 'curriculum' || lower === 'outcomes' || lower === 'syllabus') {
+      const lines = curriculumOutcomes().map((o, i) => `${String(i + 1).padStart(2, ' ')}. ${o}`);
+      const summary = summarizeCurriculum(this.progress);
+      this.pushOut('After this course you should be able to:');
+      this.pushOut(lines.join('\n'));
+      this.pushMeta(`Progress: ${summary.solvedCount}/${summary.total} levels solved.`);
+      this.pushMeta('Field glossary: type `concepts` (or `concepts pointer`).');
+      this.terminal.focus();
+      return;
+    }
+    if (lower === 'concepts' || lower === 'glossary' || lower.startsWith('concepts ') || lower.startsWith('glossary ')) {
+      // Engine handles concepts content; meta only re-focuses terminal after.
+      this.runCommand(cmd, { fromSolution: false });
       this.terminal.focus();
       return;
     }

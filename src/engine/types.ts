@@ -140,6 +140,8 @@ export interface LevelDef {
   objective: string;
   /** Concepts this level is supposed to install — shown in the goal panel. */
   learning: string[];
+  /** What a working data/ML engineer does with this in production. */
+  fieldNotes?: string[];
   startDialog: DialogSlide[];
   startState: RepoState;
   /** State checks that mark the level solved — must mirror `solution` step effects. */

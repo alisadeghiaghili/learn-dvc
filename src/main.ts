@@ -20,7 +20,7 @@ if (!params.has('NODEMO')) {
         '',
         `- Basics: \`init\`, \`add\`, pointers, status\n- Remotes: \`remote add\`, \`push\`, \`pull\`\n- Pipelines: \`stage add\`, \`repro\`, params/metrics\n- Experiments: \`exp run\`, \`exp show\`, \`exp apply\``,
         '',
-        'Meta commands: `levels`, `hint`, `show goal`, `show solution`, `reset`, `undo`, `sandbox`, `help`.',
+        'Meta: `levels`, `curriculum`, `concepts`, `hint`, `steps`, `show solution`.',
         '',
         `**${allLevels.length}** levels included. Open Levels to begin, or stay in sandbox.`,
       ].join('\n'),

@@ -88,6 +88,11 @@ export const basicsLevels: LevelDef[] = [
       'dvc init only creates .dvc/ metadata — no data is versioned yet',
       'Git versions that metadata; teammates clone the same workflow',
     ],
+    fieldNotes: [
+      'Repo bootstrap: git init → dvc init → commit .dvc immediately',
+      'Store remote config in .dvc/config so clones inherit the same data store',
+      'If .dvc is not committed, every teammate has a different data workflow',
+    ],
     startDialog: [
       {
         title: 'Why Git alone fails for ML data',
@@ -133,6 +138,11 @@ export const basicsLevels: LevelDef[] = [
       'dvc add = hash + cache object + .dvc pointer + gitignore',
       'Git commits the pointer (md5), never the large file',
       'Board: Workspace file turns into pointer + Cache object appears',
+    ],
+    fieldNotes: [
+      'Track datasets/models/artifacts you cannot rebuild cheaply',
+      'PR review should read pointer diffs (md5), not megabytes of CSV',
+      'CI pulls data via DVC; images stay slim',
     ],
     startDialog: [
       {
@@ -187,6 +197,10 @@ export const basicsLevels: LevelDef[] = [
       'dvc status is the data analogue of git status',
       'dvc commit updates pointer+cache; git commit versions that pointer',
       'History keeps old md5 — you can go back with checkout later',
+    ],
+    fieldNotes: [
+      'Pre-commit hook: fail CI if dvc status shows uncommitted data drift',
+      'Every metric in a paper/model card should reference a data pointer commit',
     ],
     startDialog: [
       {
@@ -245,6 +259,10 @@ export const remoteLevels: LevelDef[] = [
       'dvc remote add -d sets the default push/pull target',
       'Local folder remotes are valid for learning; production uses S3/GCS/SSH',
     ],
+    fieldNotes: [
+      'Secrets for remotes go in CI/CD, not committed config',
+      'Separate buckets per env (dev/stage/prod) when data sensitivity differs',
+    ],
     startDialog: [
       {
         title: 'Why remotes exist',
@@ -280,6 +298,10 @@ export const remoteLevels: LevelDef[] = [
       'push copies cache → remote only for objects the remote lacks',
       'Pointers can be on Git while data is not yet shared — incomplete collaboration',
       'Board: Cache object should also appear under Remote after push',
+    ],
+    fieldNotes: [
+      'Release = git push + dvc push; both are required for teammates/CI',
+      'Orphan cache objects: periodically dvc gc after backups — know the tradeoff',
     ],
     startDialog: [
       {
@@ -679,11 +701,395 @@ export const experimentLevels: LevelDef[] = [
   },
 ];
 
+/** Two-version data history: HEAD has v1, HEAD~1 has v0; cache holds both. */
+function twoVersionRepo(path = 'data/data.xml'): RepoState {
+  const s = rawRepo();
+  const md5v0 = fakeMd5(`file:${path}:v0`);
+  const md5v1 = fakeMd5(`file:${path}:v1`);
+  s.dataVersions[path] = 1;
+  s.files[path] = makeFile(path, 'data', {
+    contentId: md5v1,
+    tracked: true,
+    pointerMd5: md5v1,
+    dirty: false,
+    present: true,
+    gitignored: true,
+  });
+  s.cache = [md5v0, md5v1];
+  s.remoteObjects = [md5v0, md5v1];
+  s.remotes = [{ name: 'myremote', url: '/tmp/dvcstore', isDefault: true }];
+  s.files[`${path}.dvc`] = makeFile(`${path}.dvc`, 'dvc');
+  s.files['data/.gitignore'] = makeFile('data/.gitignore', 'meta');
+  s.gitCommits.push({
+    hash: 'aaa0001',
+    message: 'Add raw data',
+    pointers: { [path]: md5v0 },
+    pipelineSig: '',
+    params: {},
+    metrics: {},
+    files: [`${path}.dvc`, 'data/.gitignore'],
+  });
+  s.gitCommits.push({
+    hash: 'bbb0002',
+    message: 'Dataset updates',
+    pointers: { [path]: md5v1 },
+    pipelineSig: '',
+    params: {},
+    metrics: {},
+    files: [`${path}.dvc`],
+  });
+  s.commandHistory = [];
+  return s;
+}
+
+function dirtyPipelineRepo(): RepoState {
+  const s = pipelineRepo();
+  s.pipeline = [
+    {
+      name: 'train',
+      deps: ['data/data.xml', 'src/train.py'],
+      outs: ['model.pkl'],
+      cmd: 'python src/train.py',
+      params: ['lr', 'n_estimators'],
+      metrics: ['metrics.json'],
+      frozen: false,
+      upToDate: true,
+    },
+  ];
+  s.files['model.pkl'] = makeFile('model.pkl', 'data');
+  s.files['dvc.yaml'] = makeFile('dvc.yaml', 'yaml');
+  s.files['dvc.lock'] = makeFile('dvc.lock', 'yaml');
+  s.metrics = { 'metrics.json:acc': 0.7 };
+  s.commandHistory = [];
+  return s;
+}
+
+function promotePipelineRepo(): RepoState {
+  const s = pipelineRepo();
+  s.pipeline = [
+    {
+      name: 'train',
+      deps: ['data/data.xml', 'src/train.py'],
+      outs: ['model.pkl'],
+      cmd: 'python src/train.py',
+      params: ['lr', 'n_estimators'],
+      metrics: ['metrics.json'],
+      frozen: false,
+      upToDate: false,
+    },
+  ];
+  s.commandHistory = [];
+  return s;
+}
+
+function capstoneRepo(): RepoState {
+  const s = trackedDataRepo();
+  s.files['src/train.py'] = makeFile('src/train.py', 'code');
+  s.files['src/prepare.py'] = makeFile('src/prepare.py', 'code');
+  s.files['params.yaml'] = makeFile('params.yaml', 'params', {
+    contentId: fakeMd5('params:lr=0.1:n=10'),
+  });
+  s.params = { lr: 0.1, n_estimators: 10 };
+  s.remotes = [];
+  s.commandHistory = [];
+  return s;
+}
+
+export const fieldLevels: LevelDef[] = [
+  {
+    id: 'field-1',
+    series: 'field',
+    seriesTitle: 'Field practice',
+    name: 'Restore older data version',
+    difficulty: 5,
+    par: 2,
+    hint: 'git checkout HEAD~1 data/data.xml.dvc; dvc checkout',
+    objective:
+      'Git history holds two data versions. Restore the older pointer and sync workspace bytes with `dvc checkout`.',
+    learning: [
+      'Data versions live in Git as pointer snapshots, not as file copies',
+      'git checkout of a .dvc path switches the requested version pointer',
+      'dvc checkout materializes cache objects into the workspace',
+      'Incident skill: roll back data without hunting backups',
+    ],
+    fieldNotes: [
+      'When a bad dataset ships: find the Git commit that still has the good pointer',
+      'git checkout <good-sha> -- path/to/file.dvc && dvc checkout',
+      'If cache lacks that md5, dvc pull --rev or restore from remote backup',
+      'Never “fix data” by overwriting files on a shared server without a pointer commit',
+    ],
+    startDialog: [
+      {
+        title: 'The real rollback drill',
+        markdown:
+          'Your board should show `data/data.xml` at **v1** (Dataset updates).\n\nGoal: go back to **v0** (Add raw data):\n\n```\ngit checkout HEAD~1 data/data.xml.dvc\ndvc checkout\n```\n\nWatch Cache — both md5 objects stay; only the **pointer** and workspace link change.',
+      },
+      {
+        title: 'Why two commands',
+        markdown:
+          '- `git checkout … -- file.dvc` → metadata says “this project wants hash X”\n- `dvc checkout` → put hash X’s bytes on disk\n\nSkipping DVC checkout leaves code training on **wrong bytes** while Git claims an old version. That silent mismatch is worse than a crash.',
+      },
+      {
+        title: 'Interview-grade answer',
+        markdown:
+          '“DVC is not a second Git. Git versions *intent* (which data hash). DVC versions *payload* (objects). Rollback = move intent, then materialize payload.”',
+      },
+    ],
+    startState: twoVersionRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'pointer', path: 'data/data.xml', md5: fakeMd5('file:data/data.xml:v0') },
+        { kind: 'notDirty' },
+        { kind: 'workspaceHas', paths: ['data/data.xml'] },
+      ],
+    },
+    solution: ['git checkout HEAD~1 data/data.xml.dvc', 'dvc checkout'],
+  },
+  {
+    id: 'field-2',
+    series: 'field',
+    seriesTitle: 'Field practice',
+    name: 'Data changed → pipeline stale',
+    difficulty: 4,
+    par: 2,
+    hint: 'edit data/data.xml; dvc repro',
+    objective:
+      'Pipeline looks green until data changes. Edit the dataset, then `dvc repro` so dependents re-run.',
+    learning: [
+      'Data files are first-class pipeline dependencies',
+      'edit/dirty data invalidates stages that declared those deps',
+      'dvc repro re-runs only what is stale — cost control at scale',
+    ],
+    fieldNotes: [
+      'Nightly data refreshes should land as dvc add/commit + pipeline repro, not ad-hoc notebooks',
+      'If repro “skips everything” unexpectedly, check whether deps actually changed hashes',
+      'Pair data releases with pointer commits so metrics stay attributable',
+    ],
+    startDialog: [
+      {
+        title: 'Green until it isn’t',
+        markdown:
+          'Train is marked up to date. Then new data arrives:\n\n```\nedit data/data.xml\ndvc repro\n```\n\n`edit` here means *the dataset changed*. DVC should treat `train` as dirty because `data/data.xml` is a dependency.',
+      },
+      {
+        title: 'Build-system thinking',
+        markdown:
+          'ML cost is compute. A reproducible DAG lets you answer:\n\n- what must re-run?\n- what can reuse cache?\n- what changed since last green build?\n\nWithout deps declared, everyone re-runs everything — or worse, nobody re-runs train.',
+      },
+    ],
+    startState: dirtyPipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'stageUpToDate', name: 'train' },
+        { kind: 'workspaceHas', paths: ['model.pkl'] },
+      ],
+    },
+    solution: ['edit data/data.xml', 'dvc repro'],
+  },
+  {
+    id: 'field-3',
+    series: 'field',
+    seriesTitle: 'Field practice',
+    name: 'Promote winner then repro',
+    difficulty: 5,
+    par: 3,
+    hint: 'dvc exp run -S lr=0.05; dvc exp apply exp-…; dvc repro',
+    objective:
+      'Winning experiment must become the production baseline: run, apply, then `dvc repro` so artifacts match the new params.',
+    learning: [
+      'apply updates workspace params/metrics, not magically all artifacts',
+      'After apply, stages are stale until repro materializes new outputs',
+      'Shipping config without repro produces “params say X, model is Y”',
+    ],
+    fieldNotes: [
+      'Release checklist: exp show → exp apply winner → dvc repro → git commit pointer/yaml/params → dvc push',
+      'CI can re-run repro on the release commit to prove the model matches committed config',
+    ],
+    startDialog: [
+      {
+        title: 'The incomplete promotion',
+        markdown:
+          '```\ndvc exp run -S lr=0.05\ndvc exp apply <id>\ndvc repro\n```\n\nMany teams stop at apply. Metrics on the experiment are recorded; **model.pkl on disk** may still be the old run until repro.',
+      },
+      {
+        title: 'Definition of done',
+        markdown:
+          'A baseline is done when:\n\n1. Git commit pins code + params + data pointers\n2. Pipeline outputs are regenerated (or cached) for that lock\n3. Remote holds the objects teammates need\n\nApply + repro is how you get (1) and (2) aligned.',
+      },
+    ],
+    startState: promotePipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'experimentCount', min: 1 },
+        { kind: 'paramsAt', key: 'lr', value: 0.05 },
+        { kind: 'stageUpToDate', name: 'train' },
+        { kind: 'workspaceHas', paths: ['model.pkl'] },
+      ],
+    },
+    solution: [
+      'dvc exp run -S lr=0.05',
+      'dvc exp apply exp-',
+      'dvc repro',
+    ],
+  },
+  {
+    id: 'capstone-1',
+    series: 'field',
+    seriesTitle: 'Field practice',
+    name: 'Capstone: ship a data version',
+    difficulty: 5,
+    par: 10,
+    hint: 'remote add; push; stage prepare+train; repro; exp run; exp apply; (optionally repro again)',
+    objective:
+      'Ship a data-backed experiment end-to-end: remote, push, pipeline, repro, experiment, apply — then leave train up to date.',
+    learning: [
+      'Integrate the whole loop under time pressure',
+      'Every missing step shows up as a broken board or failed goal',
+      'Independence = knowing the next correct command from state, not a tutorial',
+    ],
+    fieldNotes: [
+      'On a new repo: dvc init → track data → remote → push → pipeline → repro → exp',
+      'Demo to stakeholders: show Git log + dvc exp show + board cache/remote alignment',
+      'If you can explain this capstone aloud, you can survive a DVC onboarding week',
+    ],
+    startDialog: [
+      {
+        title: 'Capstone',
+        markdown:
+          'You have tracked `data/data.xml`, code for prepare/train, and params — **no remote, no pipeline runs**.\n\nDeliver:\n\n1. Default remote + `dvc push` data objects\n2. `prepare` then `train` stages + `dvc repro`\n3. `dvc exp run -S lr=0.05` + `dvc exp apply`\n4. End with `train` up to date and `model.pkl` present\n\nUse `steps` freely. This is a drill, not a trick.',
+      },
+      {
+        title: 'Success looks like',
+        markdown:
+          'Board: data tracked, cache filled, remote holds objects.\nDAG: prepare → train reproduced.\nExperiments: at least one with `lr=0.05` applied.\n\nThat is a miniature production pipeline you can explain on an interview whiteboard.',
+      },
+    ],
+    startState: capstoneRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'remoteConfigured', default: true },
+        { kind: 'remoteHas', md5s: ['tracked:data/data.xml'] },
+        { kind: 'stageExists', name: 'prepare' },
+        { kind: 'stageExists', name: 'train' },
+        { kind: 'stageUpToDate', name: 'train' },
+        { kind: 'workspaceHas', paths: ['model.pkl'] },
+        { kind: 'experimentCount', min: 1 },
+        { kind: 'paramsAt', key: 'lr', value: 0.05 },
+      ],
+    },
+    solution: [
+      'dvc remote add -d myremote /tmp/dvcstore',
+      'dvc push',
+      'dvc stage add -n prepare -d data/data.xml -d src/prepare.py -o data/prepared.csv python src/prepare.py',
+      'dvc stage add -n train -d data/prepared.csv -d src/train.py -p lr -p n_estimators -o model.pkl -m metrics.json python src/train.py',
+      'dvc repro',
+      'dvc exp run -S lr=0.05',
+      'dvc exp apply exp-',
+      'dvc repro',
+    ],
+  },
+  {
+    id: 'field-5',
+    series: 'field',
+    seriesTitle: 'Field practice',
+    name: 'Freeze a production stage',
+    difficulty: 4,
+    par: 3,
+    hint: 'dvc freeze train; edit params.yaml lr=0.2; dvc repro; dvc unfreeze train; dvc repro',
+    objective:
+      'Protect a production `train` artifact with freeze, see that repro skips it even when params change, then unfreeze and repro the new baseline.',
+    learning: [
+      'freeze pins a stage against input invalidation',
+      'repro skips frozen stages by design — not a DVC bug',
+      'unfreeze + repro is how you intentionally take a new baseline',
+    ],
+    fieldNotes: [
+      'Use freeze on a blessed production model while you experiment on downstream evals',
+      'Document freeze reasons in Git commit messages — silent freezes hide stale models',
+      'Interview answer: freeze is a guardrail, not a substitute for review',
+    ],
+    startDialog: [
+      {
+        title: 'Why freeze exists',
+        markdown:
+          'You are investigating a data drift issue. You must **not** overwrite the production model while trying params.\n\n```\ndvc freeze train\nedit params.yaml lr=0.2\ndvc repro\n```\n\nExpect repro to **refuse** to re-run `train`. That refusal is the feature.',
+      },
+      {
+        title: 'Then take the new baseline on purpose',
+        markdown:
+          '```\ndvc unfreeze train\ndvc repro\n```\n\nNow the pipeline is allowed to produce a new `model.pkl` for the new params.\n\nAlways unfreeze in a reviewed PR — otherwise “main” silently keeps old artifacts.',
+      },
+    ],
+    startState: dirtyPipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'paramsAt', key: 'lr', value: 0.2 },
+        { kind: 'stageUpToDate', name: 'train' },
+      ],
+    },
+    solution: [
+      'dvc freeze train',
+      'edit params.yaml lr=0.2',
+      'dvc repro',
+      'dvc unfreeze train',
+      'dvc repro',
+    ],
+  },
+  {
+    id: 'field-6',
+    series: 'field',
+    seriesTitle: 'Field practice',
+    name: 'Diagnose with status/diff',
+    difficulty: 4,
+    par: 3,
+    hint: 'edit data/data.xml; dvc status; dvc diff; dvc commit',
+    objective:
+      'Intentionally dirty a tracked file, read `dvc status` and `dvc diff`, then accept the new data version with `dvc commit`.',
+    learning: [
+      'Diagnosis before action: status/diff show pointer vs content drift',
+      'diff is the data analogue of git diff — hashes, not text hunks',
+      'commit is an explicit acceptance of a new data version',
+    ],
+    fieldNotes: [
+      'Incident: training loss spiked → dvc status/diff on dataset pointers first',
+      'If diff shows unexpected md5 change, stop and find who ran add/push',
+      'Never “quietly re-add” data without an explainable pointer commit',
+    ],
+    startDialog: [
+      {
+        title: 'Observe, then accept',
+        markdown:
+          '```\nedit data/data.xml\ndvc status\ndvc diff\ndvc commit\n```\n\nRead the board: workspace content id ≠ pointer. Cache will gain the new object only after commit.',
+      },
+      {
+        title: 'What good engineers write down',
+        markdown:
+          'In PR/issue text include:\n\n- old md5 → new md5\n- why the data changed (source, filter, date range)\n- whether models must be retrained\n\nDVC gives you the hashes; you supply the narrative.',
+      },
+    ],
+    startState: trackedDataRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'notDirty' },
+        { kind: 'cacheHas', md5s: ['tracked:data/data.xml'] },
+      ],
+    },
+    solution: ['edit data/data.xml', 'dvc status', 'dvc diff', 'dvc commit'],
+  },
+];
+
 export const allLevels: LevelDef[] = [
   ...basicsLevels,
   ...remoteLevels,
   ...pipelineLevels,
   ...experimentLevels,
+  ...fieldLevels,
 ];
 
 export function getLevel(id: string): LevelDef | undefined {
@@ -700,16 +1106,37 @@ export function getNextLevel(id: string): LevelDef | undefined {
 }
 
 export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] {
-  const order = ['basics', 'remote', 'pipe', 'exp'];
+  const order = ['basics', 'remote', 'pipe', 'exp', 'field'];
   const titles: Record<string, string> = {
     basics: 'Basics',
     remote: 'Remotes',
     pipe: 'Pipelines',
     exp: 'Experiments',
+    field: 'Field practice',
   };
   return order.map((id) => ({
     id,
     title: titles[id],
     levels: allLevels.filter((l) => l.series === id),
   }));
+}
+
+/** What an independent DVC user should be able to do after this course. */
+export function curriculumOutcomes(): string[] {
+  return [
+    'Explain why Git alone cannot version large datasets/models',
+    'Track data with dvc add and commit only pointers + ignore rules to Git',
+    'Diagnose dirty data with dvc status / dvc diff and promote with dvc commit',
+    'Configure a DVC remote and share objects with push/pull/fetch',
+    'Reproduce after clone: git clone → dvc pull → data on disk',
+    'Restore an older data version: git checkout <ref> -- path.dvc → dvc checkout',
+    'Declare ML pipelines in dvc.yaml (deps/outs/params/metrics) and run dvc repro',
+    'Know when a stage is dirty and why repro skipped or re-ran work',
+    'Freeze/unfreeze stages to protect production artifacts intentionally',
+    'Run controlled experiments with dvc exp run -S and compare with exp show',
+    'Promote a winning experiment with dvc exp apply, then repro the baseline',
+    'Read the board: Workspace pointers ↔ cache objects ↔ remote artifacts',
+    'Answer “which data produced this model?” using Git + DVC history',
+    'Use `concepts` as a field glossary when stuck on a real project',
+  ];
 }

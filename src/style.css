@@ -504,16 +504,30 @@ button.ghost {
   margin: 0 0 10px;
 }
 
+.field-box {
+  border: 1px solid color-mix(in srgb, var(--remote) 40%, var(--line));
+  background: color-mix(in srgb, var(--remote) 8%, var(--ink));
+  border-radius: 10px;
+  padding: 10px;
+  margin: 0 0 10px;
+}
+
+.field-box ul,
 .learning-box ul {
   margin: 6px 0 0;
   padding-left: 16px;
 }
 
+.field-box li,
 .learning-box li {
   font-size: 12px;
   color: var(--text);
   margin-bottom: 4px;
   line-height: 1.4;
+}
+
+.field-box li {
+  color: #f0e0c0;
 }
 
 .next-box {

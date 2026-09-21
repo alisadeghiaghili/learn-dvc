@@ -1,6 +1,7 @@
 import type { CommandResult, GitCommit, PipelineStage, RepoState } from './types';
 import { commitHash, expId, fakeMd5, shortMd5 } from './hash';
 import { teachAfterCommand } from './teach';
+import { findConcept, formatConcepts } from './glossary';
 import {
   addCache,
   addRemoteObject,
@@ -335,10 +336,29 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       result: ok(
         [
           'DVC commands: init, add, status, commit, checkout, remote, push, pull, fetch,',
-          '  stage, repro, dag, metrics, params, exp, remove, gc, version',
+          '  stage, repro, dag, freeze, unfreeze, metrics, params, exp, remove, gc, diff, version',
           'Git (simulated): init, add, commit, log, status, checkout',
           'Workspace simulators: edit <path>, rm <path>, cat <path>, ls',
-          'Meta: levels, steps, hint, show goal, hide goal, show solution, reset, undo, sandbox, clear',
+          'Meta: levels, curriculum, concepts|glossary, steps, hint, show goal, show solution, reset, undo, sandbox, clear',
+        ].join('\n'),
+      ),
+    };
+  }
+
+  if (cmd === 'concepts' || cmd === 'glossary') {
+    if (args.length) {
+      const c = findConcept(args.join(' '));
+      return c
+        ? { state, result: ok(`${c.title}\n${c.body}`) }
+        : { state, result: fail(`Unknown concept '${args.join(' ')}'. Type \`concepts\`.`) };
+    }
+    return {
+      state,
+      result: ok(
+        [
+          'DVC mental models (type `concepts <term>` for one entry):',
+          '',
+          formatConcepts(),
         ].join('\n'),
       ),
     };
@@ -603,8 +623,44 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     ));
   }
 
+  if (sub === 'freeze' || sub === 'unfreeze') {
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    const name = args[1];
+    if (!name) return { state, result: fail(`Usage: dvc ${sub} <stage>`) };
+    const stage = state.pipeline.find((s) => s.name === name);
+    if (!stage) return { state, result: fail(`ERROR: stage '${name}' not found.`) };
+    stage.frozen = sub === 'freeze';
+    return finish(
+      state,
+      ok(
+        stage.frozen
+          ? `Frozen stage '${name}' — repro will skip it until unfreeze.`
+          : `Unfrozen stage '${name}' — repro can run it again when dirty.`,
+      ),
+    );
+  }
+
+  if (sub === 'diff') {
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    const dirty = computeDirtyPaths(state);
+    const lines: string[] = ['Data/workspace diff vs pointers (simplified):'];
+    if (!dirty.length) lines.push('  (no dirty tracked data)');
+    for (const p of dirty) {
+      const f = state.files[p]!;
+      lines.push(
+        `  ${!f.present ? 'deleted' : 'modified'}  ${p}  pointer=${f.pointerMd5?.slice(0, 8) ?? '—'}… content=${f.contentId.slice(0, 8)}…`,
+      );
+    }
+    const tracked = Object.values(state.files).filter((f) => f.tracked);
+    const onRemote = tracked.filter((f) => f.pointerMd5 && state.remoteObjects.includes(f.pointerMd5)).length;
+    lines.push(`  remote coverage: ${onRemote}/${tracked.length} tracked object(s)`);
+    return finish(state, ok(lines.join('\n')));
+  }
+
   if (sub === 'status') {
-    return { state, result: ok(statusLines(state)) };
+    return finish(state, ok(statusLines(state)));
   }
 
   if (sub === 'add') {

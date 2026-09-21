@@ -55,6 +55,7 @@ const BASE_COMMANDS = [
   'sandbox',
   'clear',
   'help',
+  'curriculum',
 ];
 
 interface WordState {
