@@ -16,6 +16,7 @@ export interface CurriculumItem {
   seriesTitle: string;
   commands: string[];
   bestCommands?: number;
+  learning?: string[];
 }
 
 export interface CurriculumSummary {
@@ -122,6 +123,7 @@ export function summarizeCurriculum(progress: Record<string, LevelProgress>): Cu
       seriesTitle: level.seriesTitle,
       commands: level.solution.filter((c) => !/^(dvc status|dvc exp show|dvc metrics show|dvc params show)/.test(c)),
       bestCommands: progress[level.id]?.bestCommands,
+      learning: level.learning ?? [],
     };
     if (progress[level.id]?.solved) {
       learned.push(item);

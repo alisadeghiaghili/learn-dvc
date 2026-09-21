@@ -1,5 +1,6 @@
 import type { CommandResult, GitCommit, PipelineStage, RepoState } from './types';
 import { commitHash, expId, fakeMd5, shortMd5 } from './hash';
+import { teachAfterCommand } from './teach';
 import {
   addCache,
   addRemoteObject,
@@ -290,6 +291,12 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
   const raw = rawInput.trim();
   if (!raw) return { state, result: ok('') };
 
+  const finish = (st: RepoState, res: CommandResult): { state: RepoState; result: CommandResult } => {
+    if (!res.ok || !res.output) return { state: st, result: res };
+    const teach = teachAfterCommand(raw, st);
+    return { state: st, result: ok(res.output + (teach ? `\n${teach}` : '')) };
+  };
+
   // support simple `;` chains
   if (raw.includes(';') && !raw.startsWith('echo')) {
     const parts = raw.split(';').map((s) => s.trim()).filter(Boolean);
@@ -514,7 +521,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
         return { state, result: fail('nothing to commit, working tree clean (stage .dvc files first)') };
       }
       const c = snapshotGit(state, message);
-      return { state, result: ok(`[${c.hash}] ${message}`) };
+      return finish(state, ok(`[${c.hash}] ${message}`));
     }
     if (sub === 'checkout') {
       // forms:
@@ -558,24 +565,17 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
     state.initialized = true;
     state.files['.dvc/config'] = makeFile('.dvc/config', 'meta');
     state.files['.dvc/.gitignore'] = makeFile('.dvc/.gitignore', 'meta');
-    return {
-      state,
-      result: ok(
-        [
-          'Initialized DVC local workspace.',
-          '',
-          'Created:',
-          '  .dvc/config',
-          '  .dvc/.gitignore',
-          '',
-          'DVC alone is not enough for this level — Git must track the .dvc metadata:',
-          '  1) git add .dvc',
-          '  2) git commit -m "Initialize DVC"',
-          '',
-          'Tip: type `steps` to see remaining goal commands after every action.',
-        ].join('\n'),
-      ),
-    };
+    return finish(state, ok(
+      [
+        'Initialized DVC local workspace.',
+        '',
+        'Created:',
+        '  .dvc/config',
+        '  .dvc/.gitignore',
+        '',
+        'DVC alone is not enough — Git must version this metadata.',
+      ].join('\n'),
+    ));
   }
 
   if (sub === 'status') {
@@ -610,20 +610,15 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       });
     }
     markPipelineDirtyIfInputChanged(state, path);
-    return {
-      state,
-      result: ok(
-        [
-          `100% ${path}`,
-          `To track the changes with git, run:`,
-          `\tgit add ${path}.dvc ${path.includes('/') ? path.split('/')[0] + '/.gitignore' : '.gitignore'}`,
-          `To enable auto staging, run:`,
-          `\tdvc stage add --autostage`,
-          ``,
-          `Cached object → .dvc/cache/files/md5/${md5.slice(0, 2)}/${md5.slice(2)}`,
-        ].join('\n'),
-      ),
-    };
+    return finish(state, ok(
+      [
+        `100% ${path}`,
+        `Pointer file written: ${path}.dvc  (md5 ${md5.slice(0, 8)}…)`,
+        `Cache object: .dvc/cache/files/md5/${md5.slice(0, 2)}/${md5.slice(2)}`,
+        `${path} is now gitignored — Git will track the pointer, not the bytes.`,
+        `Next in Git: git add ${path}.dvc data/.gitignore`,
+      ].join('\n'),
+    ));
   }
 
   if (sub === 'commit') {
@@ -647,7 +642,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       addCache(state, f.pointerMd5);
       lines.push(`committed ${p} → ${shortMd5(f.pointerMd5)}`);
     }
-    return { state, result: ok(lines.join('\n')) };
+    return finish(state, ok(lines.join('\n')));
   }
 
   if (sub === 'checkout') {
@@ -704,10 +699,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
         for (const r of state.remotes) r.isDefault = false;
       }
       state.remotes.push({ name, url, isDefault: isDefault || state.remotes.length === 0 });
-      return {
-        state,
-        result: ok(`Added remote '${name}' → ${url}${isDefault || state.remotes.length === 1 ? ' (default)' : ''}`),
-      };
+      return finish(state, ok(`Added remote '${name}' → ${url}${isDefault || state.remotes.length === 1 ? ' (default)' : ''}`));
     }
     if (rsub === 'default') {
       const name = args[2];
@@ -760,8 +752,8 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
         lines.push(`${f.path} already on remote`);
       }
     }
-    if (!pushed && !lines.length) return { state, result: ok('Everything is up to date.') };
-    return { state, result: ok(lines.join('\n') || `Pushed ${pushed} object(s) to ${remote.name}`) };
+    if (!pushed && !lines.length) return finish(state, ok('Everything is up to date.'));
+    return finish(state, ok(lines.join('\n') || `Pushed ${pushed} object(s) to ${remote.name}`));
   }
 
   if (sub === 'fetch' || sub === 'pull') {
@@ -865,17 +857,16 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       state.files['dvc.yaml'] = makeFile('dvc.yaml', 'yaml', {
         contentId: fakeMd5(`dvc.yaml:${pipelineSignature(state)}`),
       });
-      return {
-        state,
-        result: ok(
-          [
-            `Added stage '${parsed.name}' to dvc.yaml`,
-            `  deps: ${parsed.deps.join(', ') || '(none)'}`,
-            `  outs: ${parsed.outs.join(', ') || '(none)'}`,
-            `  cmd:  ${parsed.cmd}`,
-          ].join('\n'),
-        ),
-      };
+      return finish(state, ok(
+        [
+          `Added stage '${parsed.name}' to dvc.yaml`,
+          `  deps: ${parsed.deps.join(', ') || '(none)'}`,
+          `  outs: ${parsed.outs.join(', ') || '(none)'}`,
+          `  params: ${parsed.params.join(', ') || '(none)'}`,
+          `  metrics: ${parsed.metrics.join(', ') || '(none)'}`,
+          `  cmd:  ${parsed.cmd}`,
+        ].join('\n'),
+      ));
     }
     return { state, result: fail('Usage: dvc stage [add|list]') };
   }
@@ -910,7 +901,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
     state.files['dvc.lock'] = makeFile('dvc.lock', 'yaml', {
       contentId: fakeMd5(`lock:${pipelineSignature(state)}:${JSON.stringify(state.metrics)}`),
     });
-    return { state, result: ok(logs.join('\n')) };
+    return finish(state, ok(logs.join('\n')));
   }
 
   if (sub === 'dag') {
@@ -1008,7 +999,7 @@ export function executeCommand(prev: RepoState, rawInput: string): { state: Repo
       state.experiments.push(run);
       logs.push(`Queued experiment ${id}`);
       logs.push(`Check results with \`dvc exp show\``);
-      return { state, result: ok(logs.join('\n')) };
+      return finish(state, ok(logs.join('\n')));
     }
     if (esub === 'apply') {
       const id = args[2];

@@ -136,6 +136,8 @@ export interface LevelDef {
   par: number;
   hint: string;
   objective: string;
+  /** Concepts this level is supposed to install — shown in the goal panel. */
+  learning: string[];
   startDialog: DialogSlide[];
   startState: RepoState;
   /** State checks that mark the level solved — must mirror `solution` step effects. */

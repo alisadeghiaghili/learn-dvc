@@ -190,6 +190,14 @@ export class App {
     this.dockEl.innerHTML = `
       <h2>${level.name}</h2>
       <p class="objective">${level.objective}</p>
+      ${
+        level.learning?.length
+          ? `<div class="learning-box">
+              <div class="next-title">You are learning</div>
+              <ul>${level.learning.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
+            </div>`
+          : ''
+      }
       <div class="par-note">${golfNote}${solved ? ' · SOLVED' : ''}</div>
       ${this.solvedFlash ? `<div class="solved-banner">Level solved${this.golf.length ? ` in ${this.golf.length} command(s)` : ''}.</div>` : ''}
       ${nextBlock}

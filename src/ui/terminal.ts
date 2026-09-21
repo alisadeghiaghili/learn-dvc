@@ -57,6 +57,28 @@ const BASE_COMMANDS = [
   'help',
 ];
 
+interface WordState {
+  /** Words fully before the caret/current token. */
+  head: string[];
+  /** Partial current token (empty when line ends with a space). */
+  current: string;
+  /** True when user finished a token with whitespace. */
+  afterSpace: boolean;
+}
+
+function parseLine(value: string): WordState {
+  const endsWithSpace = /\s$/.test(value);
+  const trimmed = value.replace(/\s+$/, '');
+  if (!trimmed) {
+    return { head: [], current: '', afterSpace: endsWithSpace };
+  }
+  const parts = trimmed.split(/\s+/);
+  if (endsWithSpace) {
+    return { head: parts, current: '', afterSpace: true };
+  }
+  return { head: parts.slice(0, -1), current: parts[parts.length - 1]!, afterSpace: false };
+}
+
 export class TerminalView {
   private logEl: HTMLElement;
   private inputEl: HTMLInputElement;
@@ -69,9 +91,10 @@ export class TerminalView {
   private draft = '';
   private hint = '';
   private extraCompletions: string[] = [];
-  private tabCycle: string[] = [];
-  private tabIdx = 0;
-  private tabPrefix = '';
+  /** Candidates for the *current word*, cycled by repeated Tab. */
+  private wordCycle: string[] = [];
+  private wordIdx = 0;
+  private wordKey = '';
   private measureCtx: CanvasRenderingContext2D | null = null;
   private onSubmit: (cmd: string) => void;
 
@@ -86,7 +109,7 @@ export class TerminalView {
           <div class="term-ghost" id="term-ghost" aria-hidden="true"></div>
           <input id="term-input" class="term-input" autocomplete="off" spellcheck="false"
             placeholder=""
-            aria-label="DVC command input. Tab completes the next command. Arrow up and down browse history." />
+            aria-label="DVC command input. Tab completes one word at a time. Arrow up and down browse history." />
         </div>
       </div>
     `;
@@ -106,7 +129,7 @@ export class TerminalView {
     try {
       this.inputEl.setSelectionRange(len, len);
     } catch {
-      // ignore unsupported input types
+      // ignore
     }
   }
 
@@ -137,24 +160,23 @@ export class TerminalView {
   private render(): void {
     const html = this.lines
       .map((l) => {
-        const cls = l.kind;
         const prefix = l.kind === 'cmd' ? '$ ' : '';
-        return `<div class="${cls}">${prefix}${escapeHtml(l.text)}</div>`;
+        return `<div class="${l.kind}">${prefix}${escapeHtml(l.text)}</div>`;
       })
       .join('');
     this.logEl.innerHTML = html;
     this.logEl.scrollTop = this.logEl.scrollHeight;
   }
 
-  /** Next step shown as faded placeholder + Tab target (learnGitBranching-style). */
   setHint(command: string | null): void {
     this.hint = command ?? '';
+    // Empty input: ONE faded cue only (placeholder) — never stacked with ghost.
     this.inputEl.placeholder = this.hint
-      ? `Tab → ${this.hint}`
+      ? `Next: ${this.hint}  (Tab steps word-by-word)`
       : 'Type a command — help · levels · hint · steps';
     this.hintEl.hidden = !this.hint;
     if (this.hint) {
-      this.hintEl.innerHTML = `Next: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· press Tab to fill</span>`;
+      this.hintEl.innerHTML = `Next: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· Tab fills one word at a time</span>`;
     } else {
       this.hintEl.textContent = '';
     }
@@ -166,29 +188,49 @@ export class TerminalView {
   }
 
   private allCompletions(): string[] {
-    const set = new Set<string>([
-      ...this.extraCompletions,
-      ...BASE_COMMANDS,
-      ...this.history.slice().reverse(),
-    ]);
-    return [...set];
+    return [
+      ...new Set<string>([...this.extraCompletions, ...BASE_COMMANDS, ...this.history.slice().reverse()]),
+    ];
   }
 
-  private candidates(prefix: string): string[] {
-    const p = prefix.toLowerCase();
-    return this.allCompletions().filter(
-      (c) => c.toLowerCase().startsWith(p) && c.toLowerCase() !== p,
-    );
+  /** Full commands that share the same head words + current token prefix. */
+  private matchingCommands(head: string[], current: string): string[] {
+    const cur = current.toLowerCase();
+    return this.allCompletions().filter((cmd) => {
+      const words = cmd.split(/\s+/);
+      if (words.length <= head.length) {
+        // Allow exact head match only if current is empty and we need a next word — handled by longer cmds.
+        if (head.length && words.length === head.length) {
+          return words.every((w, i) => w === head[i]);
+        }
+        return false;
+      }
+      for (let i = 0; i < head.length; i++) {
+        if (words[i] !== head[i]) return false;
+      }
+      if (!cur) return true;
+      return (words[head.length] ?? '').toLowerCase().startsWith(cur);
+    });
   }
 
-  private bestCompletion(value: string): string | null {
-    if (!value) return this.hint || null;
-    const matches = this.candidates(value);
-    if (!matches.length) {
-      return this.hint && this.hint.toLowerCase().startsWith(value.toLowerCase()) ? this.hint : null;
+  /** Distinct next-word options in order, hint-first. */
+  private nextWords(head: string[], current: string): string[] {
+    const matches = this.matchingCommands(head, current);
+    const words: string[] = [];
+    const push = (w: string | undefined) => {
+      if (!w) return;
+      if (!words.includes(w)) words.push(w);
+    };
+    if (this.hint) {
+      const hw = this.hint.split(/\s+/);
+      const okHead = head.every((h, i) => hw[i] === h);
+      if (okHead) push(hw[head.length]);
     }
-    // Prefer exact solution/hint match order: extraCompletions come first in set iteration
-    return matches[0]!;
+    for (const cmd of matches) {
+      push(cmd.split(/\s+/)[head.length]);
+    }
+    // If no library match but hint continues, still offer hint's next word.
+    return words.filter((w) => !current || w.toLowerCase().startsWith(current.toLowerCase()));
   }
 
   private measureText(text: string): number {
@@ -202,85 +244,91 @@ export class TerminalView {
     return ctx.measureText(text).width;
   }
 
-  /** Ghost suffix aligned after typed prefix; full command when input is empty. */
+  /**
+   * Ghost shows only the *rest of the current word* (or the next word after a space).
+   * Empty input relies on placeholder alone so two texts never stack.
+   */
   private syncGhost(): void {
     const value = this.inputEl.value;
-    const completion = this.bestCompletion(value);
+    this.ghostEl.dataset.visible = '0';
+    this.ghostEl.textContent = '';
+    this.wrapEl.classList.remove('has-ghost');
 
-    if (!completion) {
-      this.ghostEl.textContent = '';
-      this.ghostEl.dataset.visible = '0';
-      this.wrapEl.classList.remove('has-ghost');
-      return;
-    }
+    if (!value) return;
 
-    if (!value) {
-      // Full faded suggestion sitting in the empty prompt.
-      this.ghostEl.textContent = completion;
-      this.ghostEl.style.left = '0px';
+    const { head, current, afterSpace } = parseLine(value);
+    const words = this.nextWords(head, afterSpace ? '' : current);
+    const first = words[0];
+    if (!first) return;
+
+    if (afterSpace) {
+      // Suggest the next word sitting after the space.
+      this.ghostEl.textContent = first;
+      this.ghostEl.style.left = `${this.measureText(value)}px`;
       this.ghostEl.dataset.visible = '1';
       this.wrapEl.classList.add('has-ghost');
       return;
     }
 
-    if (!completion.toLowerCase().startsWith(value.toLowerCase()) || completion.length <= value.length) {
-      this.ghostEl.textContent = '';
-      this.ghostEl.dataset.visible = '0';
-      this.wrapEl.classList.remove('has-ghost');
+    if (!first.toLowerCase().startsWith(current.toLowerCase()) || first.length <= current.length) {
       return;
     }
 
-    const rest = completion.slice(value.length);
-    this.ghostEl.textContent = rest;
+    // Suffix of the current word only — not the whole command line.
+    this.ghostEl.textContent = first.slice(current.length);
     this.ghostEl.style.left = `${this.measureText(value)}px`;
     this.ghostEl.dataset.visible = '1';
     this.wrapEl.classList.add('has-ghost');
   }
 
+  /** Real-terminal Tab: complete the current word (or offer the next word), cycle on repeat. */
   private applyTab(e: KeyboardEvent): void {
     e.preventDefault();
     const value = this.inputEl.value;
+    const { head, current, afterSpace } = parseLine(value);
+    const cycleKey = `${head.join(' ')}|${afterSpace ? '' : current}`;
 
     if (!value && this.hint) {
-      this.inputEl.value = this.hint;
-      this.tabCycle = [this.hint];
-      this.tabIdx = 0;
-      this.tabPrefix = '';
+      // First Tab from empty: type only the first word (e.g. "dvc").
+      const firstWord = this.hint.split(/\s+/)[0]!;
+      this.inputEl.value = firstWord;
+      this.wordCycle = [firstWord];
+      this.wordIdx = 0;
+      this.wordKey = firstWord;
       this.focus();
       this.syncGhost();
       return;
     }
 
-    const matches = value ? this.candidates(value) : BASE_COMMANDS.filter((c) => c.startsWith('dvc '));
-
-    if (!matches.length) {
-      if (this.hint && this.hint.toLowerCase().startsWith(value.toLowerCase())) {
-        this.inputEl.value = this.hint;
-        this.focus();
-        this.syncGhost();
-      }
+    const options = this.nextWords(head, afterSpace ? '' : current);
+    if (!options.length) {
+      this.syncGhost();
       return;
     }
 
-    if (value !== this.tabPrefix || !this.tabCycle.length) {
-      this.tabPrefix = value;
-      this.tabCycle = matches;
-      this.tabIdx = 0;
+    if (cycleKey !== this.wordKey || !this.wordCycle.length) {
+      this.wordKey = cycleKey;
+      this.wordCycle = options;
+      this.wordIdx = 0;
     } else {
-      this.tabIdx = (this.tabIdx + 1) % this.tabCycle.length;
+      this.wordIdx = (this.wordIdx + 1) % this.wordCycle.length;
     }
 
-    const chosen = this.tabCycle[this.tabIdx] ?? matches[0]!;
-    this.inputEl.value = chosen;
+    const chosen = this.wordCycle[this.wordIdx] ?? options[0]!;
+    const headText = head.length ? `${head.join(' ')} ` : '';
+    // After completing a word, leave a space so the next Tab moves to the next word.
+    this.inputEl.value = `${headText}${chosen}`;
     this.focus();
     this.syncGhost();
 
-    if (this.tabCycle.length > 1) {
-      const preview = this.tabCycle.slice(0, 5).map((m) => escapeHtml(m)).join(' · ');
+    if (this.wordCycle.length > 1) {
+      const preview = this.wordCycle.slice(0, 6).join(' · ');
       this.hintEl.hidden = false;
-      this.hintEl.innerHTML = `Tab <strong>${this.tabIdx + 1}/${this.tabCycle.length}</strong>: ${preview}${
-        this.tabCycle.length > 5 ? ' …' : ''
+      this.hintEl.innerHTML = `Tab word <strong>${this.wordIdx + 1}/${this.wordCycle.length}</strong>: <code>${escapeHtml(preview)}</code>${
+        this.wordCycle.length > 6 ? ' …' : ''
       }`;
+    } else if (this.hint) {
+      this.hintEl.innerHTML = `Next: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· Tab fills one word at a time</span>`;
     }
   }
 
@@ -292,8 +340,8 @@ export class TerminalView {
     if (e.key === 'Escape') {
       e.preventDefault();
       this.inputEl.value = '';
-      this.tabCycle = [];
-      this.tabPrefix = '';
+      this.wordCycle = [];
+      this.wordKey = '';
       this.syncGhost();
       return;
     }
@@ -307,8 +355,8 @@ export class TerminalView {
         this.history.push(trimmed);
         this.historyIdx = this.history.length;
       }
-      this.tabCycle = [];
-      this.tabPrefix = '';
+      this.wordCycle = [];
+      this.wordKey = '';
       this.onSubmit(value);
       this.focus();
       this.syncGhost();
@@ -317,12 +365,10 @@ export class TerminalView {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (!this.history.length) return;
-      if (this.historyIdx === this.history.length) {
-        this.draft = this.inputEl.value;
-      }
+      if (this.historyIdx === this.history.length) this.draft = this.inputEl.value;
       this.historyIdx = Math.max(0, this.historyIdx - 1);
       this.inputEl.value = this.history[this.historyIdx] ?? '';
-      this.tabCycle = [];
+      this.wordCycle = [];
       this.syncGhost();
       return;
     }
@@ -332,15 +378,12 @@ export class TerminalView {
       this.historyIdx = Math.min(this.history.length, this.historyIdx + 1);
       this.inputEl.value =
         this.historyIdx >= this.history.length ? this.draft : (this.history[this.historyIdx] ?? '');
-      this.tabCycle = [];
+      this.wordCycle = [];
       this.syncGhost();
     }
   }
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
