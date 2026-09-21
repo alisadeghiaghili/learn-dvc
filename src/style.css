@@ -26,6 +26,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  min-height: 100%;
   background: var(--ink);
   color: var(--text);
   font-family: var(--ui);
@@ -34,10 +35,25 @@ body {
 }
 
 #app {
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   min-height: 0;
+  overflow: hidden;
+}
+
+.app-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 
 /* Toolbar */
@@ -48,6 +64,7 @@ body {
   padding: 10px 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
@@ -129,6 +146,7 @@ button.ghost {
   min-height: 0;
   overflow: auto;
   padding: 16px;
+  border-right: 1px solid var(--line);
 }
 
 .board {
@@ -138,12 +156,27 @@ button.ghost {
   align-items: start;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .board {
     grid-template-columns: 1fr;
   }
-  .stage {
-    grid-template-columns: 1fr;
+  #app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(180px, 36vh);
+    height: 100vh;
+    height: 100dvh;
+  }
+  .dock {
+    grid-column: 1;
+    grid-row: 2;
+    height: auto;
+    max-height: 36vh;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+  .app-main {
+    grid-row: 1;
+    min-height: 0;
   }
 }
 
@@ -369,18 +402,51 @@ button.ghost {
   color: var(--err);
 }
 
-/* Goal dock */
+/* Always-on guide dock — full viewport height on the right */
 .dock {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
   border-left: 1px solid var(--line);
   background: var(--panel);
   padding: 14px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.dock-pulse {
+  animation: dock-flash 0.7s ease;
+}
+
+@keyframes dock-flash {
+  0% {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--dvc) 70%, transparent);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-pulse {
+    animation: none;
+  }
 }
 
 .dock h2 {
   margin: 0 0 8px;
   font-size: 14px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  padding-bottom: 6px;
+  z-index: 1;
 }
 
 .dock .objective {
@@ -922,6 +988,7 @@ button.ghost {
   grid-template-rows: 1fr auto;
   height: 220px;
   min-height: 160px;
+  border-right: 1px solid var(--line);
 }
 
 .term-log {

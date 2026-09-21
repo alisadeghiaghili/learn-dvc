@@ -28,7 +28,6 @@ export class App {
   private startSnapshot: RepoState;
   private golf: string[] = [];
   private log: LogLine[] = [];
-  private goalOpen = false;
   private solvedFlash = false;
   private progress = loadProgress();
   private terminal!: TerminalView;
@@ -60,25 +59,25 @@ export class App {
 
   private mount(): void {
     this.root.innerHTML = `
-      <header class="toolbar">
-        <div class="brand" data-help-id="brand">Learn<span>DVC</span></div>
-        <div class="level-title" id="level-title" data-help-id="level-title"></div>
-        <div class="toolbar-actions" data-help-id="toolbar">
-          <button type="button" data-action="levels">Levels</button>
-          <button type="button" data-action="goal">Goal</button>
-          <button type="button" data-action="hint">Hint</button>
-          <button type="button" data-action="solution">Solution</button>
-          <button type="button" data-action="undo">Undo</button>
-          <button type="button" data-action="reset">Reset</button>
-          <button type="button" data-action="sandbox" class="ghost">Sandbox</button>
-          <button type="button" data-action="help" class="ghost" title="Explain UI elements">Help</button>
-        </div>
-      </header>
-      <div class="stage no-dock" id="stage">
+      <div class="app-main">
+        <header class="toolbar">
+          <div class="brand" data-help-id="brand">Learn<span>DVC</span></div>
+          <div class="level-title" id="level-title" data-help-id="level-title"></div>
+          <div class="toolbar-actions" data-help-id="toolbar">
+            <button type="button" data-action="levels">Levels</button>
+            <button type="button" data-action="goal">Guide</button>
+            <button type="button" data-action="hint">Hint</button>
+            <button type="button" data-action="solution">Solution</button>
+            <button type="button" data-action="undo">Undo</button>
+            <button type="button" data-action="reset">Reset</button>
+            <button type="button" data-action="sandbox" class="ghost">Sandbox</button>
+            <button type="button" data-action="help" class="ghost" title="Explain UI elements">Help</button>
+          </div>
+        </header>
         <div class="board-wrap" id="board-wrap"></div>
-        <aside class="dock" id="dock" data-help-id="dock" hidden></aside>
+        <div class="terminal" id="terminal" data-help-id="term-log"></div>
       </div>
-      <div class="terminal" id="terminal" data-help-id="term-log"></div>
+      <aside class="dock" id="dock" data-help-id="dock" aria-label="Learning guide panel"></aside>
     `;
     this.boardEl = this.root.querySelector('#board-wrap')!;
     this.dockEl = this.root.querySelector('#dock')!;
@@ -90,7 +89,7 @@ export class App {
       btn.addEventListener('click', () => {
         const action = btn.dataset.action;
         if (action === 'levels') this.openLevels();
-        if (action === 'goal') this.toggleGoal();
+        if (action === 'goal') this.focusGuide();
         if (action === 'hint') this.handleCommand('hint');
         if (action === 'solution') this.handleCommand('show solution');
         if (action === 'undo') this.handleCommand('undo');
@@ -100,9 +99,14 @@ export class App {
         this.terminal.focus();
       });
     });
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.goalOpen) this.toggleGoal(false);
-    });
+  }
+
+  /** Guide panel is always visible — this only scrolls/flashes it. */
+  private focusGuide(): void {
+    this.dockEl.classList.remove('dock-pulse');
+    void this.dockEl.offsetWidth;
+    this.dockEl.classList.add('dock-pulse');
+    this.dockEl.scrollTop = 0;
   }
 
   /** Explain every on-screen region; optional highlight tour. */
@@ -150,14 +154,8 @@ export class App {
       : 'sandbox mode';
     this.renderDock();
     this.syncTerminalHints();
-    const stage = this.root.querySelector('#stage')!;
-    if (this.goalOpen) {
-      stage.classList.remove('no-dock');
-      this.dockEl.hidden = false;
-    } else {
-      stage.classList.add('no-dock');
-      this.dockEl.hidden = true;
-    }
+    // Guide panel is always mounted — never hidden.
+    this.dockEl.hidden = false;
   }
 
   private syncTerminalHints(): void {
@@ -177,11 +175,31 @@ export class App {
 
   private renderDock(): void {
     if (!this.level) {
-      this.dockEl.innerHTML = `<h2>Sandbox</h2>
-        <p class="objective">Free-form practice. Open <strong>Levels</strong> for guided challenges.</p>
+      this.dockEl.innerHTML = `
+        <h2>Learning guide</h2>
+        <p class="objective">Always-on panel. In a level it shows concepts, field notes, and the solution checklist.</p>
+        <div class="learning-box">
+          <div class="next-title">Start here</div>
+          <ul>
+            <li>Open <strong>Levels</strong> and begin with Basics → Initialize DVC</li>
+            <li>Type <code>help ui</code> for a map of this page</li>
+            <li>Type <code>curriculum</code> for outcomes you will own</li>
+            <li>Type <code>concepts</code> for DVC mental models</li>
+          </ul>
+        </div>
+        <div class="learning-box">
+          <div class="next-title">Sandbox tip</div>
+          <ul>
+            <li>Board: Workspace → Cache → Remote</li>
+            <li>Terminal: Tab completes word-by-word; ↑/↓ is history</li>
+            <li>Progress saves in this browser (cookie + localStorage)</li>
+          </ul>
+        </div>
         <ul class="goal-list">
-          <li class="met"><div class="g-label">No active goal</div><div class="g-detail">levels → pick a challenge</div></li>
-        </ul>`;
+          <li class="met"><div class="g-label">No active level</div><div class="g-detail">levels → pick a challenge to see the checklist here</div></li>
+        </ul>
+        <div class="par-note">Toolbar <code>Guide</code> flashes this panel. It stays open at full page height.</div>
+      `;
       return;
     }
     const level = this.level;
@@ -240,9 +258,12 @@ export class App {
   }
 
   private toggleGoal(force?: boolean): void {
-    this.goalOpen = force ?? !this.goalOpen;
+    // Guide panel stays visible by default; this command only jumps attention to it.
+    void force;
+    this.dockEl.hidden = false;
     this.renderAll();
-    if (this.goalOpen) this.pushMeta('Goal panel opened. (`hide goal` or Esc to close.)');
+    this.focusGuide();
+    this.pushMeta('Guide panel is always on the right (full height). Guide button focuses it.');
   }
 
   private openLevels(): void {
@@ -298,7 +319,7 @@ export class App {
     if (coach) this.pushMeta(coach);
     this.renderAll();
     this.showIntro(level);
-    this.goalOpen = true;
+    this.dockEl.hidden = false;
     this.renderAll();
     this.terminal.focus();
   }
@@ -445,7 +466,7 @@ export class App {
       }
       const coach = coachLine(this.state, this.level);
       this.pushOut(coach ?? 'All solution steps are met.');
-      this.goalOpen = true;
+      this.dockEl.hidden = false;
       this.renderAll();
       return;
     }
@@ -579,7 +600,7 @@ export class App {
           num > 0 ? `Commands used: ${num} (par ${this.level.par})` : `Par ${this.level.par}`,
         );
         this.pushOut('*** PARTY MODE *** confetti incoming — share buttons below.');
-        this.goalOpen = true;
+        this.dockEl.hidden = false;
       } else if (!solved && this.solvedFlash) {
         this.solvedFlash = false;
       }
