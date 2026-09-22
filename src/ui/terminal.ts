@@ -108,15 +108,17 @@ export class TerminalView {
   constructor(root: HTMLElement, onSubmit: (cmd: string) => void) {
     this.onSubmit = onSubmit;
     root.innerHTML = `
-      <div class="term-log" id="term-log" role="log" aria-live="polite"></div>
-      <div class="term-hint" id="term-hint" data-help-id="term-hint" hidden></div>
-      <div class="term-input-row">
-        <label class="prompt" for="term-input">dvc $</label>
-        <div class="term-input-wrap" id="term-input-wrap" data-help-id="term-ghost">
-          <div class="term-ghost" id="term-ghost" aria-hidden="true"></div>
-          <input id="term-input" class="term-input" autocomplete="off" spellcheck="false"
-            placeholder=""
-            aria-label="${escapeHtml(ui().termAriaLabel)}" />
+      <div class="terminal-ltr" dir="ltr">
+        <div class="term-log" id="term-log" role="log" aria-live="polite"></div>
+        <div class="term-hint" id="term-hint" data-help-id="term-hint" hidden></div>
+        <div class="term-input-row">
+          <label class="prompt" for="term-input">dvc $</label>
+          <div class="term-input-wrap" id="term-input-wrap" data-help-id="term-ghost">
+            <div class="term-ghost" id="term-ghost" aria-hidden="true"></div>
+            <input id="term-input" class="term-input" autocomplete="off" spellcheck="false"
+              placeholder=""
+              aria-label="${escapeHtml(ui().termAriaLabel)}" />
+          </div>
         </div>
       </div>
     `;

@@ -1146,6 +1146,24 @@ button.ghost {
   border-right: 1px solid var(--line);
 }
 
+/* Commands and terminal chrome stay LTR even when the UI is RTL (fa). */
+.terminal-ltr {
+  display: contents;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.terminal-ltr .term-log,
+.terminal-ltr .term-hint,
+.terminal-ltr .term-input-row,
+.terminal-ltr .prompt,
+.terminal-ltr .term-input,
+.terminal-ltr .term-ghost {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
 .term-log {
   overflow: auto;
   padding: 10px 14px;
