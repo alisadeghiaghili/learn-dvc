@@ -178,6 +178,11 @@ button.ghost {
     grid-row: 1;
     min-height: 0;
   }
+  .terminal {
+    height: 280px;
+    min-height: 200px;
+    max-height: 40vh;
+  }
 }
 
 .zone {
@@ -980,14 +985,15 @@ button.ghost {
   }
 }
 
-/* Terminal */
+/* Terminal — intentionally tall (≈2×) so coach/Why output stays readable */
 .terminal {
   border-top: 1px solid var(--line);
   background: var(--ink);
   display: grid;
-  grid-template-rows: 1fr auto;
-  height: 220px;
-  min-height: 160px;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  height: 440px;
+  min-height: 320px;
+  max-height: 48vh;
   border-right: 1px solid var(--line);
 }
 
