@@ -19,12 +19,12 @@ describe('curriculum share messages', () => {
       par: 3,
       curriculum,
     });
-    expect(text).toContain('I am learning Data Version Control');
+    expect(text).toContain('I am really happy');
     expect(curriculum.solvedCount).toBe(2);
     expect(curriculum.learned).toHaveLength(2);
     expect(text).toContain('Basics: Initialize DVC');
     expect(text).toContain('Basics: Track a dataset');
-    expect(text).toContain('What I\'ve learned so far (2/');
+    expect(text).toContain('What I have learned so far');
     expect(text).toContain('learn-dvc');
   });
 

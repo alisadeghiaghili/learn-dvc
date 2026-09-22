@@ -1,7 +1,7 @@
 import type { CurriculumSummary } from './progress';
 
 export const LIVE_URL = 'https://alisadeghiaghili.github.io/learn-dvc/';
-export const SHARE_URL = `${LIVE_URL}?NODEMO`;
+export const SHARE_URL = 'https://alisadeghiaghili.github.io/learn-dvc/';
 export const REPO_URL = 'https://github.com/alisadeghiaghili/learn-dvc';
 export const COFFEE_URL = 'https://www.buymeacoffee.com/alisadeghil';
 export const PUBLISHER = 'Ali Sadeghi Aghili';
@@ -15,66 +15,44 @@ export interface ShareContext {
   curriculum: CurriculumSummary;
 }
 
-function bulletList(items: { name: string; id: string; seriesTitle: string }[], limit?: number): string[] {
+function bulletList(items: { name: string; seriesTitle: string }[], limit?: number): string[] {
   const list = limit ? items.slice(0, limit) : items;
   const lines = list.map((l) => `• ${l.seriesTitle}: ${l.name}`);
-  if (limit && items.length > limit) {
-    lines.push(`• …and ${items.length - limit} more`);
-  }
+  if (limit && items.length > limit) lines.push(`• …and ${items.length - limit} more`);
   return lines;
 }
 
 export function shareMessageLinkedIn(ctx: ShareContext): string {
-  const { curriculum: c, levelName, levelId } = ctx;
-  const headline =
-    c.solvedCount === 0
-      ? 'I just started learning Data Version Control with LearnDVC.'
-      : 'I am learning Data Version Control (DVC) with LearnDVC — an interactive sandbox and tutorial.';
-
-  const just =
+  const c = ctx.curriculum;
+  const learned = c.learned.length ? bulletList(c.learned) : [];
+  const parts = [
+    'I am really happy — I just learned practical Data Version Control on LearnDVC!',
+    '',
     c.solvedCount > 0
-      ? `Latest: “${levelName}” (${levelId})${
+      ? `Latest win: ${ctx.levelName} (${ctx.levelId})${
           ctx.commands !== null
-            ? ` — solved in ${ctx.commands} command${ctx.commands === 1 ? '' : 's'} (ideal ${ctx.par})`
+            ? ` — ${ctx.commands} command${ctx.commands === 1 ? '' : 's'} (ideal ${ctx.par})`
             : ''
-        }.`
-      : `Working through ${c.total} hands-on levels.`;
-
-  const learned = c.learned.length
-    ? ['', `What I've learned so far (${c.solvedCount}/${c.total} levels):`, ...bulletList(c.learned)].join('\n')
-    : '';
-
-  const next = c.next ? `\n\nUp next: ${c.next.name} (${c.next.id})` : '';
-
-  return [
-    headline,
+        }`
+      : 'Starting my DVC journey.',
     '',
-    just,
-    learned,
-    next,
+    learned.length ? 'What I have learned so far:' : '',
+    ...learned,
     '',
-    `Try it yourself (free, no login): ${SHARE_URL}`,
-  ]
-    .filter((part) => part !== undefined)
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n');
+    `Progress: ${c.solvedCount}/${c.total} levels.`,
+    '',
+    'If you work with ML data or models, try it — free, no login:',
+    SHARE_URL,
+  ];
+  return parts.filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 export function shareMessageX(ctx: ShareContext): string {
-  const { curriculum: c } = ctx;
-  const head =
-    c.solvedCount > 0
-      ? `Learning DVC with LearnDVC — ${c.solvedCount}/${c.total} levels done.`
-      : 'Starting DVC with LearnDVC.';
-  const body = c.learned.length
-    ? bulletList(c.learned, 3).join('\n')
-    : 'Interactive Data Version Control tutorial.';
-  const url = LIVE_URL;
-  let text = `${head}\n${body}\n${url}`;
-  if (text.length > 279) {
-    const first = c.learned[0] ? `• ${c.learned[0].seriesTitle}: ${c.learned[0].name}` : '';
-    text = `${head}\n${first}\n${url}`.slice(0, 279);
-  }
+  const c = ctx.curriculum;
+  const head = `Really happy — learning DVC on LearnDVC (${c.solvedCount}/${c.total} levels).`;
+  const first = c.learned[0] ? `• ${c.learned[0].name}` : 'Hands-on sandbox.';
+  let text = `${head}\n${first}\n${SHARE_URL}`;
+  if (text.length > 275) text = `${head}\n${SHARE_URL}`;
   return text;
 }
 
@@ -93,9 +71,9 @@ export function buildShareTargets(ctx: ShareContext): ShareTargets {
   const shortText = shareMessageX(ctx);
   const url = SHARE_URL;
   return {
-    // LinkedIn/Facebook often drop query text — we copy the post then open composer.
+    // Full draft post lives in the URL so LinkedIn/X open ready to publish.
     linkedin: `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(longText)}`,
-    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shortText)}&url=${encodeURIComponent(url)}`,
+    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shortText)}`,
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(longText)}`,
     text: longText,
     shortText,
@@ -108,47 +86,37 @@ export function openShareWindow(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer,width=720,height=640');
 }
 
-export async function copySharePayload(text: string, url: string): Promise<boolean> {
-  const payload = `${text}\n${url}`;
+export async function copySharePayload(text: string): Promise<boolean> {
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(payload);
-      return true;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
     }
-  } catch {
-    // fall through
-  }
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = payload;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
   }
 }
 
-/**
- * Copy the full post first (LinkedIn/Facebook ignore prefilled text),
- * then open the network composer so the user can paste.
- */
+/** Open LinkedIn/X/Facebook with a ready post; clipboard is fallback only. */
 export async function shareWithClipboard(
   kind: 'linkedin' | 'facebook' | 'x' | 'copy',
   targets: ShareTargets,
 ): Promise<{ opened: boolean; copied: boolean }> {
   if (kind === 'copy') {
-    const copied = await copySharePayload(targets.text, targets.url);
-    return { opened: false, copied };
+    return { opened: false, copied: await copySharePayload(targets.text) };
   }
-  const payload =
-    kind === 'x' ? `${targets.shortText}\n${targets.url}` : `${targets.text}\n${targets.url}`;
-  const copied = await copySharePayload(payload, targets.url);
+  const copied = await copySharePayload(kind === 'x' ? targets.shortText : targets.text);
   const href =
     kind === 'linkedin' ? targets.linkedin : kind === 'facebook' ? targets.facebook : targets.x;
   openShareWindow(href);
