@@ -95,6 +95,7 @@ body {
 .tb-link {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 36px;
   padding: 7px 12px;
   border-radius: 8px;
@@ -126,6 +127,15 @@ body {
 
 .tb-link.support:hover {
   background: color-mix(in srgb, var(--remote) 24%, var(--panel-2));
+}
+
+.tb-link.gh {
+  gap: 8px;
+}
+
+.tb-link .gh-mark {
+  display: block;
+  flex: 0 0 18px;
 }
 
 button,
