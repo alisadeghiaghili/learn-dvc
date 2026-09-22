@@ -486,6 +486,30 @@ button.ghost {
   font-size: 12px;
 }
 
+.diff-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.diff-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--haze);
+  box-sizing: border-box;
+  flex: 0 0 7px;
+}
+
+.diff-dot.on {
+  background: var(--remote);
+  border-color: var(--remote);
+}
+
 .legend-box {
   border: 1px solid var(--line);
   background: var(--ink);

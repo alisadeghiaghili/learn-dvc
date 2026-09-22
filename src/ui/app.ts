@@ -21,6 +21,12 @@ function escapeHtml(s: string): string {
     .replaceAll('"', '&quot;');
 }
 
+/** Five equal-size dots; filled count = difficulty 1–5. */
+function renderDiffDots(difficulty: number): string {
+  const n = Math.max(0, Math.min(5, difficulty));
+  return Array.from({ length: 5 }, (_, i) => `<i class="diff-dot${i < n ? ' on' : ''}"></i>`).join('');
+}
+
 export class App {
   private root: HTMLElement;
   private state: RepoState;
@@ -280,7 +286,9 @@ export class App {
               <span class="id">${l.id}</span>
               <span class="name">${l.name}</span>
               <span class="par-note">ideal ${l.par} cmd${l.par === 1 ? '' : 's'}</span>
-              <span class="chip ${p?.solved ? 'ok' : ''}" title="Difficulty ${l.difficulty} of 5">${p?.solved ? `solved ${p.bestCommands ?? ''}` : `${'●'.repeat(l.difficulty)}${'○'.repeat(Math.max(0, 5 - l.difficulty))}`}</span>
+              <span class="chip ${p?.solved ? 'ok' : ''}" title="Difficulty ${l.difficulty} of 5">
+                ${p?.solved ? `solved ${p.bestCommands ?? ''}` : `<span class="diff-dots" aria-label="Difficulty ${l.difficulty} of 5">${renderDiffDots(l.difficulty)}</span>`}
+              </span>
             </button>`;
           })
           .join('');
@@ -294,7 +302,10 @@ export class App {
         <div class="legend-box">
           <div class="next-title">How to read a level row</div>
           <ul class="legend-list">
-            <li><span class="chip">● ○ ○</span> <strong>Difficulty dots</strong> — 1 to 5 filled <code>●</code> = harder (more DVC concepts at once). Empty capacity is 5.</li>
+            <li>
+              <span class="diff-dots" aria-hidden="true">${renderDiffDots(3)}</span>
+              <strong>Difficulty</strong> — 1–5 equal dots; more filled = harder (several DVC ideas at once). Always 5 slots.
+            </li>
             <li><span class="par-note">ideal 3 cmds</span> <strong>Ideal command count</strong> — the clean solution length (golf target, not a hard limit).</li>
             <li><span class="chip ok">solved 3</span> <strong>Solved</strong> — you cleared it; the number is your best command count.</li>
           </ul>
