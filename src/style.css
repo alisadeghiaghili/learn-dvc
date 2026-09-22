@@ -113,16 +113,13 @@ body {
   border-color: currentColor;
 }
 
-html[dir='rtl'] .toolbar-actions {
-  flex-direction: row-reverse;
-}
-
-html[dir='rtl'] .dock {
-  order: -1;
+html[dir='rtl'] .lang-switch {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .toolbar-actions {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -1161,6 +1158,34 @@ button.ghost {
 .terminal-ltr .term-ghost {
   direction: ltr;
   text-align: left;
+  unicode-bidi: isolate;
+}
+
+/* Inline and block code never reverse in RTL UI. */
+code,
+pre,
+kbd,
+samp {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+.goal-list .g-label,
+.goal-list .g-cmd,
+.goal-list li code,
+.next-row,
+.next-row .g-cmd,
+.next-box code {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+.empty-note code,
+.zone-why code,
+.par-note code {
+  direction: ltr;
   unicode-bidi: isolate;
 }
 
