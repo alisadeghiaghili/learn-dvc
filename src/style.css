@@ -985,15 +985,15 @@ button.ghost {
   }
 }
 
-/* Terminal — tall enough for coach/Why output; 100px under the 2× draft */
+/* Terminal */
 .terminal {
   border-top: 1px solid var(--line);
   background: var(--ink);
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto auto;
-  height: 340px;
-  min-height: 260px;
-  max-height: 42vh;
+  height: 240px;
+  min-height: 200px;
+  max-height: 36vh;
   border-right: 1px solid var(--line);
 }
 
