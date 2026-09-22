@@ -571,6 +571,14 @@ button.ghost {
   font-size: 12px;
 }
 
+.markdown a img {
+  display: inline-block;
+  max-width: 220px;
+  height: auto;
+  border-radius: 8px;
+  vertical-align: middle;
+}
+
 .ui-help {
   display: grid;
   gap: 12px;

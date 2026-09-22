@@ -7,22 +7,22 @@ export function escapeHtml(s: string): string {
 }
 
 function renderInline(raw: string): string {
-  let t = escapeHtml(raw);
-  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
-  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  return t;
-}
-
-function isTableRow(line: string): boolean {
-  const s = line.trim();
-  if (!s.includes('|')) return false;
-  // Require at least two cells (one inner pipe) or outer pipes with content.
-  return s.startsWith('|') ? s.endsWith('|') && splitTableRow(s).length >= 1 : s.split('|').length >= 2;
-}
-
-function isTableSeparator(line: string): boolean {
-  const cells = splitTableRow(line);
-  return cells.length >= 1 && cells.every((c) => /^:?-+:?$/.test(c.trim()) && c.includes('-'));
+  // Keep trusted <a>…</a> HTML (Buy Me a Coffee button, links) as real markup.
+  const slots: string[] = [];
+  const parts = raw.split(/(<a\b[\s\S]*?<\/a>)/gi);
+  const mapped = parts
+    .map((part, i) => {
+      if (i % 2 === 1) {
+        slots.push(part);
+        return '@@HTML' + (slots.length - 1) + '@@';
+      }
+      let t = escapeHtml(part);
+      t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+      t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      return t;
+    })
+    .join('');
+  return mapped.replace(/@@HTML(\d+)@@/g, (_m, i: string) => slots[Number(i)] ?? '');
 }
 
 function splitTableRow(line: string): string[] {
@@ -32,13 +32,34 @@ function splitTableRow(line: string): string[] {
   return s.split('|').map((c) => c.trim());
 }
 
+function isTableRow(line: string): boolean {
+  const s = line.trim();
+  if (!s.includes('|')) return false;
+  return s.startsWith('|')
+    ? s.endsWith('|') && splitTableRow(s).length >= 1
+    : s.split('|').length >= 2;
+}
+
+function isTableSeparator(line: string): boolean {
+  const cells = splitTableRow(line);
+  return (
+    cells.length >= 1 &&
+    cells.every((c) => /^:?-+:?$/.test(c.trim()) && c.includes('-'))
+  );
+}
+
 function renderTable(rows: string[]): string {
   if (rows.length < 2) return '';
   const header = splitTableRow(rows[0]!);
   const body = rows.slice(2);
   const headHtml = header.map((h) => `<th>${renderInline(h)}</th>`).join('');
   const bodyHtml = body
-    .map((r) => `<tr>${splitTableRow(r).map((c) => `<td>${renderInline(c)}</td>`).join('')}</tr>`)
+    .map(
+      (r) =>
+        `<tr>${splitTableRow(r)
+          .map((c) => `<td>${renderInline(c)}</td>`)
+          .join('')}</tr>`,
+    )
     .join('');
   return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
 }
@@ -106,9 +127,7 @@ function renderProse(text: string): string {
   return out.join('');
 }
 
-/**
- * Markdown subset used in dialogs: fenced code, tables, bold, inline code, paragraphs.
- */
+/** Markdown subset: fences, tables, lists, bold, code, trusted anchors. */
 export function renderMarkdown(md: string): string {
   const blocks = md.split(/```/);
   let html = '';
@@ -161,7 +180,6 @@ export function showModal(opts: {
     btn.textContent = action.label;
     btn.addEventListener('click', () => {
       action.onClick();
-      // actions may close themselves via showModal handle; always remove overlay after
       if (document.body.contains(overlay)) overlay.remove();
     });
     actionsEl.appendChild(btn);
@@ -171,8 +189,6 @@ export function showModal(opts: {
     if (e.target === overlay) close();
   });
   document.body.appendChild(overlay);
-  // Focus the dialog shell, not an action button: a trailing Enter from the
-  // terminal would otherwise activate "Stay here" and dismiss the celebration.
   const modalEl = overlay.querySelector<HTMLElement>('.modal');
   if (modalEl) {
     modalEl.tabIndex = -1;
