@@ -118,6 +118,18 @@ html[dir='rtl'] .lang-switch {
   unicode-bidi: isolate;
 }
 
+/* Persian: no hairline between the guide dock and the main column. */
+html[dir='rtl'] .dock {
+  border-left: none;
+  border-right: none;
+}
+
+html[dir='rtl'] .toolbar,
+html[dir='rtl'] .board-wrap,
+html[dir='rtl'] .terminal {
+  border-right: none;
+}
+
 .toolbar-actions {
   margin-inline-start: auto;
   display: flex;
@@ -1147,8 +1159,8 @@ button.ghost {
 .term-log,
 .term-hint,
 .term-input-row,
-.term-log > *,
-.term-hint > *,
+#term-log,
+#term-hint,
 .term-log .cmd-line,
 .term-log .out,
 .term-log .err,

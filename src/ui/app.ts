@@ -127,15 +127,30 @@ export class App {
 
   private remountAfterLocale(): void {
     const levelId = this.level?.id ?? null;
-    const keepLog = this.log;
     this.mount();
     if (levelId) {
       const raw = allLevels.find((l) => l.id === levelId);
       if (raw) this.level = localizeLevel(raw);
     }
-    this.log = keepLog;
+    // Re-seed the log in the active locale — previous lines were captured in the old language.
+    this.log = [];
+    if (this.level) {
+      this.pushMeta(ui().levelMeta(this.level.id, this.level.name));
+      this.pushOut(this.level.objective);
+      const coach = coachLine(this.state, this.level);
+      if (coach) this.pushMeta(coach);
+    } else {
+      this.pushMeta(ui().appWelcome);
+      const summary = summarizeCurriculum(this.progress);
+      if (summary.solvedCount > 0) {
+        this.pushOut('');
+        this.pushOut(resumeLine(summary));
+      } else {
+        this.pushMeta(ui().sandboxSeeded);
+        this.pushMeta(ui().progressSaved);
+      }
+    }
     this.renderAll();
-    this.terminal.setLog(this.log);
     this.terminal.focus();
   }
 
