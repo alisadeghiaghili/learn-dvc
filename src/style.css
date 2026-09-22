@@ -1194,6 +1194,19 @@ button.ghost {
   font-size: 12.5px;
 }
 
+.modal .markdown p {
+  margin: 0 0 10px;
+}
+
+.modal .markdown ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+}
+
+.modal .markdown li {
+  margin-bottom: 4px;
+}
+
 .md-table-wrap {
   overflow-x: auto;
   margin: 8px 0 12px;

@@ -15,16 +15,20 @@ function renderInline(raw: string): string {
 
 function isTableRow(line: string): boolean {
   const s = line.trim();
-  return s.startsWith('|') && s.endsWith('|') && s.length >= 3;
+  if (!s.includes('|')) return false;
+  // Require at least two cells (one inner pipe) or outer pipes with content.
+  return s.startsWith('|') ? s.endsWith('|') && splitTableRow(s).length >= 1 : s.split('|').length >= 2;
 }
 
 function isTableSeparator(line: string): boolean {
-  const s = line.trim();
-  return /^\|[\s:|-]+\|$/.test(s) && s.includes('-');
+  const cells = splitTableRow(line);
+  return cells.length >= 1 && cells.every((c) => /^:?-+:?$/.test(c.trim()) && c.includes('-'));
 }
 
 function splitTableRow(line: string): string[] {
-  const s = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  let s = line.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|')) s = s.slice(0, -1);
   return s.split('|').map((c) => c.trim());
 }
 
@@ -39,22 +43,41 @@ function renderTable(rows: string[]): string {
   return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
 }
 
+function isListItem(line: string): boolean {
+  return /^\s*[-*+]\s+\S/.test(line) || /^\s*\d+\.\s+\S/.test(line);
+}
+
+function renderListItem(line: string): string {
+  const s = line.trim().replace(/^([-*+]|\d+\.)\s+/, '');
+  return `<li>${renderInline(s)}</li>`;
+}
+
 function renderProse(text: string): string {
   const lines = text.split('\n');
   const out: string[] = [];
   let para: string[] = [];
+  let list: string[] = [];
 
   const flushPara = () => {
     if (!para.length) return;
     out.push(`<p>${para.map(renderInline).join('<br/>')}</p>`);
     para = [];
   };
+  const flushList = () => {
+    if (!list.length) return;
+    out.push(`<ul>${list.join('')}</ul>`);
+    list = [];
+  };
+  const flushAll = () => {
+    flushPara();
+    flushList();
+  };
 
   let i = 0;
   while (i < lines.length) {
     const line = lines[i]!;
     if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1]!)) {
-      flushPara();
+      flushAll();
       const rows = [line, lines[i + 1]!];
       i += 2;
       while (i < lines.length && isTableRow(lines[i]!) && !isTableSeparator(lines[i]!)) {
@@ -65,14 +88,21 @@ function renderProse(text: string): string {
       continue;
     }
     if (!line.trim()) {
-      flushPara();
+      flushAll();
       i += 1;
       continue;
     }
+    if (isListItem(line)) {
+      flushPara();
+      list.push(renderListItem(line));
+      i += 1;
+      continue;
+    }
+    flushList();
     para.push(line);
     i += 1;
   }
-  flushPara();
+  flushAll();
   return out.join('');
 }
 
