@@ -1159,6 +1159,20 @@ button.ghost {
   unicode-bidi: isolate;
 }
 
+/* Persian: the log panel itself is right-aligned; command echo stays LTR. */
+html[dir='rtl'] .term-log {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+html[dir='rtl'] .term-log .cmd-line,
+html[dir='rtl'] .term-log code,
+html[dir='rtl'] .term-log pre {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: isolate;
+}
+
 .term-input-row .prompt,
 .term-input-row .term-input,
 .term-input-row .term-ghost,
