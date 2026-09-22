@@ -486,6 +486,30 @@ button.ghost {
   font-size: 12px;
 }
 
+.legend-box {
+  border: 1px solid var(--line);
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+
+.legend-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.legend-list li {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.legend-list li code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 .ui-help {
   display: grid;
   gap: 12px;

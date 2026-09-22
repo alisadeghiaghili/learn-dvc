@@ -19,7 +19,7 @@ export const UI_ELEMENTS: UiElementDoc[] = [
     selector: '.toolbar-actions',
     title: 'Toolbar buttons',
     what: [
-      '**Levels** — open the challenge browser / packs.',
+      '**Levels** — open the challenge browser / packs. Each row shows **difficulty dots** (1–5 filled ●) and **ideal command count**.',
       '**Guide** — pulse/scroll the always-on right guide panel.',
       '**Hint** — print remaining solution steps in the terminal.',
       '**Solution** — show official commands (can run them).',
@@ -28,7 +28,7 @@ export const UI_ELEMENTS: UiElementDoc[] = [
       '**Sandbox** — leave the level and free-play.',
       '**Help** — UI element map (also `help ui`).',
     ].join('\n'),
-    how: 'The right Guide panel is **always open** and spans the full page height — you do not need to open it first.',
+    how: 'The right Guide panel is **always open** and spans the full page height — you do not need to open it first. Dots = how many DVC ideas a level stacks (difficulty), not progress.',
   },
   {
     id: 'dock',

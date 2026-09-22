@@ -280,7 +280,7 @@ export class App {
               <span class="id">${l.id}</span>
               <span class="name">${l.name}</span>
               <span class="par-note">ideal ${l.par} cmd${l.par === 1 ? '' : 's'}</span>
-              <span class="chip ${p?.solved ? 'ok' : ''}">${p?.solved ? `solved ${p.bestCommands ?? ''}` : `${'●'.repeat(l.difficulty)}`}</span>
+              <span class="chip ${p?.solved ? 'ok' : ''}" title="Difficulty ${l.difficulty} of 5">${p?.solved ? `solved ${p.bestCommands ?? ''}` : `${'●'.repeat(l.difficulty)}${'○'.repeat(Math.max(0, 5 - l.difficulty))}`}</span>
             </button>`;
           })
           .join('');
@@ -290,7 +290,16 @@ export class App {
 
     const modal = showModal({
       title: 'Levels',
-      bodyHtml: `<p>Pick a challenge. Solved levels persist in this browser.</p>${body}`,
+      bodyHtml: `<p>Pick a challenge. Solved levels persist in this browser.</p>
+        <div class="legend-box">
+          <div class="next-title">How to read a level row</div>
+          <ul class="legend-list">
+            <li><span class="chip">● ○ ○</span> <strong>Difficulty dots</strong> — 1 to 5 filled <code>●</code> = harder (more DVC concepts at once). Empty capacity is 5.</li>
+            <li><span class="par-note">ideal 3 cmds</span> <strong>Ideal command count</strong> — the clean solution length (golf target, not a hard limit).</li>
+            <li><span class="chip ok">solved 3</span> <strong>Solved</strong> — you cleared it; the number is your best command count.</li>
+          </ul>
+        </div>
+        ${body}`,
       actions: [{ label: 'Close', className: 'ghost', onClick: () => modal.close() }],
     });
 
