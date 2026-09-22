@@ -40,6 +40,10 @@ export interface PipelineStage {
   frozen: boolean;
   /** Whether outs currently match last successful repro. */
   upToDate: boolean;
+  /** true when out path is a directory artifact (`.dir` style). */
+  outDirs?: string[];
+  /** Signature of last successful run — powers the run cache. */
+  lastRunSig?: string;
 }
 
 export interface ExperimentRun {
@@ -86,6 +90,10 @@ export interface RepoState {
   lastAppliedExpId?: string;
   /** Successful commands run this level — sticky checklist completion. */
   commandHistory: string[];
+  /** Content-addressed run-cache signatures already executed. */
+  runCache: string[];
+  /** Simple plot series (name → points) for plots show/diff. */
+  plots: Record<string, number[]>;
 }
 
 export interface CommandResult {
@@ -118,6 +126,7 @@ export type GoalCheck =
   | { kind: 'experimentCount'; min: number }
   | { kind: 'gitCommitMessageIncludes'; text: string; requireFilesAny?: string[] }
   | { kind: 'gitStagedIncludesAny'; paths: string[] }
+  | { kind: 'runCacheHits'; min: number }
   | { kind: 'notDirty' }
   | { kind: 'allOf'; checks: GoalCheck[] };
 

@@ -11,10 +11,14 @@ import {
   defaultRemote,
   ensureGit,
   isDirtyFile,
+  isDirOut,
   makeFile,
+  parseKeyValue,
   pipelineSignature,
   removeWorkspaceFile,
   restoreWorkspaceFromPointer,
+  setParam,
+  stageRunSig,
 } from './state';
 
 export interface CommandContext {
@@ -76,8 +80,8 @@ function markPipelineDirtyIfInputChanged(state: RepoState, path: string): void {
 
 function syntheticMetrics(stage: PipelineStage, state: RepoState): void {
   // Deterministic metrics derived from params — good enough for teaching.
-  const lr = Number(state.params.lr ?? 0.1);
-  const n = Number(state.params.n_estimators ?? 10);
+  const lr = Number(state.params.lr ?? state.params['train.lr'] ?? 0.1);
+  const n = Number(state.params.n_estimators ?? state.params['train.n_est'] ?? 10);
   const acc = Math.min(0.99, 0.55 + n * 0.02 + (lr > 0 && lr < 0.3 ? 0.08 : 0) + (state.experiments.length * 0.001));
   if (stage.metrics.length) {
     for (const m of stage.metrics) {
@@ -145,10 +149,21 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
       return logs;
     }
   }
+
+  const sig = stageRunSig(stage, state);
+  if (stage.lastRunSig === sig || state.runCache.includes(sig)) {
+    logs.push(`Stage '${stage.name}' restored from run cache (same inputs/params) — skip work.`);
+    stage.upToDate = true;
+    stage.lastRunSig = sig;
+    if (!state.runCache.includes(sig)) state.runCache.push(sig);
+    return logs;
+  }
+
   logs.push(`Running stage '${stage.name}': ${stage.cmd}`);
   for (const out of stage.outs) {
-    const existing = state.files[out];
+    const dirOut = isDirOut(out);
     const contentId = fakeMd5(`out:${out}:${stage.cmd}:${JSON.stringify(state.params)}`);
+    const existing = state.files[out];
     if (existing) {
       existing.contentId = contentId;
       existing.present = true;
@@ -158,18 +173,34 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
         addCache(state, contentId);
       }
     } else {
-      state.files[out] = makeFile(out, out.endsWith('.json') || out.endsWith('.csv') ? 'data' : 'code', {
+      state.files[out] = makeFile(out, dirOut ? 'data' : out.endsWith('.json') || out.endsWith('.csv') ? 'data' : 'code', {
         contentId,
         present: true,
         tracked: false,
       });
     }
+    if (dirOut) {
+      // materialize a small "directory" marker so learners see nfiles
+      const marker = `${out}/_dir`;
+      state.files[marker] = makeFile(marker, 'data', {
+        contentId: fakeMd5(`dir:${out}:${contentId}`),
+        present: true,
+      });
+      logs.push(`  wrote directory out '${out}' (nfiles=2)`);
+    }
     if (!state.generated.includes(out)) state.generated.push(out);
+    addCache(state, contentId);
   }
   syntheticMetrics(stage, state);
+  // plots: loss curve improves with more estimators
+  const n = Number(state.params['train.n_est'] ?? state.params.n_estimators ?? 10);
+  state.plots['loss'] = Array.from({ length: 6 }, (_, i) => Number((1 / (1 + (n / 20) * (i + 1))).toFixed(4)));
+  state.plots['acc'] = state.plots['loss']!.map((v) => Number((1 - v).toFixed(4)));
   stage.upToDate = true;
+  stage.lastRunSig = sig;
+  if (!state.runCache.includes(sig)) state.runCache.push(sig);
   logs.push(`Stage '${stage.name}' is up to date (outputs regenerated).`);
-  if (Object.keys(stage.metrics).length || stage.metrics.length) {
+  if (stage.metrics.length) {
     logs.push(`metrics: ${JSON.stringify(state.metrics)}`);
   }
   return logs;
@@ -336,9 +367,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       result: ok(
         [
           'DVC commands: init, add, status, commit, checkout, remote, push, pull, fetch,',
-          '  stage, repro, dag, freeze, unfreeze, metrics, params, exp, remove, gc, diff, version',
+          '  stage, repro, dag, freeze, unfreeze, metrics, params, plots, exp, get, import, remove, gc, diff, version',
           'Git (simulated): init, add, commit, log, status, checkout',
-          'Workspace simulators: edit <path>, rm <path>, cat <path>, ls',
+          'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls',
           'Meta: levels, help/ui/tour, curriculum, concepts|glossary, steps, hint, show goal, show solution, reset, undo, sandbox, clear',
         ].join('\n'),
       ),
@@ -379,6 +410,55 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (cmd === 'cat') {
     const path = args[0];
     if (!path) return { state, result: fail('Usage: cat <path>') };
+    if (path === 'dvc.yaml' && state.pipeline.length) {
+      const yaml: string[] = ['stages:'];
+      for (const s of state.pipeline) {
+        yaml.push(`  ${s.name}:`, `    cmd: ${s.cmd}`);
+        if (s.deps.length) {
+          yaml.push('    deps:');
+          for (const d of s.deps) yaml.push(`      - ${d}`);
+        }
+        if (s.params.length) {
+          yaml.push('    params:');
+          for (const p of s.params) yaml.push(`      - ${p}`);
+        }
+        if (s.outs.length) {
+          yaml.push('    outs:');
+          for (const o of s.outs) yaml.push(`      - ${o}`);
+        }
+        if (s.metrics.length) {
+          yaml.push('    metrics:');
+          for (const m of s.metrics) yaml.push(`      - ${m}`);
+        }
+      }
+      return { state, result: ok(yaml.join('\n')) };
+    }
+    if (path === 'dvc.lock' && state.pipeline.length) {
+      const lock: string[] = ["schema: '2.0'", 'stages:'];
+      for (const s of state.pipeline) {
+        lock.push(`  ${s.name}:`, `    cmd: ${s.cmd}`, '    deps:');
+        for (const d of s.deps) {
+          lock.push(`      - path: ${d}`, `        md5: ${state.files[d]?.contentId ?? ''}`);
+        }
+        lock.push('    params:', '      params.yaml:');
+        for (const p of s.params) lock.push(`        ${p}: ${state.params[p] ?? ''}`);
+        lock.push('    outs:');
+        for (const o of s.outs) {
+          lock.push(`      - path: ${o}`, `        md5: ${state.files[o]?.contentId ?? ''}`);
+        }
+      }
+      return { state, result: ok(lock.join('\n')) };
+    }
+    if (path === 'params.yaml') {
+      return {
+        state,
+        result: ok(
+          Object.entries(state.params)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\n'),
+        ),
+      };
+    }
     const f = state.files[path];
     if (!f || !f.present) return { state, result: fail(`cat: ${path}: No such file`) };
     if (f.tracked) {
@@ -414,15 +494,13 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     if (!f.present) return { state, result: fail(`edit: ${path}: file not present in workspace`) };
     if (f.kind === 'code' || f.kind === 'params') {
       if (path === 'params.yaml' && args[1]) {
-        // edit params.yaml lr=0.05
-        const kv = args[1].split('=');
-        if (kv.length === 2) {
-          const key = kv[0];
-          const val = kv[1];
-          state.params[key] = Number.isNaN(Number(val)) ? val : Number(val);
+        // edit params.yaml prepare.seed=0.2  (nested keys use dots)
+        const kv = parseKeyValue(args[1]);
+        if (kv) {
+          setParam(state, kv.key, kv.value);
           f.contentId = fakeMd5(`params:${JSON.stringify(state.params)}`);
           for (const s of state.pipeline) if (s.params.length) s.upToDate = false;
-          return { state, result: ok(`Updated ${path}: ${key}=${state.params[key]}`) };
+          return { state, result: ok(`Updated ${path}: ${kv.key}=${kv.value}`) };
         }
       }
       f.contentId = fakeMd5(`edit:${path}:${Date.now()}`);
@@ -924,6 +1002,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           state.files[dep] = makeFile(dep, 'code');
         }
       }
+      const outDirs = parsed.outs.filter((o) => isDirOut(o));
       const stage: PipelineStage = {
         name: parsed.name,
         deps: parsed.deps,
@@ -933,6 +1012,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         metrics: parsed.metrics,
         frozen: false,
         upToDate: false,
+        outDirs,
       };
       state.pipeline.push(stage);
       state.files['dvc.yaml'] = makeFile('dvc.yaml', 'yaml', {
@@ -942,10 +1022,16 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         [
           `Added stage '${parsed.name}' to dvc.yaml`,
           `  deps: ${parsed.deps.join(', ') || '(none)'}`,
-          `  outs: ${parsed.outs.join(', ') || '(none)'}`,
+          `  outs: ${parsed.outs.join(', ') || '(none)'}${outDirs.length ? `  [dir outs: ${outDirs.join(', ')}]` : ''}`,
           `  params: ${parsed.params.join(', ') || '(none)'}`,
           `  metrics: ${parsed.metrics.join(', ') || '(none)'}`,
           `  cmd:  ${parsed.cmd}`,
+          '',
+          'dvc.yaml excerpt (metafile — commit this with Git):',
+          `  ${parsed.name}:`,
+          `    cmd: ${parsed.cmd}`,
+          `    deps: [${parsed.deps.join(', ')}]`,
+          `    outs: [${parsed.outs.join(', ')}]`,
         ].join('\n'),
       ));
     }
@@ -999,6 +1085,35 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state, result: ok(`stages: ${names.join(', ')}\n` + lines.filter(Boolean).join('\n')) };
   }
 
+  if (sub === 'params') {
+    const psub = args[1] ?? 'show';
+    if (psub === 'show') {
+      return {
+        state,
+        result: ok(
+          Object.entries(state.params)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\n') || 'No params.',
+        ),
+      };
+    }
+    if (psub === 'diff') {
+      const head = state.gitCommits[state.gitCommits.length - 1]?.params ?? {};
+      const keys = [...new Set([...Object.keys(head), ...Object.keys(state.params)])];
+      const lines = ['Path\t\tParam\t\tHEAD\tworkspace'];
+      for (const k of keys) {
+        const a = head[k];
+        const b = state.params[k];
+        if (a !== b) lines.push(`params.yaml\t${k}\t${a ?? '—'}\t${b ?? '—'}`);
+      }
+      return {
+        state,
+        result: ok(lines.length > 1 ? lines.join('\n') : 'No param differences vs last commit.'),
+      };
+    }
+    return { state, result: fail('Usage: dvc params show|diff') };
+  }
+
   if (sub === 'metrics') {
     const msub = args[1] ?? 'show';
     if (msub === 'show') {
@@ -1012,22 +1127,87 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         ),
       };
     }
-    return { state, result: fail('Usage: dvc metrics show') };
-  }
-
-  if (sub === 'params') {
-    const psub = args[1] ?? 'show';
-    if (psub === 'show') {
+    if (msub === 'diff') {
+      const head = state.gitCommits[state.gitCommits.length - 1]?.metrics ?? {};
+      const keys = [...new Set([...Object.keys(head), ...Object.keys(state.metrics)])];
+      const lines = ['Path\t\tMetric\t\tHEAD\tworkspace\tChange'];
+      for (const k of keys) {
+        const a = head[k];
+        const b = state.metrics[k];
+        if (a !== b) {
+          const change = a !== undefined && b !== undefined ? (b - a).toFixed(4) : '—';
+          lines.push(`eval/metrics.json\t${k}\t${a ?? '—'}\t${b ?? '—'}\t${change}`);
+        }
+      }
       return {
         state,
-        result: ok(
-          Object.entries(state.params)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join('\n') || 'No params.',
-        ),
+        result: ok(lines.length > 1 ? lines.join('\n') : 'No metric differences vs last commit.'),
       };
     }
-    return { state, result: fail('Usage: dvc params show') };
+    return { state, result: fail('Usage: dvc metrics show|diff') };
+  }
+
+  if (sub === 'plots') {
+    const plsub = args[1] ?? 'show';
+    const series = state.plots;
+    const render = (label: string) => {
+      const names = Object.keys(series);
+      if (!names.length) return `No plots data. Run \`dvc repro\` first.`;
+      const lines = [label];
+      for (const name of names) {
+        const pts = series[name] ?? [];
+        lines.push(`${name}: ${pts.map((p) => p.toFixed(3)).join(' → ')}`);
+      }
+      lines.push('Opened plots HTML (simulated): dvc_plots/index.html');
+      return lines.join('\n');
+    };
+    if (plsub === 'show') return finish(state, ok(render('plots show')));
+    if (plsub === 'diff') return finish(state, ok(render('plots diff (workspace series)')));
+    return { state, result: fail('Usage: dvc plots show|diff') };
+  }
+
+  if (sub === 'get' || sub === 'import' || sub === 'import-url') {
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    const url = args[1];
+    const outIdx = args.indexOf('-o');
+    const out = outIdx >= 0 ? args[outIdx + 1] : sub === 'import-url' ? 'data/imported.bin' : 'data/registry.xml';
+    if (!url && sub !== 'import-url') {
+      return { state, result: fail(`Usage: dvc ${sub} <url> [-o <path>]`) };
+    }
+    const md5 = fakeMd5(`${sub}:${url ?? 'url'}:${out}`);
+    state.files[out] = makeFile(out, 'data', {
+      contentId: md5,
+      tracked: false,
+      present: true,
+      gitignored: true,
+    });
+    if (sub === 'import') {
+      // import also records .dvc and tracks
+      state.files[out] = makeFile(out, 'data', {
+        contentId: md5,
+        tracked: true,
+        pointerMd5: md5,
+        present: true,
+        gitignored: true,
+      });
+      state.files[`${out}.dvc`] = makeFile(`${out}.dvc`, 'dvc');
+      addCache(state, md5);
+    }
+    return finish(
+      state,
+      ok(
+        [
+          `${sub}: downloaded ${out}`,
+          `  content_id=${md5.slice(0, 8)}…`,
+          sub === 'get'
+            ? '  get = copy without tracking (data registry pattern)'
+            : sub === 'import'
+              ? '  import = versioned dependency on an external DVC project (creates .dvc)'
+              : '  import-url = track external URL as data',
+        ].join('\n'),
+      ),
+    );
   }
 
   if (sub === 'exp') {
@@ -1046,6 +1226,19 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         return vals.join('\t');
       });
       return { state, result: ok([header, ...rows].join('\n')) };
+    }
+    if (esub === 'diff') {
+      const a = state.experiments[state.experiments.length - 2];
+      const b = state.experiments[state.experiments.length - 1];
+      if (!a || !b) return { state, result: fail('Need at least two experiments for `dvc exp diff`.') };
+      const keys = [...new Set([...Object.keys(a.params), ...Object.keys(b.params), ...Object.keys(a.metrics), ...Object.keys(b.metrics)])];
+      const lines = [`${a.id} → ${b.id}`];
+      for (const k of keys) {
+        const va = (a.params[k] ?? a.metrics[k]) as string | number;
+        const vb = (b.params[k] ?? b.metrics[k]) as string | number;
+        if (va !== vb) lines.push(`  ${k}: ${va} → ${vb}`);
+      }
+      return { state, result: ok(lines.join('\n')) };
     }
     if (esub === 'run') {
       if (!state.pipeline.length) return { state, result: fail('ERROR: experiments need a pipeline. Add a stage first.') };

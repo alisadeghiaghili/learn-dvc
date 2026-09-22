@@ -1,6 +1,7 @@
 import type { LevelDef, RepoState } from '../engine/types';
 import { emptyState, ensureGit, makeFile } from '../engine/state';
 import { fakeMd5 } from '../engine/hash';
+import { compareLevels, metaLevels, registryLevels } from './gaps';
 
 function rawRepo(): RepoState {
   const s = emptyState();
@@ -1089,6 +1090,9 @@ export const allLevels: LevelDef[] = [
   ...remoteLevels,
   ...pipelineLevels,
   ...experimentLevels,
+  ...metaLevels,
+  ...compareLevels,
+  ...registryLevels,
   ...fieldLevels,
 ];
 
@@ -1106,12 +1110,15 @@ export function getNextLevel(id: string): LevelDef | undefined {
 }
 
 export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] {
-  const order = ['basics', 'remote', 'pipe', 'exp', 'field'];
+  const order = ['basics', 'remote', 'pipe', 'exp', 'meta', 'cmp', 'reg', 'field'];
   const titles: Record<string, string> = {
     basics: 'Basics',
     remote: 'Remotes',
     pipe: 'Pipelines',
     exp: 'Experiments',
+    meta: 'Metafiles',
+    cmp: 'Compare',
+    reg: 'Registry & CI',
     field: 'Field practice',
   };
   return order.map((id) => ({
@@ -1131,6 +1138,11 @@ export function curriculumOutcomes(): string[] {
     'Reproduce after clone: git clone → dvc pull → data on disk',
     'Restore an older data version: git checkout <ref> -- path.dvc → dvc checkout',
     'Declare ML pipelines in dvc.yaml (deps/outs/params/metrics) and run dvc repro',
+    'Read dvc.yaml / dvc.lock as the PR artifacts of an ML change',
+    'Use nested params (prepare.seed) and directory outputs',
+    'Recognize run-cache skips when inputs/params are unchanged',
+    'Compare iterations with dvc params/metrics/plots diff',
+    'Fetch registry data with dvc get / import / import-url',
     'Know when a stage is dirty and why repro skipped or re-ran work',
     'Freeze/unfreeze stages to protect production artifacts intentionally',
     'Run controlled experiments with dvc exp run -S and compare with exp show',

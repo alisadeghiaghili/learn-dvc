@@ -1,4 +1,4 @@
-import type { RepoState, WorkspaceFile } from './types';
+import type { PipelineStage, RepoState, WorkspaceFile } from './types';
 import { fakeMd5 } from './hash';
 
 export function emptyState(): RepoState {
@@ -17,6 +17,8 @@ export function emptyState(): RepoState {
     dataVersions: {},
     generated: [],
     commandHistory: [],
+    runCache: [],
+    plots: {},
   };
 }
 
@@ -137,6 +139,36 @@ export function applyDataEdit(state: RepoState, path: string): boolean {
   f.contentId = fakeMd5(`file:${path}:v${v}`);
   f.dirty = isDirtyFile(f);
   return true;
+}
+
+/** Nested params keys use dots (prepare.seed) like real DVC params.yaml. */
+export function getParam(state: RepoState, key: string): string | number | undefined {
+  return state.params[key];
+}
+
+export function setParam(state: RepoState, key: string, value: string | number): void {
+  state.params[key] = value;
+}
+
+export function parseKeyValue(token: string): { key: string; value: string | number } | null {
+  const i = token.indexOf('=');
+  if (i <= 0) return null;
+  const key = token.slice(0, i);
+  const raw = token.slice(i + 1);
+  return { key, value: Number.isNaN(Number(raw)) ? raw : Number(raw) };
+}
+
+/** Detect directory-style outputs (no extension or trailing slash). */
+export function isDirOut(path: string): boolean {
+  return path.endsWith('/') || !/\.[A-Za-z0-9]+$/.test(path.split('/').pop() ?? '');
+}
+
+export function stageRunSig(stage: PipelineStage, state: RepoState): string {
+  const depIds = stage.deps.map((d) => state.files[d]?.contentId ?? 'missing').join(',');
+  const paramVals = stage.params
+    .map((p) => `${p}=${state.params[p] ?? ''}`)
+    .join(',');
+  return fakeMd5(`${stage.name}|${stage.cmd}|${depIds}|${paramVals}`);
 }
 
 export function removeWorkspaceFile(state: RepoState, path: string): boolean {

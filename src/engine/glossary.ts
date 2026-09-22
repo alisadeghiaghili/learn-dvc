@@ -63,6 +63,26 @@ export const CONCEPTS: Concept[] = [
     body: 'dvc exp run executes the pipeline with recorded params/metrics without branch explosion. exp apply promotes a winner’s config into the workspace; then repro artifacts.',
   },
   {
+    id: 'run-cache',
+    title: 'Run cache',
+    body: 'DVC remembers (cmd + dep hashes + params) → outputs. Change a hyperparam, change it back, and repro restores from cache instead of re-training.',
+  },
+  {
+    id: 'metafiles',
+    title: 'dvc.yaml & dvc.lock',
+    body: 'dvc.yaml is the stage contract (cmd/deps/params/outs). dvc.lock is the execution receipt (md5s and param values). Both go to Git; never hand-edit lock.',
+  },
+  {
+    id: 'diffs',
+    title: 'Iteration diffs',
+    body: 'dvc params diff / metrics diff / plots diff compare workspace vs HEAD (or revisions). This is how ML changes get reviewed.',
+  },
+  {
+    id: 'registry-cmds',
+    title: 'get / import',
+    body: 'dvc get copies a file from another DVC project. dvc import also versions the dependency (writes .dvc). import-url tracks an external URL as data.',
+  },
+  {
     id: 'incident',
     title: 'Incident question',
     body: '“Which data produced this model?” Answer = Git commit of the release → pointer md5s → cache/remote object. If pointers were never committed, the answer does not exist.',

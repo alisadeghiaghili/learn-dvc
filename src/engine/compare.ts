@@ -198,6 +198,14 @@ function checkOne(state: RepoState, check: GoalCheck): GoalStatus {
             : 'nothing staged',
       };
     }
+    case 'runCacheHits': {
+      const n = state.runCache?.length ?? 0;
+      return {
+        met: n >= check.min,
+        label: `Run cache hits ≥ ${check.min}`,
+        detail: `current=${n}`,
+      };
+    }
     case 'notDirty': {
       const dirty = computeDirtyPaths(state);
       return {

@@ -1,5 +1,5 @@
 import type { GoalCheck, LevelDef, RepoState, SolutionStepStatus } from './types';
-import { isDirtyFile } from './state';
+import { isDirtyFile, parseKeyValue } from './state';
 
 function commitMessageOf(cmd: string): string | null {
   const m = cmd.match(/git\s+commit\b[\s\S]*-m\s+(?:"([^"]*)"|'([^']*)'|(\S+))/i);
@@ -155,9 +155,9 @@ function liveEffectContradicts(state: RepoState, cmd: string): boolean {
     const path = parseArgs(c)[1];
     const kv = parseArgs(c)[2];
     if (path === 'params.yaml' && kv?.includes('=')) {
-      const [key, raw] = kv.split('=');
-      const val = Number.isNaN(Number(raw!)) ? raw! : Number(raw!);
-      return state.params[key!] !== val;
+      const parsed = parseKeyValue(kv);
+      if (!parsed) return false;
+      return state.params[parsed.key] !== parsed.value;
     }
     const f = path ? state.files[path] : undefined;
     if (f?.tracked && f.present) {
@@ -171,9 +171,6 @@ function liveEffectContradicts(state: RepoState, cmd: string): boolean {
     return Object.entries(applied.params).some(([k, v]) => state.params[k] !== v);
   }
   if (/^git\s+commit\b/i.test(c)) {
-    const msg = commitMessageOf(c);
-    if (!msg) return false;
-    // Only contradict if we are sure a correct commit never happened AND history check is caller's job.
     return false;
   }
 
@@ -344,21 +341,38 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
  * 1) live effects win when they hold
  * 2) otherwise, if the solution command already ran successfully this session,
  *    keep it checked — unless later work clearly contradicted that effect
+ * 3) intermediate param edits (later solution step rewrites the same key) stay sticky once run
  */
-function stepStatus(state: RepoState, command: string, solution: string[] = [command]): SolutionStepStatus {
+function stepStatus(state: RepoState, command: string, solution: string[] = [command], index = 0): SolutionStepStatus {
   const cmd = command.trim();
   const live = liveStatus(state, cmd, solution);
   if (live.done || live.optional) return live;
 
   const ran = commandInHistory(state, (h) => matchSolutionCommand(h, cmd));
-  if (ran && !liveEffectContradicts(state, cmd)) {
-    return { command: cmd, done: true, note: 'already completed earlier' };
+  const intermediateParamEdit = isIntermediateParamEdit(solution, index);
+  if (ran && (intermediateParamEdit || !liveEffectContradicts(state, cmd))) {
+    return {
+      command: cmd,
+      done: true,
+      note: intermediateParamEdit ? 'ran (probe/round-trip step)' : 'already completed earlier',
+    };
   }
   return live;
 }
 
+function isIntermediateParamEdit(solution: string[], index: number): boolean {
+  const cmd = (solution[index] ?? '').trim();
+  if (!/^edit\b/i.test(cmd)) return false;
+  const key = parseKeyValue(parseArgs(cmd)[2] ?? '')?.key;
+  if (!key) return false;
+  return solution.slice(index + 1).some((c) => {
+    if (!/^edit\b/i.test(c)) return false;
+    return parseKeyValue(parseArgs(c)[2] ?? '')?.key === key;
+  });
+}
+
 export function solutionProgress(state: RepoState, solution: string[]): SolutionStepStatus[] {
-  return solution.map((command) => stepStatus(state, command, solution));
+  return solution.map((command, index) => stepStatus(state, command, solution, index));
 }
 
 export function solutionComplete(state: RepoState, solution: string[]): boolean {
