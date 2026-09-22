@@ -19,6 +19,11 @@ function renderInline(raw: string): string {
       let t = escapeHtml(part);
       t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
       t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      t = t.replace(
+        /\[([^\]]+)\]\(([^)\s]+)\)/g,
+        (_m, label: string, href: string) =>
+          `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`,
+      );
       return t;
     })
     .join('');
