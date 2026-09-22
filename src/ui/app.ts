@@ -8,7 +8,7 @@ import { allLevels, getNextLevel, seriesOf, curriculumOutcomes } from '../levels
 import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
-import { buildShareTargets, copySharePayload, openShareWindow } from './share';
+import { buildShareTargets, copySharePayload, openShareWindow, COFFEE_BUTTON_HTML, REPO_URL } from './share';
 import { launchConfetti, playFanfare } from './confetti';
 import { loadProgress, resumeLine, saveProgress, summarizeCurriculum } from './progress';
 import { formatUiHelpText, startUiTour, uiHelpModalHtml } from './ui-help';
@@ -71,6 +71,7 @@ export class App {
           <div class="level-title" id="level-title" data-help-id="level-title"></div>
           <div class="toolbar-actions" data-help-id="toolbar">
             <button type="button" data-action="levels">Levels</button>
+            <button type="button" data-action="lesson" title="Replay this level's intro lesson">Lesson</button>
             <button type="button" data-action="goal">Guide</button>
             <button type="button" data-action="hint">Hint</button>
             <button type="button" data-action="solution">Solution</button>
@@ -78,6 +79,8 @@ export class App {
             <button type="button" data-action="reset">Reset</button>
             <button type="button" data-action="sandbox" class="ghost">Sandbox</button>
             <button type="button" data-action="help" class="ghost" title="Explain UI elements">Help</button>
+            <a class="tb-link" data-help-id="links" href="https://github.com/alisadeghiaghili/learn-dvc" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a class="tb-link support" data-help-id="links" href="https://www.buymeacoffee.com/alisadeghil" target="_blank" rel="noopener noreferrer" title="Support the publisher">Buy me a coffee</a>
           </div>
         </header>
         <div class="board-wrap" id="board-wrap"></div>
@@ -102,6 +105,7 @@ export class App {
         if (action === 'reset') this.handleCommand('reset');
         if (action === 'sandbox') this.handleCommand('sandbox');
         if (action === 'help') this.openUiHelp(true);
+        if (action === 'lesson') this.replayLesson();
         this.terminal.focus();
       });
     });
@@ -347,6 +351,36 @@ export class App {
     this.terminal.focus();
   }
 
+  /** Replay this level's intro lesson, or the publisher/about card in sandbox. */
+  private replayLesson(): void {
+    if (this.level?.startDialog?.length) {
+      this.showIntro(this.level);
+      this.pushMeta('Lesson slides replayed for this level.');
+      this.terminal.focus();
+      return;
+    }
+    showModal({
+      title: 'About LearnDVC',
+      bodyHtml: renderMarkdown(
+        [
+          '**LearnDVC** is an interactive Data Version Control tutorial: sandbox + guided levels.',
+          'Published by **Ali Sadeghi Aghili**.',
+          '',
+          'The board shows **Workspace → Cache → Remote** — the material flow DVC manages.',
+          '',
+          'Open **Levels** for the curriculum, or type `curriculum` / `concepts` / `lesson`.',
+          '',
+          `- [GitHub](${REPO_URL})`,
+          '',
+          'Support the publisher:',
+          COFFEE_BUTTON_HTML,
+        ].join('\n'),
+      ),
+      actions: [{ label: 'Close', className: 'ghost', onClick: () => this.terminal.focus() }],
+      onClose: () => this.terminal.focus(),
+    });
+  }
+
   private showIntro(level: LevelDef): void {
     if (!level.startDialog.length) return;
     let idx = 0;
@@ -525,24 +559,34 @@ export class App {
       this.terminal.clear();
       return;
     }
-    if (lower === 'help' || lower === '?' || lower === 'help ui' || lower === 'help page' || lower === 'tour') {
+    if (lower === 'lesson' || lower === 'intro' || lower === 'about') {
+      this.replayLesson();
+      return;
+    }
+    if (
+      lower === 'help' ||
+      lower === '?' ||
+      lower === 'help ui' ||
+      lower === 'help page' ||
+      lower === 'tour'
+    ) {
       if (lower === 'help' || lower === '?') {
         this.pushOut(
           [
             'help ui | tour     — explain every UI region (and highlight them)',
-            'help               — command list is in the engine help when in sandbox terminal path',
+            'lesson | intro | about — replay level lesson or publisher/about card',
+            'GitHub / Buy me a coffee — toolbar links to source & support',
             'curriculum         — learning outcomes',
             'concepts           — DVC mental models glossary',
             'levels             — challenge browser',
           ].join('\n'),
         );
       }
-      if (lower === 'help ui' || lower === 'help page' || lower === 'tour' || lower === 'help') {
-        this.pushOut(formatUiHelpText());
-      }
       if (lower === 'help ui' || lower === 'help page' || lower === 'tour') {
+        this.pushOut(formatUiHelpText());
         this.openUiHelp(true);
-      } else if (lower === 'help') {
+      } else if (lower === 'help' || lower === '?') {
+        this.pushOut(formatUiHelpText());
         this.openUiHelp(false);
       }
       this.terminal.focus();
