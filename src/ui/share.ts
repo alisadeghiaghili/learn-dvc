@@ -71,8 +71,7 @@ export function buildShareTargets(ctx: ShareContext): ShareTargets {
   const shortText = shareMessageX(ctx);
   const url = SHARE_URL;
   return {
-    // Full draft post lives in the URL so LinkedIn/X open ready to publish.
-    linkedin: `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(longText)}`,
+    linkedin: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(url)}&title=${encodeURIComponent('LearnDVC — Data Version Control tutorial')}&summary=${encodeURIComponent(longText)}&source=LearnDVC`,
     x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shortText)}`,
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(longText)}`,
     text: longText,
