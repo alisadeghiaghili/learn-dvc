@@ -5,8 +5,6 @@ import { en } from '../src/i18n/en';
 import { allLevels } from '../src/levels';
 import { CONCEPT_IDS } from '../src/engine/glossary';
 
-const catalogs = { en, de, fa } as const;
-
 describe('i18n locale completeness', () => {
   it('covers every level id in de and fa', () => {
     for (const level of allLevels) {
