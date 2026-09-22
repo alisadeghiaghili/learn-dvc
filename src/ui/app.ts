@@ -8,7 +8,7 @@ import { allLevels, getNextLevel, seriesOf, curriculumOutcomes } from '../levels
 import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
-import { buildShareTargets, copySharePayload, openShareWindow, COFFEE_BUTTON_HTML, REPO_URL } from './share';
+import { buildShareTargets, COFFEE_BUTTON_HTML, REPO_URL, shareWithClipboard } from './share';
 import { launchConfetti, playFanfare } from './confetti';
 import { loadProgress, resumeLine, saveProgress, summarizeCurriculum } from './progress';
 import { formatUiHelpText, startUiTour, uiHelpModalHtml } from './ui-help';
@@ -905,25 +905,20 @@ export class App {
     modal.el.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
         ev.preventDefault();
-        const kind = btn.dataset.share;
+        const kind = (btn.dataset.share ?? 'copy') as 'linkedin' | 'facebook' | 'x' | 'copy';
         const status = modal.el.querySelector<HTMLElement>('[data-share-status]');
-        if (kind === 'linkedin') openShareWindow(share.linkedin);
-        else if (kind === 'x') openShareWindow(share.x);
-        else if (kind === 'facebook') openShareWindow(share.facebook);
-        else if (kind === 'copy') {
-          const ok = await copySharePayload(share.text, share.url);
-          if (status) {
-            status.hidden = false;
-            status.textContent = ok
-              ? 'Copied full curriculum post (LinkedIn-ready).'
-              : 'Could not copy — select the share text manually.';
-          }
+        const result = await shareWithClipboard(kind, share);
+        if (!status) return;
+        status.hidden = false;
+        if (kind === 'copy') {
+          status.textContent = result.copied
+            ? 'Copied full post — paste anywhere.'
+            : 'Could not copy — select the share text manually.';
           return;
         }
-        if (status && kind !== 'copy') {
-          status.hidden = false;
-          status.textContent = 'Share window opened (popup blocked? allow popups for this site).';
-        }
+        status.textContent = result.copied
+          ? 'Post copied. Paste it into the share box (LinkedIn/Facebook block auto-filled text).'
+          : 'Share window opened — copy the post text manually if the box is empty.';
       });
     });
 

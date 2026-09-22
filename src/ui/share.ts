@@ -24,13 +24,12 @@ function bulletList(items: { name: string; id: string; seriesTitle: string }[], 
   return lines;
 }
 
-/** Long post for LinkedIn — full learned curriculum + link. */
 export function shareMessageLinkedIn(ctx: ShareContext): string {
   const { curriculum: c, levelName, levelId } = ctx;
   const headline =
     c.solvedCount === 0
-      ? `I just started learning Data Version Control with LearnDVC.`
-      : `I'm learning Data Version Control (DVC) with LearnDVC — an interactive sandbox and tutorial.`;
+      ? 'I just started learning Data Version Control with LearnDVC.'
+      : 'I am learning Data Version Control (DVC) with LearnDVC — an interactive sandbox and tutorial.';
 
   const just =
     c.solvedCount > 0
@@ -42,7 +41,7 @@ export function shareMessageLinkedIn(ctx: ShareContext): string {
       : `Working through ${c.total} hands-on levels.`;
 
   const learned = c.learned.length
-    ? [``, `What I've learned so far (${c.solvedCount}/${c.total} levels):`, ...bulletList(c.learned)].join('\n')
+    ? ['', `What I've learned so far (${c.solvedCount}/${c.total} levels):`, ...bulletList(c.learned)].join('\n')
     : '';
 
   const next = c.next ? `\n\nUp next: ${c.next.name} (${c.next.id})` : '';
@@ -61,18 +60,16 @@ export function shareMessageLinkedIn(ctx: ShareContext): string {
     .replace(/\n{3,}/g, '\n\n');
 }
 
-/** Short post for X/Twitter — curriculum compressed to fit the limit. */
 export function shareMessageX(ctx: ShareContext): string {
   const { curriculum: c } = ctx;
   const head =
     c.solvedCount > 0
       ? `Learning DVC with LearnDVC — ${c.solvedCount}/${c.total} levels done.`
-      : `Starting DVC with LearnDVC.`;
+      : 'Starting DVC with LearnDVC.';
   const body = c.learned.length
     ? bulletList(c.learned, 3).join('\n')
-    : `Interactive Data Version Control tutorial.`;
+    : 'Interactive Data Version Control tutorial.';
   const url = LIVE_URL;
-  // Keep under ~280 including URL.
   let text = `${head}\n${body}\n${url}`;
   if (text.length > 279) {
     const first = c.learned[0] ? `• ${c.learned[0].seriesTitle}: ${c.learned[0].name}` : '';
@@ -81,20 +78,13 @@ export function shareMessageX(ctx: ShareContext): string {
   return text;
 }
 
-export function shareMessageGeneric(ctx: ShareContext): string {
-  return shareMessageLinkedIn(ctx);
-}
-
 export interface ShareTargets {
   linkedin: string;
   x: string;
   facebook: string;
-  /** Full curriculum post (LinkedIn / copy). */
   text: string;
-  /** Short post (X). */
   shortText: string;
   url: string;
-  /** Plain list for UI preview. */
   learnedLines: string[];
 }
 
@@ -103,7 +93,7 @@ export function buildShareTargets(ctx: ShareContext): ShareTargets {
   const shortText = shareMessageX(ctx);
   const url = SHARE_URL;
   return {
-    // Prefill LinkedIn composer with the curriculum post.
+    // LinkedIn/Facebook often drop query text — we copy the post then open composer.
     linkedin: `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(longText)}`,
     x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shortText)}&url=${encodeURIComponent(url)}`,
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(longText)}`,
@@ -142,4 +132,25 @@ export async function copySharePayload(text: string, url: string): Promise<boole
   } catch {
     return false;
   }
+}
+
+/**
+ * Copy the full post first (LinkedIn/Facebook ignore prefilled text),
+ * then open the network composer so the user can paste.
+ */
+export async function shareWithClipboard(
+  kind: 'linkedin' | 'facebook' | 'x' | 'copy',
+  targets: ShareTargets,
+): Promise<{ opened: boolean; copied: boolean }> {
+  if (kind === 'copy') {
+    const copied = await copySharePayload(targets.text, targets.url);
+    return { opened: false, copied };
+  }
+  const payload =
+    kind === 'x' ? `${targets.shortText}\n${targets.url}` : `${targets.text}\n${targets.url}`;
+  const copied = await copySharePayload(payload, targets.url);
+  const href =
+    kind === 'linkedin' ? targets.linkedin : kind === 'facebook' ? targets.facebook : targets.x;
+  openShareWindow(href);
+  return { opened: true, copied };
 }
