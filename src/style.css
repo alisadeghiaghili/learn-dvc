@@ -1144,20 +1144,27 @@ button.ghost {
 }
 
 /* Commands and terminal chrome stay LTR even when the UI is RTL (fa). */
-.terminal-ltr {
-  display: contents;
-  direction: ltr;
+.term-log,
+.term-hint,
+.term-input-row,
+.term-log > *,
+.term-hint > *,
+.term-log .cmd-line,
+.term-log .out,
+.term-log .err,
+.term-log .meta,
+.term-log .ok {
+  direction: ltr !important;
+  text-align: left !important;
   unicode-bidi: isolate;
 }
 
-.terminal-ltr .term-log,
-.terminal-ltr .term-hint,
-.terminal-ltr .term-input-row,
-.terminal-ltr .prompt,
-.terminal-ltr .term-input,
-.terminal-ltr .term-ghost {
-  direction: ltr;
-  text-align: left;
+.term-input-row .prompt,
+.term-input-row .term-input,
+.term-input-row .term-ghost,
+.term-input-row .term-input-wrap {
+  direction: ltr !important;
+  text-align: left !important;
   unicode-bidi: isolate;
 }
 
@@ -1174,12 +1181,14 @@ samp {
 .goal-list .g-label,
 .goal-list .g-cmd,
 .goal-list li code,
+.goal-list .g-detail,
 .next-row,
 .next-row .g-cmd,
-.next-box code {
-  direction: ltr;
+.next-box code,
+.next-box .next-row {
+  direction: ltr !important;
   unicode-bidi: isolate;
-  text-align: left;
+  text-align: left !important;
 }
 
 .empty-note code,

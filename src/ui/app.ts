@@ -247,10 +247,10 @@ export class App {
     const items = steps.map((s, i) => {
       const isCurrent = !solved && !s.done && !s.optional && i === currentId;
       return `<li class="${s.done ? 'met' : ''}${s.optional ? ' optional' : ''}${isCurrent ? ' current' : ''}">
-        <div class="g-label">${s.done ? '✓' : isCurrent ? '▶' : '○'} <code>${escapeHtml(s.command)}</code>${
+        <div class="g-label" dir="ltr">${s.done ? '✓' : isCurrent ? '▶' : '○'} <code>${escapeHtml(s.command)}</code>${
           s.optional ? ` <span class="chip">${escapeHtml(ui().optionalChip)}</span>` : ''
         }${isCurrent ? ` <span class="chip current-chip">${escapeHtml(ui().nowChip)}</span>` : ''}</div>
-        <div class="g-detail">${escapeHtml(s.note)}</div>
+        <div class="g-detail" dir="ltr">${escapeHtml(s.note)}</div>
       </li>`;
     });
     const remaining = nextSteps(this.state, level.goal, level);
