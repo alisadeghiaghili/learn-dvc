@@ -139,21 +139,24 @@ export function renderBoardHtml(state: RepoState): string {
     <div class="board">
       <section class="zone workspace" data-help-id="workspace-zone" aria-label="Workspace">
         <h2><span class="dot" style="color:var(--text)"></span> Workspace</h2>
-        <p class="zone-hint">Working tree · pointers · code</p>
+        <p class="zone-hint">Files on disk · pointers · code</p>
+        <p class="zone-why">Why it matters: this is what your tools actually read. Tracked data stays here as a linked file — Git never sees the heavy bytes.</p>
         ${renderWorkspace(state)}
       </section>
       <section class="zone cache" data-help-id="cache-zone" aria-label="Cache">
         <h2><span class="dot"></span> Cache</h2>
         <p class="zone-hint">.dvc/cache — content-addressed objects</p>
+        <p class="zone-why">Why it matters: local store of data versions (by md5). dvc add/commit put bytes here; checkout/pull read them back.</p>
         ${renderCache(state)}
       </section>
       <section class="zone remote" data-help-id="remote-zone" aria-label="Remote">
         <h2><span class="dot"></span> Remote</h2>
         <p class="zone-hint">Shared storage for heavy data</p>
+        <p class="zone-why">Why it matters: teammates and CI get the same bytes here. Empty remote = data does not travel with git push alone.</p>
         ${renderRemote(state)}
       </section>
     </div>
-    <div class="flow-arrow" data-help-id="flow-arrow">material flow: workspace ⇄ cache ⇄ remote</div>
+    <div class="flow-arrow" data-help-id="flow-arrow">material flow: workspace → cache → remote (push) · remote → cache → workspace (pull)</div>
     ${renderDag(state)}
   `;
 }

@@ -207,7 +207,16 @@ button.ghost {
 .zone .zone-hint {
   color: var(--haze);
   font-size: 12px;
+  margin: 0 0 6px;
+}
+
+.zone .zone-why {
+  color: color-mix(in srgb, var(--cache) 55%, var(--haze));
+  font-size: 11.5px;
+  line-height: 1.4;
   margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
 }
 
 .zone.workspace h2 {

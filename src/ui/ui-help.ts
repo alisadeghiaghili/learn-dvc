@@ -11,8 +11,8 @@ export const UI_ELEMENTS: UiElementDoc[] = [
     id: 'level-title',
     selector: '.level-title',
     title: 'Current context strip',
-    what: 'Shows sandbox mode or the active level id/name and par (expected command count).',
-    how: 'Read it to confirm you are on the level you think you are.',
+    what: 'Shows sandbox mode or the active level id/name and **ideal command count** (how many commands the clean solution uses).',
+    how: 'Read it to confirm which level you are on. “Ideal: 3 commands” = golf target, not a hard limit.',
   },
   {
     id: 'toolbar',

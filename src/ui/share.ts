@@ -32,7 +32,7 @@ export function shareMessageLinkedIn(ctx: ShareContext): string {
     c.solvedCount > 0
       ? `Latest: “${levelName}” (${levelId})${
           ctx.commands !== null
-            ? ` — solved in ${ctx.commands} command${ctx.commands === 1 ? '' : 's'} (par ${ctx.par})`
+            ? ` — solved in ${ctx.commands} command${ctx.commands === 1 ? '' : 's'} (ideal ${ctx.par})`
             : ''
         }.`
       : `Working through ${c.total} hands-on levels.`;

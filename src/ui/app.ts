@@ -150,7 +150,7 @@ export class App {
   private renderAll(): void {
     this.boardEl.innerHTML = renderBoardHtml(this.state);
     this.titleEl.textContent = this.level
-      ? `${this.level.id} · ${this.level.name} · par ${this.level.par}`
+      ? `${this.level.id} · ${this.level.name} · expected ${this.level.par} commands`
       : 'sandbox mode';
     this.renderDock();
     this.syncTerminalHints();
@@ -229,7 +229,10 @@ export class App {
           </div>`;
     const extra = statuses.filter((s) => !s.met);
     const prog = this.progress[level.id];
-    const golfNote = prog?.bestCommands !== undefined ? `Best: ${prog.bestCommands} cmd · par ${level.par}` : `par ${level.par}`;
+    const golfNote =
+      prog?.bestCommands !== undefined
+        ? `Best so far: ${prog.bestCommands} command${prog.bestCommands === 1 ? '' : 's'} · ideal: ${level.par}`
+        : `Ideal solution: ${level.par} command${level.par === 1 ? '' : 's'} (under or equal is excellent)`;
     this.dockEl.innerHTML = `
       <h2>${level.name}</h2>
       <p class="objective">${level.objective}</p>
@@ -276,7 +279,7 @@ export class App {
             return `<button type="button" class="level-row ${p?.solved ? 'solved' : ''}" data-level="${l.id}">
               <span class="id">${l.id}</span>
               <span class="name">${l.name}</span>
-              <span class="par-note">par ${l.par}</span>
+              <span class="par-note">ideal ${l.par} cmd${l.par === 1 ? '' : 's'}</span>
               <span class="chip ${p?.solved ? 'ok' : ''}">${p?.solved ? `solved ${p.bestCommands ?? ''}` : `${'●'.repeat(l.difficulty)}`}</span>
             </button>`;
           })
@@ -597,7 +600,9 @@ export class App {
         this.pushOut('');
         this.pushOut('*** LEVEL SOLVED *** ' + this.level.name);
         this.pushOut(
-          num > 0 ? `Commands used: ${num} (par ${this.level.par})` : `Par ${this.level.par}`,
+          num > 0
+            ? `Commands used: ${num} · ideal: ${this.level.par}`
+            : `Ideal: ${this.level.par} command${this.level.par === 1 ? '' : 's'}`,
         );
         this.pushOut('*** PARTY MODE *** confetti incoming — share buttons below.');
         this.dockEl.hidden = false;
@@ -643,10 +648,10 @@ export class App {
     const underPar = cmds !== null && cmds <= level.par;
     const golfLine =
       cmds === null
-        ? `Par for this level: ${level.par}`
+        ? `Ideal for this level: ${level.par} command${level.par === 1 ? '' : 's'}`
         : underPar
-          ? `**${cmds}** command${cmds === 1 ? '' : 's'} — at or under par (${level.par}). Clean run.`
-          : `**${cmds}** command${cmds === 1 ? '' : 's'}. Par is ${level.par}. Still counts — you got there.`;
+          ? `**${cmds}** command${cmds === 1 ? '' : 's'} — at or under the ideal (${level.par}). Clean run.`
+          : `**${cmds}** command${cmds === 1 ? '' : 's'}. Ideal is ${level.par}. Still counts — you got there.`;
 
     const cheers = [
       'Nailed it. This concept is yours now.',
