@@ -64,7 +64,7 @@ body {
   padding: 10px 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
@@ -116,18 +116,6 @@ body {
 html[dir='rtl'] .lang-switch {
   direction: ltr;
   unicode-bidi: isolate;
-}
-
-/* Persian: no hairline between the guide dock and the main column. */
-html[dir='rtl'] .dock {
-  border-left: none;
-  border-right: none;
-}
-
-html[dir='rtl'] .toolbar,
-html[dir='rtl'] .board-wrap,
-html[dir='rtl'] .terminal {
-  border-right: none;
 }
 
 .toolbar-actions {
@@ -239,7 +227,7 @@ button.ghost {
   min-height: 0;
   overflow: auto;
   padding: 16px;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
 }
 
 .board {
@@ -517,7 +505,7 @@ button.ghost {
   height: 100dvh;
   max-height: 100vh;
   max-height: 100dvh;
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
   background: var(--panel);
   padding: 14px;
   overflow-x: hidden;
@@ -1152,7 +1140,7 @@ button.ghost {
   height: 340px;
   min-height: 260px;
   max-height: 42vh;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
 }
 
 /* Commands and terminal chrome stay LTR even when the UI is RTL (fa). */
