@@ -1,67 +1,44 @@
 import type { RepoState } from '../engine/types';
-import { computeDirtyPaths } from '../engine/state';
-import { shortMd5 } from '../engine/hash';
+import { ui } from '../i18n';
 
 function esc(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+/** Simple inline markdown for board notes (code + bold only). */
+function note(s: string): string {
+  return esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 }
 
 function renderWorkspace(state: RepoState): string {
-  const dirty = new Set(computeDirtyPaths(state));
-  const staged = new Set(state.gitStaged);
-  const files = Object.values(state.files)
-    .filter((f) => f.present || f.tracked)
-    .sort((a, b) => a.path.localeCompare(b.path));
-
+  const u = ui();
+  const files = Object.values(state.files);
   if (!files.length) {
-    return `<div class="empty-note">Workspace empty — run <code>dvc init</code> or load a level.</div>`;
+    return `<div class="empty-note">${note(u.workspaceEmpty)}</div>`;
   }
-
   const cards = files
     .map((f) => {
       const chips: string[] = [];
-      if (f.path.startsWith('.dvc/')) chips.push('<span class="chip dvc">dvc meta</span>');
       if (f.tracked) chips.push('<span class="chip dvc">.dvc pointer</span>');
       if (f.gitignored) chips.push('<span class="chip">gitignored</span>');
-      if (f.kind === 'code') chips.push('<span class="chip code">code</span>');
-      if (f.kind === 'params') chips.push('<span class="chip code">params</span>');
-      if (f.kind === 'yaml') chips.push('<span class="chip code">dvc.yaml</span>');
-      if (f.kind === 'dvc') chips.push('<span class="chip dvc">pointer file</span>');
-      if (staged.has(f.path) || (f.tracked && staged.has(`${f.path}.dvc`))) {
-        chips.push('<span class="chip ok">git staged</span>');
-      } else if (
-        state.initialized &&
-        (f.path === '.dvc/config' || f.path === '.dvc/.gitignore') &&
-        !state.gitCommits.some((c) => c.message.includes('Initialize DVC'))
-      ) {
-        chips.push('<span class="chip warn">needs git commit</span>');
-      } else if (f.tracked && f.pointerMd5 && state.gitCommits.some((c) => c.pointers[f.path])) {
-        chips.push('<span class="chip ok">in git history</span>');
-      }
-      if (dirty.has(f.path)) chips.push('<span class="chip warn">dirty</span>');
-      if (f.tracked && f.pointerMd5 && !dirty.has(f.path) && f.present) {
-        chips.push('<span class="chip ok">clean</span>');
-      }
-      const meta = f.pointerMd5
-        ? `pointer ${esc(shortMd5(f.pointerMd5))}… · content ${esc(shortMd5(f.contentId))}…`
-        : esc(f.kind);
-      return `<div class="card ${f.present ? '' : 'missing'}" data-path="${esc(f.path)}">
-        <div class="path">${esc(f.path)}${f.present ? '' : ' (missing)'}</div>
-        <div class="meta">${chips.join('')}<span>${meta}</span></div>
+      if (f.dirty) chips.push('<span class="chip warn">dirty</span>');
+      if (state.gitStaged.includes(f.path)) chips.push('<span class="chip">git staged</span>');
+      if (!f.present) chips.push('<span class="chip err">missing</span>');
+      return `<div class="card">
+        <div class="path">${esc(f.path)}</div>
+        <div class="meta"><span class="chip ${f.kind}">${esc(f.kind)}</span>${chips.join('')}</div>
       </div>`;
     })
     .join('');
-
   return `<div class="cards">${cards}</div>`;
 }
 
 function renderCache(state: RepoState): string {
+  const u = ui();
   if (!state.cache.length) {
-    return `<div class="empty-note">Cache empty. <code>dvc add</code> stores objects here.</div>`;
+    return `<div class="empty-note">${note(u.cacheEmpty)}</div>`;
   }
   const cards = state.cache
     .map((md5) => {
@@ -76,8 +53,9 @@ function renderCache(state: RepoState): string {
 }
 
 function renderRemote(state: RepoState): string {
+  const u = ui();
   if (!state.remotes.length) {
-    return `<div class="empty-note">No remote. <code>dvc remote add -d &lt;name&gt; &lt;url&gt;</code></div>`;
+    return `<div class="empty-note">${note(u.remoteEmpty)}</div>`;
   }
   const remoteCards = state.remotes
     .map(
@@ -97,12 +75,13 @@ function renderRemote(state: RepoState): string {
           </div>`,
         )
         .join('')
-    : `<div class="empty-note">No objects uploaded yet — <code>dvc push</code>.</div>`;
+    : `<div class="empty-note">${note(u.remoteNoObjects)}</div>`;
 
   return `<div class="cards">${remoteCards}${objects}</div>`;
 }
 
 function renderDag(state: RepoState): string {
+  const u = ui();
   if (!state.pipeline.length) return '';
   const nodes = state.pipeline
     .map((s, i) => {
@@ -114,7 +93,7 @@ function renderDag(state: RepoState): string {
       </div>`;
     })
     .join('');
-  return `<div class="dag" data-help-id="dag"><h2>Pipeline · dvc.yaml</h2><div class="stages">${nodes}</div>
+  return `<div class="dag" data-help-id="dag"><h2>${esc(u.pipelineTitle)}</h2><div class="stages">${nodes}</div>
     ${
       Object.keys(state.metrics).length
         ? `<div class="flow-arrow">metrics: ${esc(
@@ -128,6 +107,7 @@ function renderDag(state: RepoState): string {
 }
 
 export function renderBoardHtml(state: RepoState): string {
+  const u = ui();
   return `
     <div class="status-bar" data-help-id="status-pills">
       <div class="pill ${state.initialized ? 'ok' : 'err'}">dvc <strong>${state.initialized ? 'init' : 'not initialized'}</strong></div>
@@ -137,26 +117,26 @@ export function renderBoardHtml(state: RepoState): string {
       <div class="pill">experiments <strong>${state.experiments.length}</strong></div>
     </div>
     <div class="board">
-      <section class="zone workspace" data-help-id="workspace-zone" aria-label="Workspace">
-        <h2><span class="dot" style="color:var(--text)"></span> Workspace</h2>
-        <p class="zone-hint">Files on disk · pointers · code</p>
-        <p class="zone-why">Why it matters: this is what your tools actually read. Tracked data stays here as a linked file — Git never sees the heavy bytes.</p>
+      <section class="zone workspace" data-help-id="workspace-zone" aria-label="${esc(u.workspace)}">
+        <h2><span class="dot" style="color:var(--text)"></span> ${esc(u.workspace)}</h2>
+        <p class="zone-hint">${esc(u.workspaceHint)}</p>
+        <p class="zone-why">${note(u.workspaceWhy)}</p>
         ${renderWorkspace(state)}
       </section>
-      <section class="zone cache" data-help-id="cache-zone" aria-label="Cache">
-        <h2><span class="dot"></span> Cache</h2>
-        <p class="zone-hint">.dvc/cache — content-addressed objects</p>
-        <p class="zone-why">Why it matters: local store of data versions (by md5). dvc add/commit put bytes here; checkout/pull read them back.</p>
+      <section class="zone cache" data-help-id="cache-zone" aria-label="${esc(u.cache)}">
+        <h2><span class="dot"></span> ${esc(u.cache)}</h2>
+        <p class="zone-hint">${esc(u.cacheHint)}</p>
+        <p class="zone-why">${note(u.cacheWhy)}</p>
         ${renderCache(state)}
       </section>
-      <section class="zone remote" data-help-id="remote-zone" aria-label="Remote">
-        <h2><span class="dot"></span> Remote</h2>
-        <p class="zone-hint">Shared storage for heavy data</p>
-        <p class="zone-why">Why it matters: teammates and CI get the same bytes here. Empty remote = data does not travel with git push alone.</p>
+      <section class="zone remote" data-help-id="remote-zone" aria-label="${esc(u.remote)}">
+        <h2><span class="dot"></span> ${esc(u.remote)}</h2>
+        <p class="zone-hint">${esc(u.remoteHint)}</p>
+        <p class="zone-why">${note(u.remoteWhy)}</p>
         ${renderRemote(state)}
       </section>
     </div>
-    <div class="flow-arrow" data-help-id="flow-arrow">material flow: workspace → cache → remote (push) · remote → cache → workspace (pull)</div>
+    <div class="flow-arrow" data-help-id="flow-arrow">${note(u.flowArrow)}</div>
     ${renderDag(state)}
   `;
 }

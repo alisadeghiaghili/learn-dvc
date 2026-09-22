@@ -84,6 +84,43 @@ body {
   font-size: 12px;
 }
 
+.lang-switch {
+  display: inline-flex;
+  gap: 4px;
+  margin-inline-end: 8px;
+  padding-inline-end: 8px;
+  border-inline-end: 1px solid var(--line, #333);
+}
+
+.lang-btn {
+  min-width: 2rem;
+  padding: 4px 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.lang-btn.on {
+  border-color: var(--accent, #e07a2f);
+  background: color-mix(in srgb, var(--accent, #e07a2f) 18%, transparent);
+}
+
+.lang-btn:hover {
+  border-color: currentColor;
+}
+
+html[dir='rtl'] .toolbar-actions {
+  flex-direction: row-reverse;
+}
+
+html[dir='rtl'] .dock {
+  order: -1;
+}
+
 .toolbar-actions {
   margin-left: auto;
   display: flex;

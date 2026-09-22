@@ -1,3 +1,5 @@
+import { ui } from '../i18n';
+
 export interface UiElementDoc {
   selector: string;
   id: string;
@@ -6,147 +8,35 @@ export interface UiElementDoc {
   how: string;
 }
 
-export const UI_ELEMENTS: UiElementDoc[] = [
-  {
-    id: 'level-title',
-    selector: '.level-title',
-    title: 'Current context strip',
-    what: 'Shows sandbox mode or the active level id/name and **ideal command count** (how many commands the clean solution uses).',
-    how: 'Read it to confirm which level you are on. “Ideal: 3 commands” = golf target, not a hard limit.',
-  },
-  {
-    id: 'toolbar',
-    selector: '.toolbar-actions',
-    title: 'Toolbar buttons',
-    what: [
-      '**Levels** — challenge browser. Rows show **difficulty dots** (1–5) and **ideal command count**.',
-      '**Lesson** — replay the intro slides for the current level (or About card in sandbox).',
-      '**Guide** — pulse/scroll the always-on right guide panel.',
-      '**Hint** / **Solution** / **Undo** / **Reset** / **Sandbox**.',
-      '**Help** — this UI map (`help ui`).',
-      '**GitHub** — source repository and issues.',
-      '**Buy me a coffee** — support the publisher (Ali Sadeghi Aghili).',
-    ].join('\n'),
-    how: 'Lesson is always available if you forget a level’s teaching slides. External links open in a new tab.',
-  },
-  {
-    id: 'links',
-    selector: 'a.tb-link',
-    title: 'GitHub & Support links',
-    what: 'Open-source home and Buy Me a Coffee page for the publisher.',
-    how: 'https://github.com/alisadeghiaghili/learn-dvc · https://www.buymeacoffee.com/alisadeghil',
-  },
-  {
-    id: 'dock',
-    selector: '.dock',
-    title: 'Right guide panel (always on)',
-    what: [
-      'Full-height column on the right of the whole app.',
-      '**You are learning** — concepts for this level.',
-      '**In production (field notes)** — what engineers do with this skill.',
-      '**Type next** — first unfinished official command.',
-      '**Checklist** — every solution command; orange neon = current step.',
-      'Green ✓ = done (sticky after mistakes unless the effect is undone).',
-    ].join('\n'),
-    how: 'Keep it in view while typing. It never collapses on desktop; on narrow screens it docks under the board.',
-  },
-  {
-    id: 'status-pills',
-    selector: '.status-bar',
-    title: 'Status pills (top of board)',
-    what: 'Quick health: DVC initialized?, remote count, cache object count, remote object count, experiment count.',
-    how: 'After push, remote objects should rise. After add, cache should rise.',
-  },
-  {
-    id: 'workspace-zone',
-    selector: '.zone.workspace',
-    title: 'Workspace zone',
-    what: 'Files on disk in the simulated project: raw data, code, params, `.dvc` pointer files, `dvc.yaml`.',
-    how: [
-      'Chips explain state:',
-      '• **.dvc pointer** — DVC tracks this path (Git should track only the `.dvc` file)',
-      '• **gitignored** — raw data excluded from Git on purpose',
-      '• **dirty** — bytes ≠ pointer md5 (run `dvc status`)',
-      '• **git staged** — ready for `git commit`',
-      '• **missing** — file not present (need pull/checkout)',
-    ].join('\n'),
-  },
-  {
-    id: 'cache-zone',
-    selector: '.zone.cache',
-    title: 'Cache zone',
-    what: 'Local `.dvc/cache` objects — content-addressed copies of tracked data (md5).',
-    how: '`dvc add`/`commit` fill it. `dvc checkout`/`pull` read from it. Same bytes = one object.',
-  },
-  {
-    id: 'remote-zone',
-    selector: '.zone.remote',
-    title: 'Remote zone',
-    what: 'Configured DVC remotes + objects uploaded with `dvc push`.',
-    how: 'Empty remote objects + populated cache ⇒ you still need to push before teammates can pull.',
-  },
-  {
-    id: 'flow-arrow',
-    selector: '.flow-arrow',
-    title: 'Material flow caption',
-    what: 'One-line reminder: workspace ⇄ cache ⇄ remote.',
-    how: 'Ask “where are the bytes?” using this direction when debugging.',
-  },
-  {
-    id: 'dag',
-    selector: '.dag',
-    title: 'Pipeline strip',
-    what: 'Stages from `dvc.yaml` with cmd/outs. Green/up = current; warn = stale/needs repro.',
-    how: '`dvc dag`, `dvc repro`. Params/metrics summary appears when produced.',
-  },
-  {
-    id: 'term-log',
-    selector: '.term-log',
-    title: 'Terminal log',
-    what: 'Command echo, outputs, errors, coach lines, Why blocks, celebration text.',
-    how: 'Scroll for `── Why: … ──` after important DVC commands.',
-  },
-  {
-    id: 'term-hint',
-    selector: '.term-hint',
-    title: 'Hint strip above input',
-    what: 'Shows the next official command and Tab-cycle options.',
-    how: 'Orange `now` chip in the dock matches this “next” step.',
-  },
-  {
-    id: 'term-ghost',
-    selector: '.term-input-wrap',
-    title: 'Prompt + ghost completion',
-    what: [
-      '`dvc $` prompt.',
-      'Placeholder: next command when empty (single cue).',
-      'Ghost: remainder of the **current word** when typing.',
-      'Tab: complete **one word** (bash-like). ↑/↓ history. Esc clears input.',
-    ].join('\n'),
-    how: 'Type `dvc ` then Tab repeatedly to see subcommand words cycle.',
-  },
-];
+export function uiElements(): UiElementDoc[] {
+  return ui().helpSections;
+}
 
 export function formatUiHelpText(): string {
+  const u = ui();
+  const elements = uiElements();
   return [
-    'Page map — what each UI region does',
+    u.uiHelpMapTitle,
     '',
-    ...UI_ELEMENTS.map((e, i) => `${i + 1}. ${e.title}\n   ${e.what.replace(/\n/g, '\n   ')}`),
+    ...elements.map((e, i) => `${i + 1}. ${e.title}\n   ${e.what.replace(/\n/g, '\n   ')}`),
     '',
-    'Commands: `help ui` · `help` · `curriculum` · `concepts` · `levels`',
+    u.uiHelpCommands,
   ].join('\n');
 }
 
 export function uiHelpModalHtml(): string {
-  const sections = UI_ELEMENTS.map(
-    (e) => `
+  const u = ui();
+  const sections = uiElements()
+    .map(
+      (e) => `
       <section class="ui-help-item" data-help-id="${e.id}">
         <h3>${e.title}</h3>
         <div class="ui-help-what">${formatInline(e.what)}</div>
-        <div class="ui-help-how"><strong>Use it:</strong> ${formatInline(e.how)}</div>
+        <div class="ui-help-how"><strong>${u.useIt}</strong> ${formatInline(e.how)}</div>
       </section>
     `,
-  ).join('');
+    )
+    .join('');
   return `<div class="ui-help">${sections}</div>`;
 }
 
@@ -162,7 +52,9 @@ function formatInline(text: string): string {
 /** Outline live regions briefly so learners connect docs to pixels. */
 export function startUiTour(root: ParentNode): () => void {
   root.querySelectorAll('.ui-tour-on').forEach((el) => el.classList.remove('ui-tour-on'));
-  const nodes = UI_ELEMENTS.map((e) => root.querySelector(e.selector)).filter(Boolean) as Element[];
+  const nodes = uiElements()
+    .map((e) => root.querySelector(e.selector))
+    .filter(Boolean) as Element[];
   nodes.forEach((n) => n.classList.add('ui-tour-on'));
   const stop = () => {
     nodes.forEach((n) => n.classList.remove('ui-tour-on'));

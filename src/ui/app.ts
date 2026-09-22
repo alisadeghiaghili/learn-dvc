@@ -9,6 +9,8 @@ import { renderBoardHtml } from './board';
 import { TerminalView, type LogLine } from './terminal';
 import { renderMarkdown, showModal } from './dialog';
 import { buildShareTargets, COFFEE_BUTTON_HTML, REPO_URL, shareWithClipboard } from './share';
+import { getLocale, localizeLevel, setLocale, ui, LOCALES } from '../i18n';
+import type { Locale } from '../i18n/types';
 import { launchConfetti, playFanfare } from './confetti';
 import { loadProgress, resumeLine, saveProgress, summarizeCurriculum } from './progress';
 import { formatUiHelpText, startUiTour, uiHelpModalHtml } from './ui-help';
@@ -50,43 +52,47 @@ export class App {
     this.startSnapshot = cloneState(this.state);
     this.mount();
     this.renderAll();
-    this.pushMeta(
-      'LearnDVC — interactive DVC sandbox. Type `help`, or `levels` to start the first tutorial.',
-    );
+    this.pushMeta(ui().appWelcome);
     const summary = summarizeCurriculum(this.progress);
     if (summary.solvedCount > 0) {
       this.pushOut('');
       this.pushOut(resumeLine(summary));
     } else {
-      this.pushMeta('Sandbox seeded with a DVC project and data/data.xml. Try `dvc add data/data.xml`.');
-      this.pushMeta('Progress is saved in this browser (localStorage + cookie). Come back anytime.');
+      this.pushMeta(ui().sandboxSeeded);
+      this.pushMeta(ui().progressSaved);
     }
   }
 
   private mount(): void {
+    const u = ui();
+    const langButtons = LOCALES.map(
+      (loc) =>
+        `<button type="button" class="lang-btn${getLocale() === loc ? ' on' : ''}" data-lang="${loc}" aria-pressed="${getLocale() === loc}">${loc.toUpperCase()}</button>`,
+    ).join('');
     this.root.innerHTML = `
       <div class="app-main">
         <header class="toolbar">
           <div class="brand" data-help-id="brand">Learn<span>DVC</span></div>
           <div class="level-title" id="level-title" data-help-id="level-title"></div>
           <div class="toolbar-actions" data-help-id="toolbar">
-            <button type="button" data-action="levels">Levels</button>
-            <button type="button" data-action="lesson" title="Replay this level's intro lesson">Lesson</button>
-            <button type="button" data-action="goal">Guide</button>
-            <button type="button" data-action="hint">Hint</button>
-            <button type="button" data-action="solution">Solution</button>
-            <button type="button" data-action="undo">Undo</button>
-            <button type="button" data-action="reset">Reset</button>
-            <button type="button" data-action="sandbox" class="ghost">Sandbox</button>
-            <button type="button" data-action="help" class="ghost" title="Explain UI elements">Help</button>
-            <a class="tb-link gh" data-help-id="links" href="https://github.com/alisadeghiaghili/learn-dvc" target="_blank" rel="noopener noreferrer" title="GitHub — source &amp; issues" aria-label="GitHub repository"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
-            <a class="tb-link support" data-help-id="links" href="https://www.buymeacoffee.com/alisadeghil" target="_blank" rel="noopener noreferrer" title="Support the publisher">Buy me a coffee</a>
+            <div class="lang-switch" role="group" aria-label="${escapeHtml(u.language)}">${langButtons}</div>
+            <button type="button" data-action="levels">${escapeHtml(u.levels)}</button>
+            <button type="button" data-action="lesson" title="${escapeHtml(u.lessonTitle)}">${escapeHtml(u.lesson)}</button>
+            <button type="button" data-action="goal">${escapeHtml(u.guide)}</button>
+            <button type="button" data-action="hint">${escapeHtml(u.hint)}</button>
+            <button type="button" data-action="solution">${escapeHtml(u.solution)}</button>
+            <button type="button" data-action="undo">${escapeHtml(u.undo)}</button>
+            <button type="button" data-action="reset">${escapeHtml(u.reset)}</button>
+            <button type="button" data-action="sandbox" class="ghost">${escapeHtml(u.sandboxBtn)}</button>
+            <button type="button" data-action="help" class="ghost" title="${escapeHtml(u.uiGuideTitle)}">${escapeHtml(u.help)}</button>
+            <a class="tb-link gh" data-help-id="links" href="https://github.com/alisadeghiaghili/learn-dvc" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.githubTitle)}" aria-label="GitHub repository"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
+            <a class="tb-link support" data-help-id="links" href="https://www.buymeacoffee.com/alisadeghil" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.supportTitle)}">${escapeHtml(u.support)}</a>
           </div>
         </header>
         <div class="board-wrap" id="board-wrap"></div>
         <div class="terminal" id="terminal" data-help-id="term-log"></div>
       </div>
-      <aside class="dock" id="dock" data-help-id="dock" aria-label="Learning guide panel"></aside>
+      <aside class="dock" id="dock" data-help-id="dock" aria-label="${escapeHtml(u.guidePanel)}"></aside>
     `;
     this.boardEl = this.root.querySelector('#board-wrap')!;
     this.dockEl = this.root.querySelector('#dock')!;
@@ -109,6 +115,28 @@ export class App {
         this.terminal.focus();
       });
     });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const loc = btn.dataset.lang as Locale | undefined;
+        if (!loc || loc === getLocale()) return;
+        setLocale(loc);
+        this.remountAfterLocale();
+      });
+    });
+  }
+
+  private remountAfterLocale(): void {
+    const levelId = this.level?.id ?? null;
+    const keepLog = this.log;
+    this.mount();
+    if (levelId) {
+      const raw = allLevels.find((l) => l.id === levelId);
+      if (raw) this.level = localizeLevel(raw);
+    }
+    this.log = keepLog;
+    this.renderAll();
+    this.terminal.setLog(this.log);
+    this.terminal.focus();
   }
 
   /** Guide panel is always visible — this only scrolls/flashes it. */
@@ -123,17 +151,17 @@ export class App {
   private openUiHelp(runTour = false): void {
     if (runTour) startUiTour(this.root);
     const modal = showModal({
-      title: 'UI guide — what each part does',
+      title: ui().uiGuideTitle,
       bodyHtml: uiHelpModalHtml(),
       actions: [
-        { label: 'Close', className: 'ghost', onClick: () => modal.close() },
+        { label: ui().close, className: 'ghost', onClick: () => modal.close() },
         {
-          label: 'Highlight regions',
+          label: ui().highlightRegions,
           className: 'primary',
           onClick: () => {
             startUiTour(this.root);
             modal.close();
-            this.pushMeta('UI tour: board/toolbar/terminal briefly outlined. Press Help again for docs.');
+            this.pushMeta(ui().uiTourMeta);
           },
         },
       ],
@@ -160,8 +188,8 @@ export class App {
   private renderAll(): void {
     this.boardEl.innerHTML = renderBoardHtml(this.state);
     this.titleEl.textContent = this.level
-      ? `${this.level.id} · ${this.level.name} · expected ${this.level.par} commands`
-      : 'sandbox mode';
+      ? ui().titleLine(this.level.id, this.level.name, this.level.par)
+      : ui().sandboxTitle;
     this.renderDock();
     this.syncTerminalHints();
     // Guide panel is always mounted — never hidden.
@@ -186,29 +214,28 @@ export class App {
   private renderDock(): void {
     if (!this.level) {
       this.dockEl.innerHTML = `
-        <h2>Learning guide</h2>
-        <p class="objective">Always-on panel. In a level it shows concepts, field notes, and the solution checklist.</p>
+        <h2>${escapeHtml(ui().learningGuide)}</h2>
+        <p class="objective">${escapeHtml(ui().guideAlwaysOn)}</p>
         <div class="learning-box">
-          <div class="next-title">Start here</div>
+          <div class="next-title">${escapeHtml(ui().startHere)}</div>
           <ul>
-            <li>Open <strong>Levels</strong> and begin with Basics → Initialize DVC</li>
-            <li>Type <code>help ui</code> for a map of this page</li>
-            <li>Type <code>curriculum</code> for outcomes you will own</li>
-            <li>Type <code>concepts</code> for DVC mental models</li>
+            ${ui()
+              .startHereItems.map((item) => `<li>${renderMarkdown(item)}</li>`)
+              .join('')}
           </ul>
         </div>
         <div class="learning-box">
-          <div class="next-title">Sandbox tip</div>
+          <div class="next-title">${escapeHtml(ui().sandboxTip)}</div>
           <ul>
-            <li>Board: Workspace → Cache → Remote</li>
-            <li>Terminal: Tab completes word-by-word; ↑/↓ is history</li>
-            <li>Progress saves in this browser (cookie + localStorage)</li>
+            ${ui()
+              .sandboxTipItems.map((item) => `<li>${escapeHtml(item)}</li>`)
+              .join('')}
           </ul>
         </div>
         <ul class="goal-list">
-          <li class="met"><div class="g-label">No active level</div><div class="g-detail">levels → pick a challenge to see the checklist here</div></li>
+          <li class="met"><div class="g-label">${escapeHtml(ui().noActiveLevel)}</div><div class="g-detail">${escapeHtml(ui().noActiveLevelDetail)}</div></li>
         </ul>
-        <div class="par-note">Toolbar <code>Guide</code> flashes this panel. It stays open at full page height.</div>
+        <div class="par-note">${ui().guideFlashNote}</div>
       `;
       return;
     }
@@ -221,35 +248,35 @@ export class App {
       const isCurrent = !solved && !s.done && !s.optional && i === currentId;
       return `<li class="${s.done ? 'met' : ''}${s.optional ? ' optional' : ''}${isCurrent ? ' current' : ''}">
         <div class="g-label">${s.done ? '✓' : isCurrent ? '▶' : '○'} <code>${escapeHtml(s.command)}</code>${
-          s.optional ? ' <span class="chip">optional</span>' : ''
-        }${isCurrent ? ' <span class="chip current-chip">now</span>' : ''}</div>
+          s.optional ? ` <span class="chip">${escapeHtml(ui().optionalChip)}</span>` : ''
+        }${isCurrent ? ` <span class="chip current-chip">${escapeHtml(ui().nowChip)}</span>` : ''}</div>
         <div class="g-detail">${escapeHtml(s.note)}</div>
       </li>`;
     });
     const remaining = nextSteps(this.state, level.goal, level);
     const firstNext = remaining[0]?.command;
     const nextBlock = solved
-      ? `<div class="next-box met">All solution steps met.</div>`
+      ? `<div class="next-box met">${escapeHtml(ui().allSolutionMet)}</div>`
       : `<div class="next-box">
-            <div class="next-title">Type next — highlighted in orange</div>
-            <div class="next-row"><span class="g-label">○ remaining</span>${
+            <div class="next-title">${escapeHtml(ui().typeNextTitle)}</div>
+            <div class="next-row"><span class="g-label">${escapeHtml(ui().remainingLabel)}</span>${
               firstNext ? `<code class="g-cmd">${escapeHtml(firstNext)}</code>` : ''
             }</div>
-            <div class="par-note">Wrong command? You stay here — progress is kept. History: ↑ / ↓</div>
+            <div class="par-note">${escapeHtml(ui().wrongCommandNote)}</div>
           </div>`;
     const extra = statuses.filter((s) => !s.met);
     const prog = this.progress[level.id];
     const golfNote =
       prog?.bestCommands !== undefined
-        ? `Best so far: ${prog.bestCommands} command${prog.bestCommands === 1 ? '' : 's'} · ideal: ${level.par}`
-        : `Ideal solution: ${level.par} command${level.par === 1 ? '' : 's'} (under or equal is excellent)`;
+        ? ui().bestSoFar(prog.bestCommands, level.par)
+        : ui().idealSolution(level.par);
     this.dockEl.innerHTML = `
-      <h2>${level.name}</h2>
-      <p class="objective">${level.objective}</p>
+      <h2>${escapeHtml(level.name)}</h2>
+      <p class="objective">${escapeHtml(level.objective)}</p>
       ${
         level.learning?.length
           ? `<div class="learning-box">
-              <div class="next-title">You are learning</div>
+              <div class="next-title">${escapeHtml(ui().youAreLearning)}</div>
               <ul>${level.learning.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
             </div>`
           : ''
@@ -257,16 +284,16 @@ export class App {
       ${
         level.fieldNotes?.length
           ? `<div class="field-box">
-              <div class="next-title">In production</div>
+              <div class="next-title">${escapeHtml(ui().fieldNotesTitle)}</div>
               <ul>${level.fieldNotes.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
             </div>`
           : ''
       }
-      <div class="par-note">${golfNote}${solved ? ' · SOLVED' : ''}</div>
-      ${this.solvedFlash ? `<div class="solved-banner">Level solved${this.golf.length ? ` in ${this.golf.length} command(s)` : ''}.</div>` : ''}
+      <div class="par-note">${escapeHtml(golfNote)}</div>
+      ${this.solvedFlash ? `<div class="solved-banner">${escapeHtml(ui().solvedBanner(this.golf.length || null))}</div>` : ''}
       ${nextBlock}
       <ul class="goal-list">${items.join('')}</ul>
-      ${extra.length && !solved ? `<div class="par-note">State notes: ${extra.map((s) => escapeHtml(s.label)).join(' · ')}</div>` : ''}
+      ${extra.length && !solved ? `<div class="par-note">${escapeHtml(ui().stateNotes)} ${extra.map((s) => escapeHtml(s.label)).join(' · ')}</div>` : ''}
     `;
   }
 
@@ -276,7 +303,7 @@ export class App {
     this.dockEl.hidden = false;
     this.renderAll();
     this.focusGuide();
-    this.pushMeta('Guide panel is always on the right (full height). Guide button focuses it.');
+    this.pushMeta(ui().guideAlwaysRight);
   }
 
   private openLevels(): void {
@@ -290,32 +317,32 @@ export class App {
               <span class="id">${l.id}</span>
               <span class="name">${l.name}</span>
               <span class="par-note">ideal ${l.par} cmd${l.par === 1 ? '' : 's'}</span>
-              <span class="chip ${p?.solved ? 'ok' : ''}" title="Difficulty ${l.difficulty} of 5">
-                ${p?.solved ? `solved ${p.bestCommands ?? ''}` : `<span class="diff-dots" aria-label="Difficulty ${l.difficulty} of 5">${renderDiffDots(l.difficulty)}</span>`}
+              <span class="chip ${p?.solved ? 'ok' : ''}" title="${escapeHtml(ui().difficultyOf(l.difficulty))}">
+                ${p?.solved ? `${escapeHtml(ui().solvedLabel)} ${p.bestCommands ?? ''}` : `<span class="diff-dots" aria-label="${escapeHtml(ui().difficultyOf(l.difficulty))}">${renderDiffDots(l.difficulty)}</span>`}
               </span>
             </button>`;
           })
           .join('');
-        return `<div class="series-block"><h3>${s.title}</h3><div class="level-list">${rows}</div></div>`;
+        return `<div class="series-block"><h3>${escapeHtml(s.title)}</h3><div class="level-list">${rows}</div></div>`;
       })
       .join('');
 
     const modal = showModal({
-      title: 'Levels',
-      bodyHtml: `<p>Pick a challenge. Solved levels persist in this browser.</p>
+      title: ui().levelsTitle,
+      bodyHtml: `<p>${escapeHtml(ui().pickChallenge)}</p>
         <div class="legend-box">
-          <div class="next-title">How to read a level row</div>
+          <div class="next-title">${escapeHtml(ui().howToRead)}</div>
           <ul class="legend-list">
             <li>
               <span class="diff-dots" aria-hidden="true">${renderDiffDots(3)}</span>
-              <strong>Difficulty</strong> — 1–5 equal dots; more filled = harder (several DVC ideas at once). Always 5 slots.
+              ${renderMarkdown(ui().difficultyLegend)}
             </li>
-            <li><span class="par-note">ideal 3 cmds</span> <strong>Ideal command count</strong> — the clean solution length (golf target, not a hard limit).</li>
-            <li><span class="chip ok">solved 3</span> <strong>Solved</strong> — you cleared it; the number is your best command count.</li>
+            <li><span class="par-note">ideal 3 cmds</span> ${renderMarkdown(ui().idealLegend)}</li>
+            <li><span class="chip ok">${escapeHtml(ui().solvedLabel)} 3</span> ${renderMarkdown(ui().solvedLegend)}</li>
           </ul>
         </div>
         ${body}`,
-      actions: [{ label: 'Close', className: 'ghost', onClick: () => modal.close() }],
+      actions: [{ label: ui().close, className: 'ghost', onClick: () => modal.close() }],
     });
 
     modal.el.querySelectorAll('[data-level]').forEach((btn) => {
@@ -328,11 +355,12 @@ export class App {
   }
 
   private startLevel(id: string): void {
-    const level = allLevels.find((l) => l.id === id);
-    if (!level) {
-      this.pushErr(`Unknown level '${id}'`);
+    const raw = allLevels.find((l) => l.id === id);
+    if (!raw) {
+      this.pushErr(ui().unknownLevel(id));
       return;
     }
+    const level = localizeLevel(raw);
     this.level = level;
     this.state = cloneState(level.startState);
     this.startSnapshot = cloneState(level.startState);
@@ -340,7 +368,7 @@ export class App {
     this.undoStack = [];
     this.solvedFlash = false;
     this.log = [];
-    this.pushMeta(`Level ${level.id} — ${level.name}`);
+    this.pushMeta(ui().levelMeta(level.id, level.name));
     this.pushOut(level.objective);
     const coach = coachLine(this.state, level);
     if (coach) this.pushMeta(coach);
@@ -355,28 +383,28 @@ export class App {
   private replayLesson(): void {
     if (this.level?.startDialog?.length) {
       this.showIntro(this.level);
-      this.pushMeta('Lesson slides replayed for this level.');
+      this.pushMeta(ui().lessonReplayed);
       this.terminal.focus();
       return;
     }
     showModal({
-      title: 'About LearnDVC',
+      title: ui().aboutTitle,
       bodyHtml: renderMarkdown(
         [
-          '**LearnDVC** is an interactive Data Version Control tutorial: sandbox + guided levels.',
-          'Published by **Ali Sadeghi Aghili**.',
+          ui().welcomeIntro,
+          ui().aboutPublished,
           '',
-          'The board shows **Workspace → Cache → Remote** — the material flow DVC manages.',
+          ui().aboutBoard,
           '',
-          'Open **Levels** for the curriculum, or type `curriculum` / `concepts` / `lesson`.',
+          ui().aboutOpenLevels,
           '',
           `- [GitHub](${REPO_URL})`,
           '',
-          'Support the publisher:',
+          ui().aboutSupport,
           COFFEE_BUTTON_HTML,
         ].join('\n'),
       ),
-      actions: [{ label: 'Close', className: 'ghost', onClick: () => this.terminal.focus() }],
+      actions: [{ label: ui().close, className: 'ghost', onClick: () => this.terminal.focus() }],
       onClose: () => this.terminal.focus(),
     });
   }
@@ -390,7 +418,7 @@ export class App {
       const modalRef: { close: () => void } = { close: () => undefined };
       if (idx > 0) {
         actions.push({
-          label: 'Back',
+          label: ui().back,
           className: 'ghost',
           onClick: () => {
             idx -= 1;
@@ -401,7 +429,7 @@ export class App {
       }
       if (idx < level.startDialog.length - 1) {
         actions.push({
-          label: 'Next',
+          label: ui().next,
           className: 'primary',
           onClick: () => {
             idx += 1;
@@ -411,7 +439,7 @@ export class App {
         });
       } else {
         actions.push({
-          label: 'Start level',
+          label: ui().startLevel,
           className: 'primary',
           onClick: () => {
             modalRef.close();
@@ -420,7 +448,7 @@ export class App {
         });
       }
       const m = showModal({
-        title: slide.title ?? `Level ${level.id}`,
+        title: slide.title ?? ui().levelMeta(level.id, ''),
         bodyHtml: renderMarkdown(slide.markdown),
         actions,
         onClose: () => this.terminal.focus(),
@@ -438,7 +466,7 @@ export class App {
     this.undoStack = [];
     this.solvedFlash = false;
     this.log = [];
-    this.pushMeta('Sandbox mode.');
+    this.pushMeta(ui().sandboxMode);
     this.renderAll();
     this.terminal.focus();
   }
@@ -448,7 +476,7 @@ export class App {
     this.golf = [];
     this.undoStack = [];
     this.solvedFlash = false;
-    this.pushMeta(this.level ? `Reset level ${this.level.id}.` : 'Reset sandbox.');
+    this.pushMeta(this.level ? ui().resetLevel(this.level.id) : ui().resetSandbox);
     if (this.level) {
       const coach = coachLine(this.state, this.level);
       if (coach) this.pushMeta(coach);
@@ -459,27 +487,27 @@ export class App {
 
   private showSolution(): void {
     if (!this.level) {
-      this.pushMeta('Sandbox has no solution. Open Levels.');
+      this.pushMeta(ui().noSolutionSandbox);
       return;
     }
     const cmds = this.level.solution;
     showModal({
-      title: `Solution — ${this.level.id}`,
+      title: ui().solutionTitle(this.level.id),
       bodyHtml: renderMarkdown(
         [
-          'Commands that solve this level:',
+          ui().solutionCommands,
           '',
           '```',
           cmds.join('\n'),
           '```',
           '',
-          'It will reset first, then run the solution.',
+          ui().solutionWarn,
         ].join('\n'),
       ),
       actions: [
-        { label: 'Cancel', className: 'ghost', onClick: () => this.terminal.focus() },
+        { label: ui().cancel, className: 'ghost', onClick: () => this.terminal.focus() },
         {
-          label: 'Run solution',
+          label: ui().runSolution,
           className: 'primary',
           onClick: () => {
             this.resetLevel();
@@ -509,7 +537,7 @@ export class App {
       return;
     }
     if (lower === 'hint') {
-      this.pushOut(this.level?.hint ?? 'No hint in sandbox. Open Levels.');
+      this.pushOut(this.level?.hint ?? ui().noHintSandbox);
       if (this.level) {
         const coach = coachLine(this.state, this.level);
         if (coach) this.pushMeta(coach);
@@ -518,11 +546,11 @@ export class App {
     }
     if (lower === 'steps' || lower === 'next') {
       if (!this.level) {
-        this.pushMeta('Sandbox has no goal. Open Levels for a challenge.');
+        this.pushMeta(ui().noGoalSandbox);
         return;
       }
       const coach = coachLine(this.state, this.level);
-      this.pushOut(coach ?? 'All solution steps are met.');
+      this.pushOut(coach ?? ui().allStepsMet);
       this.dockEl.hidden = false;
       this.renderAll();
       return;
@@ -545,12 +573,12 @@ export class App {
     }
     if (lower === 'undo') {
       if (!this.undoStack.length) {
-        this.pushErr('Nothing to undo.');
+        this.pushErr(ui().nothingToUndo);
         return;
       }
       this.state = this.undoStack.pop()!;
       if (this.golf.length) this.golf.pop();
-      this.pushMeta('Undo.');
+      this.pushMeta(ui().undoMeta);
       this.afterStateChange();
       return;
     }
@@ -575,7 +603,7 @@ export class App {
           [
             'help ui | tour     — explain every UI region (and highlight them)',
             'lesson | intro | about — replay level lesson or publisher/about card',
-            'GitHub / Buy me a coffee — toolbar links to source & support',
+            ui().helpLinks,
             'curriculum         — learning outcomes',
             'concepts           — DVC mental models glossary',
             'levels             — challenge browser',
@@ -596,10 +624,10 @@ export class App {
     if (lower === 'curriculum' || lower === 'outcomes' || lower === 'syllabus') {
       const lines = curriculumOutcomes().map((o, i) => `${String(i + 1).padStart(2, ' ')}. ${o}`);
       const summary = summarizeCurriculum(this.progress);
-      this.pushOut('After this course you should be able to:');
+      this.pushOut(ui().curriculumOutcomes);
       this.pushOut(lines.join('\n'));
-      this.pushMeta(`Progress: ${summary.solvedCount}/${summary.total} levels solved.`);
-      this.pushMeta('Field glossary: type `concepts` (or `concepts pointer`).');
+      this.pushMeta(ui().progressLevels(summary.solvedCount, summary.total));
+      this.pushMeta(ui().fieldGlossary);
       this.terminal.focus();
       return;
     }
@@ -618,38 +646,9 @@ export class App {
     this.runCommand(cmd, { fromSolution: false });
   }
 
-  private quizItems = [
-    {
-      q: 'Git stores what in an ML repo after dvc add?',
-      a: ['Raw dataset bytes', 'Pointer (.dvc: md5) + ignore rules', 'Only model weights'],
-      correct: 1,
-    },
-    {
-      q: 'dvc.lock is…',
-      a: ['A password file', 'The execution receipt (hashes/params of last repro)', 'The remote URL'],
-      correct: 1,
-    },
-    {
-      q: 'After editing params and returning the old value, repro should…',
-      a: ['Always re-train', 'Hit the run cache and skip work', 'Delete the cache'],
-      correct: 1,
-    },
-    {
-      q: 'DVCLive log_metric feeds…',
-      a: ['GitHub stars', 'metrics.json / exp comparison', 'SSH keys'],
-      correct: 1,
-    },
-    {
-      q: 'Best CI skeleton for a DVC project?',
-      a: ['git clone only', 'git clone + dvc pull + dvc repro (+ cml comment)', 'pip install dvc && exit'],
-      correct: 1,
-    },
-    {
-      q: 'Git-LFS vs DVC in one line?',
-      a: ['Identical', 'LFS = big blobs in Git remotes; DVC = pointers in Git + object remote + pipeline/exp', 'LFS is for Python'],
-      correct: 1,
-    },
-  ];
+  private get quizItems() {
+    return ui().quiz;
+  }
 
   private quizIndex = 0;
 
@@ -664,11 +663,11 @@ export class App {
     if (!item) return;
     const idx = pick === 'A' ? 0 : pick === 'B' ? 1 : pick === 'C' ? 2 : -1;
     if (idx < 0) {
-      this.pushErr('Answer with: quiz A | quiz B | quiz C');
+      this.pushErr(ui().quizAnswerUsage);
       return;
     }
     if (idx === item.correct) {
-      this.pushOut('✓ Correct.');
+      this.pushOut(ui().correct);
     } else {
       this.pushOut(`✗ Not quite. Best answer: ${['A', 'B', 'C'][item.correct]} — ${item.a[item.correct]}`);
     }
@@ -680,15 +679,15 @@ export class App {
   private askQuiz(): void {
     const item = this.quizItems[this.quizIndex];
     if (!item) {
-      this.pushOut('Quiz finished. Type `curriculum` to see outcomes, or `quiz` to restart.');
+      this.pushOut(ui().quizFinished);
       this.quizIndex = 0;
       return;
     }
     this.pushOut(
       [
-        `Quiz ${this.quizIndex + 1}/${this.quizItems.length}: ${item.q}`,
+        `${ui().quizHeader(this.quizIndex + 1, this.quizItems.length)}: ${item.q}`,
         ...item.a.map((a, i) => `  ${['A', 'B', 'C'][i]}) ${a}`),
-        'Answer: quiz A | quiz B | quiz C',
+        ui().quizAnswerUsage,
       ].join('\n'),
     );
     this.terminal.focus();
@@ -708,7 +707,7 @@ export class App {
         const steps = solutionProgress(this.state, this.level.solution);
         const next = steps.find((s) => !s.done && !s.optional);
         if (next?.command) {
-          this.pushMeta(`Progress kept. Still on: ${next.command}`);
+          this.pushMeta(ui().progressKept(next.command));
         }
       }
     } else {
@@ -743,13 +742,13 @@ export class App {
         this.progress[this.level.id] = { solved: true, bestCommands: nextBest };
         saveProgress(this.progress);
         this.pushOut('');
-        this.pushOut('*** LEVEL SOLVED *** ' + this.level.name);
+        this.pushOut(ui().levelSolvedBanner + ' ' + this.level.name);
         this.pushOut(
           num > 0
-            ? `Commands used: ${num} · ideal: ${this.level.par}`
-            : `Ideal: ${this.level.par} command${this.level.par === 1 ? '' : 's'}`,
+            ? ui().commandsUsed(num, this.level.par)
+            : ui().idealCommands(this.level.par),
         );
-        this.pushOut('*** PARTY MODE *** confetti incoming — share buttons below.');
+        this.pushOut(ui().partyMode);
         this.dockEl.hidden = false;
       } else if (!solved && this.solvedFlash) {
         this.solvedFlash = false;
@@ -760,9 +759,9 @@ export class App {
         if (coach) {
           const first = nextSteps(this.state, this.level.goal, this.level)[0];
           if (first?.command) {
-            this.pushMeta(`Next: ${first.command}`);
+            this.pushMeta(ui().nextMeta(first.command));
           } else {
-            this.pushMeta(coach.split('\n')[0] ?? 'Continue the level goal.');
+            this.pushMeta(coach.split('\n')[0] ?? ui().continueGoal);
           }
         }
       }
@@ -793,18 +792,12 @@ export class App {
     const underPar = cmds !== null && cmds <= level.par;
     const golfLine =
       cmds === null
-        ? `Ideal for this level: ${level.par} command${level.par === 1 ? '' : 's'}`
+        ? ui().idealForLevel(level.par)
         : underPar
-          ? `**${cmds}** command${cmds === 1 ? '' : 's'} — at or under the ideal (${level.par}). Clean run.`
+          ? `**${cmds}** ${ui().idealForLevelShort(level.par)}`
           : `**${cmds}** command${cmds === 1 ? '' : 's'}. Ideal is ${level.par}. Still counts — you got there.`;
 
-    const cheers = [
-      'Nailed it. This concept is yours now.',
-      'Boom — another DVC skill banked.',
-      'You just earned that. Share it.',
-      'Pipeline of learning: stage solved.',
-      'Pointer committed. Confidence up.',
-    ];
+    const cheers = ui().cheers;
     const cheer = cheers[Math.floor(Math.random() * cheers.length)]!;
 
     const learnedPreview = curriculum.learned
@@ -827,30 +820,30 @@ export class App {
           <div class="par-note">${solvedCount} / ${total} levels solved · progress saved in this browser</div>
         </div>
         <div class="share-block">
-          <div class="next-title">Share what you learned (includes your curriculum)</div>
+          <div class="next-title">${escapeHtml(ui().shareTitle)}</div>
           <div class="learned-preview">
-            <div class="par-note">Sylist for the post:</div>
-            <ul>${learnedPreview || '<li>Solve more levels to grow this list</li>'}</ul>
+            <div class="par-note">${escapeHtml(ui().styleList)}</div>
+            <ul>${learnedPreview || `<li>${escapeHtml(ui().solveMoreLevels)}</li>`}</ul>
           </div>
-          <div class="share-row" role="group" aria-label="Share on social networks">
-            <button type="button" class="share-btn linkedin" data-share="linkedin">LinkedIn</button>
-            <button type="button" class="share-btn x" data-share="x">X / Twitter</button>
-            <button type="button" class="share-btn facebook" data-share="facebook">Facebook</button>
-            <button type="button" class="share-btn copy" data-share="copy">Copy post</button>
+          <div class="share-row" role="group" aria-label="${escapeHtml(ui().shareGroupLabel)}">
+            <button type="button" class="share-btn linkedin" data-share="linkedin">${escapeHtml(ui().linkedin)}</button>
+            <button type="button" class="share-btn x" data-share="x">${escapeHtml(ui().xTwitter)}</button>
+            <button type="button" class="share-btn facebook" data-share="facebook">${escapeHtml(ui().facebook)}</button>
+            <button type="button" class="share-btn copy" data-share="copy">${escapeHtml(ui().copyPost)}</button>
           </div>
           <div class="share-status" data-share-status hidden></div>
         </div>
         ${
           next
-            ? `<div class="celebrate-next">Next celebration: <strong>${escapeHtml(next.id)}</strong> — ${escapeHtml(next.name)}</div>`
-            : `<div class="celebrate-next">Last level in this pack. Open <strong>Levels</strong> to keep the party going.</div>`
+            ? `<div class="celebrate-next">${renderMarkdown(ui().nextCelebration(next.id, next.name))}</div>`
+            : `<div class="celebrate-next">${renderMarkdown(ui().lastInPack)}</div>`
         }
       </div>
     `;
 
     const actions = [
       {
-        label: 'Bask in it',
+        label: ui().baskInIt,
         className: 'ghost',
         onClick: () => {
           this.offered = false;
@@ -860,7 +853,7 @@ export class App {
     ];
     if (next) {
       actions.push({
-        label: `Celebrate on: ${next.id}`,
+        label: ui().celebrateOn(next.id),
         className: 'primary',
         onClick: () => {
           this.offered = false;
@@ -869,7 +862,7 @@ export class App {
       });
     } else {
       actions.push({
-        label: 'Browse levels',
+        label: ui().browseLevels,
         className: 'primary',
         onClick: () => {
           this.offered = false;
@@ -884,7 +877,7 @@ export class App {
     playFanfare();
 
     const modal = showModal({
-      title: 'Level complete',
+      title: ui().levelComplete,
       bodyHtml,
       variant: 'celebrate',
       actions: actions.map((a) => ({
@@ -911,14 +904,10 @@ export class App {
         if (!status) return;
         status.hidden = false;
         if (kind === 'copy') {
-          status.textContent = result.copied
-            ? 'Copied full post — paste anywhere.'
-            : 'Could not copy — select the share text manually.';
+          status.textContent = result.copied ? ui().copyOk : ui().copyFail;
           return;
         }
-        status.textContent = result.copied
-          ? 'Post copied. Paste it into the share box (LinkedIn/Facebook block auto-filled text).'
-          : 'Share window opened — copy the post text manually if the box is empty.';
+        status.textContent = result.copied ? ui().shareCopied : ui().shareOpened;
       });
     });
 

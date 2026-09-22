@@ -1,6 +1,7 @@
 import type { GoalCheck, LevelDef, RepoState } from './types';
 import { evaluateGoal } from './compare';
 import { solutionProgress, suggestFromSolution } from './solution';
+import { ui } from '../i18n';
 
 export interface NextStep {
   label: string;
@@ -10,6 +11,7 @@ export interface NextStep {
 /**
  * Remaining work, authored from the level solution itself.
  * Goal checks and solution steps stay aligned on purpose.
+ * Solution notes stay English (command verification labels).
  */
 export function nextSteps(state: RepoState, goal: GoalCheck, level?: LevelDef | null): NextStep[] {
   if (level?.solution?.length) {
@@ -30,17 +32,16 @@ export function nextSteps(state: RepoState, goal: GoalCheck, level?: LevelDef | 
 }
 
 export function formatNextSteps(steps: NextStep[], level: LevelDef | null): string {
+  const u = ui();
   if (!steps.length) {
-    return 'All goal steps are met — you should be done. Type `show goal` to confirm.';
+    return u.coachAllDone;
   }
-  const lines = [
-    `Next steps (${steps.length} remaining)${level ? ` for ${level.id}` : ''}:`,
-  ];
+  const lines = [u.coachNextSteps(steps.length, level ? level.id : '')];
   steps.forEach((s, i) => {
     const cmd = s.command ? `\n      ${s.command}` : '';
     lines.push(`  ${i + 1}. [ ] ${s.label}${cmd}`);
   });
-  lines.push('Type `steps` to repeat this list · `hint` · `show goal`');
+  lines.push(u.coachFooter);
   return lines.join('\n');
 }
 

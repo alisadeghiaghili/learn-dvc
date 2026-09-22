@@ -1,197 +1,55 @@
 import type { RepoState } from './types';
+import { teachEntry } from '../i18n';
+import { ui } from '../i18n';
 
 /**
  * Short "why this command matters" blocks appended to simulator output.
  * Goal: learners leave with mental models, not only muscle memory.
+ * Command names stay English; explanation lines are localized.
  */
 
 export function teachBlock(title: string, lines: string[]): string {
   return ['', `── Why: ${title} ──`, ...lines.map((l) => `  ${l}`)].join('\n');
 }
 
+function teachFromKey(key: string): string | null {
+  const entry = teachEntry(key);
+  if (!entry) return null;
+  return teachBlock(entry.title, entry.lines);
+}
+
 export function teachAfterCommand(raw: string, _state: RepoState): string | null {
   const cmd = raw.trim();
   if (!cmd) return null;
 
-  if (/^git\s+checkout\b/.test(cmd)) {
-    return teachBlock('git checkout (data pointers)', [
-      'You are switching which data version the project intends to use.',
-      'Git updates the .dvc pointer; it does not download bytes by itself.',
-      'Follow with dvc checkout so the workspace matches that pointer.',
-      'Production rollback drill — practice before you need it at 2am.',
-    ]);
-  }
-
-  if (/^dvc\s+init\b/.test(cmd)) {
-    return teachBlock('dvc init', [
-      'DVC is a Git extension for data, not a replacement for Git.',
-      'Init only creates local metadata under .dvc/ (config, ignore rules).',
-      'No dataset is versioned yet — you just enabled the workflow.',
-      'Those tiny files must be committed with Git so teammates get the same DVC setup.',
-    ]);
-  }
-
-  if (/^dvc\s+add\b/.test(cmd)) {
-    return teachBlock('dvc add', [
-      '1. Content of the data file is hashed (md5) — identity of that exact bytes.',
-      '2. Bytes are stored once in the local cache (.dvc/cache), content-addressed.',
-      '3. A small .dvc pointer file records path → md5 (human-readable YAML).',
-      '4. The raw data path is added to .gitignore so Git never bloats with GB files.',
-      'Git versions the pointer; DVC versions the bytes. Split responsibilities.',
-    ]);
-  }
-
-  if (/^dvc\s+status\b/.test(cmd)) {
-    return teachBlock('dvc status', [
-      'Compares workspace data vs pointers vs cache vs remote.',
-      '"modified" means the file on disk no longer matches the md5 in its .dvc file.',
-      'You have not lost data — you have an uncommitted data change, like Git status.',
-    ]);
-  }
-
-  if (/^dvc\s+commit\b/.test(cmd)) {
-    return teachBlock('dvc commit', [
-      'Updates the .dvc pointer to the current file hash and ensures cache has the object.',
-      'This is the data-side commit. You still git commit the pointer afterward.',
-      'Without dvc commit, Git would record a pointer that no longer matches the data.',
-    ]);
-  }
-
-  if (/^dvc\s+remote\s+add\b/.test(cmd)) {
-    return teachBlock('dvc remote add', [
-      'A DVC remote is object storage for cache artifacts (S3, GCS, SSH, local path…).',
-      'It is NOT the Git remote. Git remote = code + pointers. DVC remote = heavy data.',
-      '-d marks the default remote used by push/pull/fetch.',
-    ]);
-  }
-
-  if (/^dvc\s+push\b/.test(cmd)) {
-    return teachBlock('dvc push', [
-      'Uploads cache objects the remote does not have yet.',
-      'Teammates with the same Git commit can dvc pull to get the exact data bytes.',
-      'CI can also pull data without baking datasets into the Git repo.',
-    ]);
-  }
-
-  if (/^dvc\s+(pull|fetch)\b/.test(cmd)) {
-    return teachBlock(cmd.startsWith('dvc pull') ? 'dvc pull' : 'dvc fetch', [
-      'fetch: copy objects remote → local cache only.',
-      'pull: fetch + checkout so workspace files match current pointers.',
-      'This is why clones stay small: Git clone brings pointers; DVC pull brings data.',
-    ]);
-  }
-
-  if (/^dvc\s+checkout\b/.test(cmd)) {
-    return teachBlock('dvc checkout', [
-      'Reads each .dvc pointer and restores that exact hash into the workspace from cache.',
-      'After git checkout of an older commit, dvc checkout brings data back in sync.',
-      'Data version switches are pointer switches — cheap, not full downloads when cached.',
-    ]);
-  }
-
-  if (/^dvc\s+stage\s+add\b/.test(cmd)) {
-    return teachBlock('dvc stage add', [
-      'Pipeline stages live in dvc.yaml (deps, outs, cmd, params, metrics).',
-      'Dependencies declare what invalidates the stage when it changes.',
-      'Outputs declare what DVC should track/cache after a successful run.',
-      'Code stays in Git; data I/O is mediated by DVC — reproducibility by contract.',
-    ]);
-  }
-
-  if (/^dvc\s+repro\b/.test(cmd)) {
-    return teachBlock('dvc repro', [
-      'Build-system semantics for ML: run only stages whose inputs/params changed.',
-      'Successful runs write dvc.lock — an execution receipt of hashes used.',
-      'Same lock + same cache ⇒ same outputs without re-training from scratch.',
-    ]);
-  }
-
-  if (/^dvc\s+exp\s+run\b/.test(cmd)) {
-    return teachBlock('dvc exp run', [
-      'Runs the pipeline in an experiment context without branch spam.',
-      'Params from -S / params.yaml are recorded with metrics for comparison.',
-      'Experiments are first-class: list, diff, apply winners back to the workspace.',
-    ]);
-  }
-
-  if (/^dvc\s+exp\s+apply\b/.test(cmd)) {
-    return teachBlock('dvc exp apply', [
-      'Promotes a chosen experiment’s params/metrics into the workspace.',
-      'That is how a “winning run” becomes the new baseline without retyping values.',
-    ]);
-  }
-
-  if (/^edit\b/.test(cmd)) {
-    return teachBlock('edit (simulated)', [
-      'Real projects modify data/params with tools or code, not this helper.',
-      'Here `edit` stands in for “the dataset/hyperparams changed”.',
-      'Next question DVC forces you to answer: is that change versioned yet?',
-    ]);
-  }
-
+  if (/^git\s+checkout\b/.test(cmd)) return teachFromKey('git-checkout-data');
+  if (/^dvc\s+init\b/.test(cmd)) return teachFromKey('dvc-init');
+  if (/^dvc\s+add\b/.test(cmd)) return teachFromKey('dvc-add');
+  if (/^dvc\s+status\b/.test(cmd)) return teachFromKey('dvc-status');
+  if (/^dvc\s+commit\b/.test(cmd)) return teachFromKey('dvc-commit');
+  if (/^dvc\s+remote\s+add\b/.test(cmd)) return teachFromKey('dvc-remote-add');
+  if (/^dvc\s+push\b/.test(cmd)) return teachFromKey('dvc-push');
+  if (/^dvc\s+pull\b/.test(cmd)) return teachFromKey('dvc-pull');
+  if (/^dvc\s+fetch\b/.test(cmd)) return teachFromKey('dvc-fetch');
+  if (/^dvc\s+checkout\b/.test(cmd)) return teachFromKey('dvc-checkout');
+  if (/^dvc\s+stage\s+add\b/.test(cmd)) return teachFromKey('dvc-stage-add');
+  if (/^dvc\s+repro\b/.test(cmd)) return teachFromKey('dvc-repro');
+  if (/^dvc\s+exp\s+run\b/.test(cmd)) return teachFromKey('dvc-exp-run');
+  if (/^dvc\s+exp\s+apply\b/.test(cmd)) return teachFromKey('dvc-exp-apply');
+  if (/^edit\b/.test(cmd)) return teachFromKey('edit');
   if (/^git\s+add\b/.test(cmd) && /\.dvc|\.gitignore|dvc\.yaml|params\.yaml/.test(cmd)) {
-    return teachBlock('git add (DVC files)', [
-      'You are staging metadata Git should keep: pointers, ignore rules, pipeline YAML.',
-      'Large data files should never appear here — .gitignore keeps them out.',
-      'Review with `git status` before commit: you want pointer diffs, not data blobs.',
-    ]);
+    return teachFromKey('git-add-dvc');
   }
+  if (/^git\s+commit\b/.test(cmd)) return teachFromKey('git-commit');
+  if (/^dvc\s+live\b/.test(cmd)) return teachFromKey('dvc-live');
+  if (/^dvc\s+queue\b/.test(cmd) || /exp\s+run\s+--queue/.test(cmd)) return teachFromKey('exp-queue');
+  if (/^dvc\s+update\b/.test(cmd)) return teachFromKey('dvc-update');
+  if (/^dvc\s+cml\b|^cml\b/.test(cmd)) return teachFromKey('cml');
+  if (/^dvc\s+freeze\b/.test(cmd)) return teachFromKey('dvc-freeze');
+  if (/^dvc\s+unfreeze\b/.test(cmd)) return teachFromKey('dvc-unfreeze');
+  if (/^dvc\s+diff\b/.test(cmd)) return teachFromKey('dvc-diff');
+  if (/^dvc\s+exp\s+show\b/.test(cmd)) return teachFromKey('dvc-exp-show');
 
-  if (/^git\s+commit\b/.test(cmd)) {
-    return teachBlock('git commit', [
-      'This records pointer/pipeline state in Git history for code review + repro.',
-      'A clone of this commit knows WHICH data version belongs, not the data itself.',
-      'Pair every Git release with a DVC remote that still holds those cache objects.',
-    ]);
-  }
-
-  if (/^dvc\s+live\b/.test(cmd)) {
-    return teachBlock('dvc live (DVCLive)', [
-      'DVCLive instruments Python (Live / log_metric / log_plot / make_report).',
-      'Scalars become metrics; series become plots; HTML report for humans.',
-      'Official courses treat this as the bridge from notebook to exp show/plots.',
-    ]);
-  }
-  if (/^dvc\s+queue\b/.test(cmd) || /exp\s+run\s+--queue/.test(cmd)) {
-    return teachBlock('exp queue', [
-      'Queue parameter sets, then run them together (--run-all / queue start).',
-      'Avoids babysitting one laptop job for every hyperparameter.',
-    ]);
-  }
-  if (/^dvc\s+update\b/.test(cmd)) {
-    return teachBlock('dvc update', [
-      'Refreshes an imported .dvc target to the latest upstream registry version.',
-      'Then repro if the import is a pipeline dep.',
-    ]);
-  }
-  if (/^dvc\s+cml\b|^cml\b/.test(cmd)) {
-    return teachBlock('CML', [
-      'CML comments metrics/plots on GitHub/GitLab PRs from CI.',
-      'CI skeleton: checkout → dvc pull → dvc repro → cml comment.',
-    ]);
-  }
-  if (/^dvc\s+freeze\b/.test(cmd) || /^dvc\s+unfreeze\b/.test(cmd)) {
-    return teachBlock(cmd.startsWith('dvc freeze') ? 'dvc freeze' : 'dvc unfreeze', [
-      'Freeze pins a pipeline stage so repro will not re-run it.',
-      'Use it to protect a production artifact while you experiment on params/data.',
-      'Unfreeze is an intentional act — pair it with review + repro + push.',
-    ]);
-  }
-
-  if (/^dvc\s+diff\b/.test(cmd)) {
-    return teachBlock('dvc diff', [
-      'Shows pointer/content drift for tracked data (hash-level, not text hunks).',
-      'Use before accepting a change: what md5 moved, and how much is on remote?',
-      'In production, pair with git show of the .dvc file for the narrative.',
-    ]);
-  }
-
-  if (/^dvc\s+exp\s+show\b/.test(cmd)) {
-    return teachBlock('dvc exp show', [
-      'Tabular comparison of experiments: params vs metrics side by side.',
-      'You are choosing baselines with evidence, not memory.',
-    ]);
-  }
-
+  void ui;
   return null;
 }

@@ -1,4 +1,10 @@
+import { ui } from '../i18n';
+
 export type LogKind = 'cmd' | 'out' | 'err' | 'meta' | 'ok';
+
+function escapeHtml(s: string): string {
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
 
 export interface LogLine {
   kind: LogKind;
@@ -110,7 +116,7 @@ export class TerminalView {
           <div class="term-ghost" id="term-ghost" aria-hidden="true"></div>
           <input id="term-input" class="term-input" autocomplete="off" spellcheck="false"
             placeholder=""
-            aria-label="DVC command input. Tab completes one word at a time. Arrow up and down browse history." />
+            aria-label="${escapeHtml(ui().termAriaLabel)}" />
         </div>
       </div>
     `;
@@ -173,11 +179,11 @@ export class TerminalView {
     this.hint = command ?? '';
     // Empty input: ONE faded cue only (placeholder) — never stacked with ghost.
     this.inputEl.placeholder = this.hint
-      ? `Next: ${this.hint}  (Tab steps word-by-word)`
+      ? ui().nextPlaceholder(this.hint)
       : 'Type a command — help · levels · hint · steps';
     this.hintEl.hidden = !this.hint;
     if (this.hint) {
-      this.hintEl.innerHTML = `Next: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· Tab fills one word at a time</span>`;
+      this.hintEl.innerHTML = `${escapeHtml(ui().nextPrompt)}: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· ${escapeHtml(ui().tabFillsWord)}</span>`;
     } else {
       this.hintEl.textContent = '';
     }
@@ -329,7 +335,7 @@ export class TerminalView {
         this.wordCycle.length > 6 ? ' …' : ''
       }`;
     } else if (this.hint) {
-      this.hintEl.innerHTML = `Next: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· Tab fills one word at a time</span>`;
+      this.hintEl.innerHTML = `${escapeHtml(ui().nextPrompt)}: <code>${escapeHtml(this.hint)}</code> <span class="par-note">· ${escapeHtml(ui().tabFillsWord)}</span>`;
     }
   }
 
@@ -383,8 +389,4 @@ export class TerminalView {
       this.syncGhost();
     }
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }

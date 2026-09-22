@@ -1,4 +1,5 @@
 import type { CurriculumSummary } from './progress';
+import { ui } from '../i18n';
 
 export const LIVE_URL = 'https://alisadeghiaghili.github.io/learn-dvc/';
 export const SHARE_URL = 'https://alisadeghiaghili.github.io/learn-dvc/';
@@ -23,34 +24,34 @@ function bulletList(items: { name: string; seriesTitle: string }[], limit?: numb
 }
 
 export function shareMessageLinkedIn(ctx: ShareContext): string {
+  const u = ui();
   const c = ctx.curriculum;
   const learned = c.learned.length ? bulletList(c.learned) : [];
   const parts = [
-    'I am really happy — I just learned practical Data Version Control on LearnDVC!',
+    u.shareLinkedInHead,
     '',
     c.solvedCount > 0
-      ? `Latest win: ${ctx.levelName} (${ctx.levelId})${
-          ctx.commands !== null
-            ? ` — ${ctx.commands} command${ctx.commands === 1 ? '' : 's'} (ideal ${ctx.par})`
-            : ''
+      ? `${u.shareLatestWin(ctx.levelName, ctx.levelId)}${
+          ctx.commands !== null ? u.shareCommands(ctx.commands, ctx.par) : ''
         }`
-      : 'Starting my DVC journey.',
+      : u.shareStarting,
     '',
-    learned.length ? 'What I have learned so far:' : '',
+    learned.length ? u.shareLearnedSoFar : '',
     ...learned,
     '',
-    `Progress: ${c.solvedCount}/${c.total} levels.`,
+    u.shareProgress(c.solvedCount, c.total),
     '',
-    'If you work with ML data or models, try it — free, no login:',
+    u.shareCta,
     SHARE_URL,
   ];
   return parts.filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 export function shareMessageX(ctx: ShareContext): string {
+  const u = ui();
   const c = ctx.curriculum;
-  const head = `Really happy — learning DVC on LearnDVC (${c.solvedCount}/${c.total} levels).`;
-  const first = c.learned[0] ? `• ${c.learned[0].name}` : 'Hands-on sandbox.';
+  const head = u.shareXHead(c.solvedCount, c.total);
+  const first = c.learned[0] ? `• ${c.learned[0].name}` : u.shareXFirst;
   let text = `${head}\n${first}\n${SHARE_URL}`;
   if (text.length > 275) text = `${head}\n${SHARE_URL}`;
   return text;
@@ -67,11 +68,12 @@ export interface ShareTargets {
 }
 
 export function buildShareTargets(ctx: ShareContext): ShareTargets {
+  const u = ui();
   const longText = shareMessageLinkedIn(ctx);
   const shortText = shareMessageX(ctx);
   const url = SHARE_URL;
   return {
-    linkedin: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(url)}&title=${encodeURIComponent('LearnDVC — Data Version Control tutorial')}&summary=${encodeURIComponent(longText)}&source=LearnDVC`,
+    linkedin: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(url)}&title=${encodeURIComponent(u.titleLearnDvc)}&summary=${encodeURIComponent(longText)}&source=LearnDVC`,
     x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shortText)}`,
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(longText)}`,
     text: longText,
