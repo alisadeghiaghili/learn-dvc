@@ -8,13 +8,6 @@ export interface UiElementDoc {
 
 export const UI_ELEMENTS: UiElementDoc[] = [
   {
-    id: 'brand',
-    selector: '.brand',
-    title: 'Brand / title',
-    what: 'App name (LearnDVC). Not clickable product chrome.',
-    how: 'Ignore while learning; use toolbar + terminal.',
-  },
-  {
     id: 'level-title',
     selector: '.level-title',
     title: 'Current context strip',
