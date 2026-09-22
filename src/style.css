@@ -985,15 +985,15 @@ button.ghost {
   }
 }
 
-/* Terminal */
+/* Terminal — preferred height (user-settled) */
 .terminal {
   border-top: 1px solid var(--line);
   background: var(--ink);
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto auto;
-  height: 240px;
-  min-height: 200px;
-  max-height: 36vh;
+  height: 340px;
+  min-height: 260px;
+  max-height: 42vh;
   border-right: 1px solid var(--line);
 }
 
