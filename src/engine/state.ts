@@ -19,6 +19,10 @@ export function emptyState(): RepoState {
     commandHistory: [],
     runCache: [],
     plots: {},
+    live: { active: false, step: 0, metrics: {}, images: [], plotData: [] },
+    expQueue: [],
+    dvcIgnore: [],
+    stageMeta: {},
   };
 }
 

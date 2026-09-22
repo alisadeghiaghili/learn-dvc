@@ -145,6 +145,31 @@ export function teachAfterCommand(raw: string, _state: RepoState): string | null
     ]);
   }
 
+  if (/^dvc\s+live\b/.test(cmd)) {
+    return teachBlock('dvc live (DVCLive)', [
+      'DVCLive instruments Python (Live / log_metric / log_plot / make_report).',
+      'Scalars become metrics; series become plots; HTML report for humans.',
+      'Official courses treat this as the bridge from notebook to exp show/plots.',
+    ]);
+  }
+  if (/^dvc\s+queue\b/.test(cmd) || /exp\s+run\s+--queue/.test(cmd)) {
+    return teachBlock('exp queue', [
+      'Queue parameter sets, then run them together (--run-all / queue start).',
+      'Avoids babysitting one laptop job for every hyperparameter.',
+    ]);
+  }
+  if (/^dvc\s+update\b/.test(cmd)) {
+    return teachBlock('dvc update', [
+      'Refreshes an imported .dvc target to the latest upstream registry version.',
+      'Then repro if the import is a pipeline dep.',
+    ]);
+  }
+  if (/^dvc\s+cml\b|^cml\b/.test(cmd)) {
+    return teachBlock('CML', [
+      'CML comments metrics/plots on GitHub/GitLab PRs from CI.',
+      'CI skeleton: checkout → dvc pull → dvc repro → cml comment.',
+    ]);
+  }
   if (/^dvc\s+freeze\b/.test(cmd) || /^dvc\s+unfreeze\b/.test(cmd)) {
     return teachBlock(cmd.startsWith('dvc freeze') ? 'dvc freeze' : 'dvc unfreeze', [
       'Freeze pins a pipeline stage so repro will not re-run it.',

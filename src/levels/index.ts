@@ -2,6 +2,7 @@ import type { LevelDef, RepoState } from '../engine/types';
 import { emptyState, ensureGit, makeFile } from '../engine/state';
 import { fakeMd5 } from '../engine/hash';
 import { compareLevels, metaLevels, registryLevels } from './gaps';
+import { campLevels } from './camp';
 
 function rawRepo(): RepoState {
   const s = emptyState();
@@ -1092,6 +1093,7 @@ export const allLevels: LevelDef[] = [
   ...experimentLevels,
   ...metaLevels,
   ...compareLevels,
+  ...campLevels,
   ...registryLevels,
   ...fieldLevels,
 ];
@@ -1110,7 +1112,7 @@ export function getNextLevel(id: string): LevelDef | undefined {
 }
 
 export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] {
-  const order = ['basics', 'remote', 'pipe', 'exp', 'meta', 'cmp', 'reg', 'field'];
+  const order = ['basics', 'remote', 'pipe', 'exp', 'meta', 'cmp', 'camp', 'reg', 'field'];
   const titles: Record<string, string> = {
     basics: 'Basics',
     remote: 'Remotes',
@@ -1118,6 +1120,7 @@ export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] 
     exp: 'Experiments',
     meta: 'Metafiles',
     cmp: 'Compare',
+    camp: 'Camp / DVCLive',
     reg: 'Registry & CI',
     field: 'Field practice',
   };
@@ -1150,5 +1153,12 @@ export function curriculumOutcomes(): string[] {
     'Read the board: Workspace pointers ↔ cache objects ↔ remote artifacts',
     'Answer “which data produced this model?” using Git + DVC history',
     'Use `concepts` as a field glossary when stuck on a real project',
+    'Instrument training with DVCLive (log_metric/plot, reports)',
+    'Use plots templates (linear/confusion) and plots diff',
+    'Queue sweeps with exp run --queue and queue start',
+    'Use foreach stages and advanced flags (wdir, always-changed, no-cache)',
+    'Harden collab: .dvcignore, dvc update, CML PR comments',
+    'Choose Git-LFS vs DVC deliberately',
+    'Read data in apps with dvc.api',
   ];
 }

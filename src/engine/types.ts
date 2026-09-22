@@ -94,6 +94,20 @@ export interface RepoState {
   runCache: string[];
   /** Simple plot series (name → points) for plots show/diff. */
   plots: Record<string, number[]>;
+  /** DVCLive-style scalar/image/plot logs. */
+  live: {
+    active: boolean;
+    step: number;
+    metrics: Record<string, number[]>;
+    images: string[];
+    plotData: string[];
+  };
+  /** Queued experiment specs (exp run --queue). */
+  expQueue: { params: Record<string, string | number>; id: string }[];
+  /** Paths ignored via .dvcignore. */
+  dvcIgnore: string[];
+  /** Extra pipeline metadata from stage flags. */
+  stageMeta: Record<string, { alwaysChanged?: boolean; noCache?: string[]; external?: string[]; wdir?: string; desc?: string; foreach?: string[] }>;
 }
 
 export interface CommandResult {
@@ -127,6 +141,10 @@ export type GoalCheck =
   | { kind: 'gitCommitMessageIncludes'; text: string; requireFilesAny?: string[] }
   | { kind: 'gitStagedIncludesAny'; paths: string[] }
   | { kind: 'runCacheHits'; min: number }
+  | { kind: 'liveMetricLogged'; name: string }
+  | { kind: 'expQueueSize'; min: number }
+  | { kind: 'ignoredPath'; path: string }
+  | { kind: 'importUpdated'; path: string }
   | { kind: 'notDirty' }
   | { kind: 'allOf'; checks: GoalCheck[] };
 

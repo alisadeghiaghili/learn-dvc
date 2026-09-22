@@ -153,6 +153,7 @@ function liveEffectContradicts(state: RepoState, cmd: string): boolean {
   }
   if (/^edit\b/i.test(c)) {
     const path = parseArgs(c)[1];
+    if (path === '.dvcignore') return false;
     const kv = parseArgs(c)[2];
     if (path === 'params.yaml' && kv?.includes('=')) {
       const parsed = parseKeyValue(kv);
@@ -292,6 +293,11 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
   if (/^dvc\s+exp\s+run\b/.test(cmd)) {
     const sets = setParamsOf(cmd);
     const keys = Object.keys(sets);
+    const queued = /\s--queue\b/.test(cmd);
+    if (queued) {
+      const n = state.expQueue?.length ?? 0;
+      return n > 0 ? ok(`${n} queued`) : fail(cmd);
+    }
     if (!keys.length) {
       return state.experiments.length ? ok(`${state.experiments.length} exp(s)`) : fail(cmd);
     }
@@ -319,6 +325,35 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
 
   if (/^dvc\s+diff\b/.test(cmd)) {
     return { command: cmd, done: true, note: 'inspect drift (does not block completion)', optional: true };
+  }
+
+  if (/^dvc\s+live\b/i.test(cmd) || /^dvc\s+queue\b/i.test(cmd) || /^dvc\s+update\b/i.test(cmd) || /^dvc\s+cml\b/i.test(cmd) || /^dvc\s+api\b/i.test(cmd)) {
+    if (commandInHistory(state, (h) => matchSolutionCommand(h, cmd))) {
+      return ok('ran');
+    }
+    if (/^dvc\s+live\s+log\s+metric\s+(\S+)/i.test(cmd)) {
+      const m = cmd.match(/metric\s+([^=\s]+)=/i);
+      const name = m?.[1];
+      if (name && (state.live?.metrics?.[name]?.length ?? 0) > 0) return ok(`live metric ${name}`);
+    }
+    if (/^dvc\s+queue\s+start/i.test(cmd) || /--run-all/.test(cmd)) {
+      return (state.expQueue?.length ?? 0) === 0 && state.experiments.length > 0 ? ok('queue drained') : fail(cmd);
+    }
+    if (/^dvc\s+update\b/i.test(cmd)) {
+      const path = parseArgs(cmd)[2];
+      const dataPath = path?.endsWith('.dvc') ? path.slice(0, -4) : path;
+      if (dataPath && (state.dataVersions[dataPath] ?? 0) > 0) return ok('import updated');
+    }
+    return fail(cmd);
+  }
+
+  if (/^edit\s+\.dvcignore\b/i.test(cmd)) {
+    const pat = parseArgs(cmd)[2];
+    return pat && (state.dvcIgnore ?? []).includes(pat) ? ok(`ignored ${pat}`) : fail(cmd);
+  }
+
+  if (/^dvc\s+plots\b/i.test(cmd)) {
+    return { command: cmd, done: true, note: 'inspect plots (does not block completion)', optional: true };
   }
 
   if (/^dvc\s+status\b/.test(cmd)) {

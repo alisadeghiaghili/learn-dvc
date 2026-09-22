@@ -566,7 +566,88 @@ export class App {
       return;
     }
 
+    if (lower === 'quiz' || lower.startsWith('quiz ')) {
+      this.runQuiz(lower.slice(4).trim());
+      return;
+    }
+
     this.runCommand(cmd, { fromSolution: false });
+  }
+
+  private quizItems = [
+    {
+      q: 'Git stores what in an ML repo after dvc add?',
+      a: ['Raw dataset bytes', 'Pointer (.dvc: md5) + ignore rules', 'Only model weights'],
+      correct: 1,
+    },
+    {
+      q: 'dvc.lock is…',
+      a: ['A password file', 'The execution receipt (hashes/params of last repro)', 'The remote URL'],
+      correct: 1,
+    },
+    {
+      q: 'After editing params and returning the old value, repro should…',
+      a: ['Always re-train', 'Hit the run cache and skip work', 'Delete the cache'],
+      correct: 1,
+    },
+    {
+      q: 'DVCLive log_metric feeds…',
+      a: ['GitHub stars', 'metrics.json / exp comparison', 'SSH keys'],
+      correct: 1,
+    },
+    {
+      q: 'Best CI skeleton for a DVC project?',
+      a: ['git clone only', 'git clone + dvc pull + dvc repro (+ cml comment)', 'pip install dvc && exit'],
+      correct: 1,
+    },
+    {
+      q: 'Git-LFS vs DVC in one line?',
+      a: ['Identical', 'LFS = big blobs in Git remotes; DVC = pointers in Git + object remote + pipeline/exp', 'LFS is for Python'],
+      correct: 1,
+    },
+  ];
+
+  private quizIndex = 0;
+
+  private runQuiz(arg: string): void {
+    if (!arg) {
+      this.quizIndex = 0;
+      this.askQuiz();
+      return;
+    }
+    const pick = arg.toUpperCase();
+    const item = this.quizItems[this.quizIndex];
+    if (!item) return;
+    const idx = pick === 'A' ? 0 : pick === 'B' ? 1 : pick === 'C' ? 2 : -1;
+    if (idx < 0) {
+      this.pushErr('Answer with: quiz A | quiz B | quiz C');
+      return;
+    }
+    if (idx === item.correct) {
+      this.pushOut('✓ Correct.');
+    } else {
+      this.pushOut(`✗ Not quite. Best answer: ${['A', 'B', 'C'][item.correct]} — ${item.a[item.correct]}`);
+    }
+    this.quizIndex += 1;
+    this.askQuiz();
+    this.terminal.focus();
+  }
+
+  private askQuiz(): void {
+    const item = this.quizItems[this.quizIndex];
+    if (!item) {
+      this.pushOut('Quiz finished. Type `curriculum` to see outcomes, or `quiz` to restart.');
+      this.quizIndex = 0;
+      return;
+    }
+    this.pushOut(
+      [
+        `Quiz ${this.quizIndex + 1}/${this.quizItems.length}: ${item.q}`,
+        ...item.a.map((a, i) => `  ${['A', 'B', 'C'][i]}) ${a}`),
+        'Answer: quiz A | quiz B | quiz C',
+      ].join('\n'),
+    );
+    this.terminal.focus();
   }
 
   private runCommand(cmd: string, opts: { fromSolution: boolean }): void {

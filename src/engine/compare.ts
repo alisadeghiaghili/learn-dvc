@@ -206,6 +206,38 @@ function checkOne(state: RepoState, check: GoalCheck): GoalStatus {
         detail: `current=${n}`,
       };
     }
+    case 'liveMetricLogged': {
+      const n = state.live?.metrics?.[check.name]?.length ?? 0;
+      return {
+        met: n > 0,
+        label: `DVCLive metric '${check.name}' logged`,
+        detail: `points=${n}`,
+      };
+    }
+    case 'expQueueSize': {
+      return {
+        met: state.experiments.length + (state.expQueue?.length ?? 0) >= check.min,
+        label: `Experiments + queue ≥ ${check.min}`,
+        detail: `done=${state.experiments.length} queued=${state.expQueue?.length ?? 0}`,
+      };
+    }
+    case 'ignoredPath': {
+      const met = (state.dvcIgnore ?? []).some((p) => check.path.includes(p) || p.includes(check.path));
+      return {
+        met,
+        label: `.dvcignore contains ${check.path}`,
+        detail: met ? 'ok' : `ignores: ${(state.dvcIgnore ?? []).join(', ') || '(none)'}`,
+      };
+    }
+    case 'importUpdated': {
+      const f = state.files[check.path];
+      const met = !!f?.tracked && (state.dataVersions[check.path] ?? 0) > 0;
+      return {
+        met,
+        label: `Updated import ${check.path}`,
+        detail: met ? 'refreshed' : 'run `dvc update`',
+      };
+    }
     case 'notDirty': {
       const dirty = computeDirtyPaths(state);
       return {

@@ -367,10 +367,12 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       result: ok(
         [
           'DVC commands: init, add, status, commit, checkout, remote, push, pull, fetch,',
-          '  stage, repro, dag, freeze, unfreeze, metrics, params, plots, exp, get, import, remove, gc, diff, version',
+          '  stage (with --foreach/--wdir/--always-changed), repro, dag, freeze, unfreeze,',
+          '  metrics, params, plots --template, exp (run --queue|diff), queue, live, get, import,',
+          '  update, api, cml, remove, gc, diff, version',
           'Git (simulated): init, add, commit, log, status, checkout',
           'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls',
-          'Meta: levels, help/ui/tour, curriculum, concepts|glossary, steps, hint, show goal, show solution, reset, undo, sandbox, clear',
+          'Meta: levels, help/ui/tour, curriculum, concepts|glossary, quiz, steps, hint, show goal, reset, undo, sandbox, clear',
         ].join('\n'),
       ),
     };
@@ -489,6 +491,14 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (cmd === 'edit') {
     const path = args[0];
     if (!path) return { state, result: fail('Usage: edit <path>') };
+    if (path === '.dvcignore') {
+      const pattern = args[1];
+      if (pattern) {
+        if (!state.dvcIgnore.includes(pattern)) state.dvcIgnore.push(pattern);
+        return finish(state, ok(`.dvcignore += ${pattern}\nDVC will skip matching paths in status/add scans.`));
+      }
+      return { state, result: ok((state.dvcIgnore || []).join('\n') || '(.dvcignore empty)') };
+    }
     const f = state.files[path];
     if (!f) return { state, result: fail(`edit: ${path}: No such file`) };
     if (!f.present) return { state, result: fail(`edit: ${path}: file not present in workspace`) };
@@ -1003,6 +1013,24 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         }
       }
       const outDirs = parsed.outs.filter((o) => isDirOut(o));
+      // stage flags from raw args (advanced course surface)
+      const alwaysChanged = args.includes('--always-changed');
+      const noCache: string[] = [];
+      const external: string[] = [];
+      const wIdx = args.indexOf('--wdir');
+      const wdir = wIdx >= 0 ? args[wIdx + 1] : undefined;
+      const foreachIdx = args.indexOf('--foreach');
+      const foreachList =
+        foreachIdx >= 0
+          ? (args[foreachIdx + 1] ?? '').split(',').filter(Boolean)
+          : [];
+      for (let i = 2; i < args.length; i++) {
+        if (args[i] === '--outs-no-cache' && args[i + 1]) noCache.push(args[i + 1]!);
+        if ((args[i] === '-O' || args[i] === '--outs-no-cache') && args[i + 1]) noCache.push(args[i + 1]!);
+      }
+      for (const o of parsed.outs) {
+        if (o.includes('://') || o.startsWith('s3://') || o.startsWith('gs://')) external.push(o);
+      }
       const stage: PipelineStage = {
         name: parsed.name,
         deps: parsed.deps,
@@ -1015,6 +1043,21 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         outDirs,
       };
       state.pipeline.push(stage);
+      state.stageMeta[parsed.name] = {
+        alwaysChanged,
+        noCache,
+        external,
+        wdir,
+        foreach: foreachList,
+      };
+      if (foreachList.length) {
+        for (const key of foreachList) {
+          const expanded = `${parsed.name}[${key}]`;
+          if (!state.pipeline.some((s) => s.name === expanded)) {
+            state.pipeline.push({ ...stage, name: expanded, upToDate: false });
+          }
+        }
+      }
       state.files['dvc.yaml'] = makeFile('dvc.yaml', 'yaml', {
         contentId: fakeMd5(`dvc.yaml:${pipelineSignature(state)}`),
       });
@@ -1147,23 +1190,187 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state, result: fail('Usage: dvc metrics show|diff') };
   }
 
+  if (sub === 'live') {
+    // DVCLive-style instrumentation (simulated API surface used in courses).
+    const lsub = args[1] ?? 'status';
+    if (lsub === 'start' || lsub === 'init') {
+      state.live = { active: true, step: 0, metrics: {}, images: [], plotData: [] };
+      return finish(state, ok('DVCLive: Live(dir="dvclive_logs") started (simulated).\nIn real code: with Live() as live: ...'));
+    }
+    if (lsub === 'log') {
+      const kind = args[2]; // metric|image|plot|param
+      const kv = args[3];
+      if (!state.live.active) state.live.active = true;
+      state.live.step += 1;
+      if (kind === 'metric' && kv) {
+        const p = parseKeyValue(kv);
+        if (!p) return { state, result: fail('Usage: dvc live log metric name=value') };
+        const arr = state.live.metrics[p.key] ?? [];
+        arr.push(Number(p.value));
+        state.live.metrics[p.key] = arr;
+        state.metrics[`live:${p.key}`] = Number(p.value);
+        state.plots[p.key] = arr;
+        return finish(state, ok(`live.log_metric('${p.key}', ${p.value})  step=${state.live.step}`));
+      }
+      if (kind === 'image' && kv) {
+        state.live.images.push(kv);
+        return finish(state, ok(`live.log_image('${kv}')`));
+      }
+      if (kind === 'plot' && kv) {
+        state.live.plotData.push(kv);
+        state.plots[kv.split('/').pop() ?? kv] = [0.2, 0.35, 0.5, 0.72];
+        return finish(state, ok(`live.log_plot('${kv}')  (series registered for plots show)`));
+      }
+      if (kind === 'param' && kv) {
+        const p = parseKeyValue(kv);
+        if (p) setParam(state, p.key, p.value);
+        return finish(state, ok(`live.log_param('${p?.key}', ${p?.value})`));
+      }
+      return { state, result: fail('Usage: dvc live log metric|image|plot|param …') };
+    }
+    if (lsub === 'report' || lsub === 'make-report') {
+      return finish(
+        state,
+        ok(
+          [
+            'DVCLive HTML report (simulated): dvclive_reports/report.html',
+            `  metrics steps: ${state.live.step}`,
+            `  series: ${Object.keys(state.live.metrics).join(', ') || '(none)'}`,
+            `  images: ${state.live.images.length}  plots: ${state.live.plotData.length}`,
+            'In real projects Live.make_report() writes browsable HTML + dvc.yaml metrics/plots hooks.',
+          ].join('\n'),
+        ),
+      );
+    }
+    return {
+      state,
+      result: ok(
+        [
+          'DVCLive (simulated API used in courses):',
+          '  dvc live start',
+          '  dvc live log metric acc=0.92',
+          '  dvc live log image confusion.png',
+          '  dvc live log plot roc.json',
+          '  dvc live log param lr=0.05',
+          '  dvc live report',
+        ].join('\n'),
+      ),
+    };
+  }
+
+  if (sub === 'queue') {
+    const qsub = args[1] ?? 'status';
+    if (qsub === 'status') {
+      return {
+        state,
+        result: ok(
+          [
+            `queued: ${state.expQueue.length}`,
+            `done:   ${state.experiments.length}`,
+            ...state.expQueue.map((q, i) => `  [${i}] ${q.id} params=${JSON.stringify(q.params)}`),
+          ].join('\n'),
+        ),
+      };
+    }
+    if (qsub === 'start') {
+      if (!state.expQueue.length) return { state, result: fail('Queue is empty. Use `dvc exp run --queue -S key=val`.') };
+      const logs = [`Starting queued experiments (${state.expQueue.length})…`];
+      for (const q of state.expQueue) {
+        for (const [k, v] of Object.entries(q.params)) setParam(state, k, v);
+        for (const st of state.pipeline) st.upToDate = false;
+        for (const st of state.pipeline) logs.push(...reproStage(state, st));
+        const id = expId(JSON.stringify(q.params) + state.experiments.length);
+        state.experiments.push({
+          id,
+          name: id,
+          commitRef: state.gitCommits[state.gitCommits.length - 1]?.hash ?? 'HEAD',
+          params: { ...state.params },
+          metrics: { ...state.metrics },
+        });
+        logs.push(`  finished ${id}`);
+      }
+      state.expQueue = [];
+      return finish(state, ok(logs.join('\n')));
+    }
+    if (qsub === 'remove') {
+      state.expQueue = [];
+      return finish(state, ok('Cleared experiment queue.'));
+    }
+    return { state, result: fail('Usage: dvc queue [status|start|remove]') };
+  }
+
+  if (sub === 'update') {
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    const path = args[1];
+    if (!path) return { state, result: fail('Usage: dvc update <path.dvc>') };
+    const dataPath = path.endsWith('.dvc') ? path.slice(0, -4) : path;
+    const f = state.files[dataPath];
+    if (!f || !f.tracked) return { state, result: fail(`ERROR: '${path}' is not an imported .dvc target.`) };
+    const v = (state.dataVersions[dataPath] ?? 0) + 1;
+    state.dataVersions[dataPath] = v;
+    f.contentId = fakeMd5(`import:${dataPath}:v${v}`);
+    f.pointerMd5 = f.contentId;
+    f.present = true;
+    f.dirty = false;
+    addCache(state, f.contentId);
+    return finish(state, ok(`Updated ${path} from upstream → md5 ${shortMd5(f.contentId)}…`));
+  }
+
+  if (sub === 'api') {
+    return finish(
+      state,
+      ok(
+        [
+          'dvc.api (Python) — read data without leaving your project:',
+          '  import dvc.api',
+          '  with dvc.api.open("data/data.xml") as f: ...',
+          '  dvc.api.read("data/data.xml", remote="myremote")',
+          '  dvc.api.exp_show()  # table of experiments',
+          'Simulator tip: use `cat <path>` to inspect registry-style files here.',
+        ].join('\n'),
+      ),
+    );
+  }
+
+  if (sub === 'cml') {
+    // Continuous Machine Learning — PR comment bot (scenario).
+    const body = args.slice(1).join(' ') || 'metrics update';
+    return finish(
+      state,
+      ok(
+        [
+          `CML report comment posted (simulated): ${body}`,
+          'Typical CI: checkout → dvc pull → dvc repro → cml comment with metrics/plots',
+          'See cml.dev for GitHub/GitLab actions templates.',
+        ].join('\n'),
+      ),
+    );
+  }
+
   if (sub === 'plots') {
     const plsub = args[1] ?? 'show';
+    const tIdx = args.indexOf('--template');
+    const template = tIdx >= 0 ? args[tIdx + 1] : undefined;
     const series = state.plots;
     const render = (label: string) => {
       const names = Object.keys(series);
-      if (!names.length) return `No plots data. Run \`dvc repro\` first.`;
-      const lines = [label];
+      if (!names.length) return `No plots data. Run \`dvc repro\` or \`dvc live log plot …\` first.`;
+      const lines = [label + (template ? `  template=${template}` : ''), `templates: simple | linear | confusion | scatter`];
       for (const name of names) {
         const pts = series[name] ?? [];
-        lines.push(`${name}: ${pts.map((p) => p.toFixed(3)).join(' → ')}`);
+        if (template === 'confusion') {
+          lines.push(`${name}: [[8,1],[2,9]]  (confusion matrix cells, simulated)`);
+        } else {
+          lines.push(`${name}: ${pts.map((p) => Number(p).toFixed(3)).join(' → ')}`);
+        }
       }
-      lines.push('Opened plots HTML (simulated): dvc_plots/index.html');
+      lines.push(`Opened plots HTML (simulated): dvc_plots/index.html${template ? ` (${template}.json template)` : ''}`);
       return lines.join('\n');
     };
     if (plsub === 'show') return finish(state, ok(render('plots show')));
     if (plsub === 'diff') return finish(state, ok(render('plots diff (workspace series)')));
-    return { state, result: fail('Usage: dvc plots show|diff') };
+    return { state, result: fail('Usage: dvc plots show|diff [--template simple|linear|confusion]') };
   }
 
   if (sub === 'get' || sub === 'import' || sub === 'import-url') {
@@ -1242,15 +1449,27 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     }
     if (esub === 'run') {
       if (!state.pipeline.length) return { state, result: fail('ERROR: experiments need a pipeline. Add a stage first.') };
-      // dvc exp run -S lr=0.05  OR  dvc exp run
       const sets: Record<string, string | number> = {};
+      let queued = false;
       for (let i = 2; i < args.length; i++) {
-        if (args[i] === '-S' || args[i] === '--set-param' || args[i] === '-s') {
-          const kv = args[++i]?.split('=');
-          if (kv?.length === 2) {
-            sets[kv[0]] = Number.isNaN(Number(kv[1])) ? kv[1] : Number(kv[1]);
-          }
+        if (args[i] === '--queue') queued = true;
+        if (args[i] === '--run-all') {
+          return executeCommand(state, 'dvc queue start');
         }
+        if (args[i] === '-S' || args[i] === '--set-param' || args[i] === '-s') {
+          const kv = parseKeyValue(args[++i] ?? '');
+          if (kv) sets[kv.key] = kv.value;
+        }
+      }
+      if (queued) {
+        const id = expId(`q${state.expQueue.length}${JSON.stringify(sets)}`);
+        state.expQueue.push({ params: sets, id });
+        return finish(
+          state,
+          ok(
+            `Queued experiment ${id}\nparams=${JSON.stringify(sets)}\nRun \`dvc queue start\` or \`dvc exp run --run-all\`.`,
+          ),
+        );
       }
       // apply param changes
       for (const [k, v] of Object.entries(sets)) state.params[k] = v;

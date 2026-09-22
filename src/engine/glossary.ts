@@ -83,6 +83,56 @@ export const CONCEPTS: Concept[] = [
     body: 'dvc get copies a file from another DVC project. dvc import also versions the dependency (writes .dvc). import-url tracks an external URL as data.',
   },
   {
+    id: 'dvclive',
+    title: 'DVCLive',
+    body: 'Python library inside training code: Live(), log_metric, log_plot, log_image, make_report. Feeds dvc.yaml metrics/plots so exp show and plots work without hand wiring.',
+  },
+  {
+    id: 'plots-templates',
+    title: 'Plots templates',
+    body: 'Vega templates: simple, linear, confusion, scatter. Configure in dvc.yaml under plots:. dvc plots show --template confusion renders matrix views.',
+  },
+  {
+    id: 'queue',
+    title: 'Experiment queue',
+    body: 'dvc exp run --queue -S k=v parks a run; dvc queue start / exp run --run-all executes them. Standard sweep pattern in courses.',
+  },
+  {
+    id: 'cml',
+    title: 'CML (CI for ML)',
+    body: 'Continuous Machine Learning posts metrics/plots to PRs. Flow: git clone + dvc pull + dvc repro + cml comment. Not a replacement for DVC.',
+  },
+  {
+    id: 'lfs',
+    title: 'Git-LFS vs DVC',
+    body: 'Git-LFS versions large blobs in Git remotes. DVC versions pointer files in Git and content-addressed objects in DVC remotes, plus pipelines/exps. Choose LFS for big binaries with few versions; DVC for ML data/models + repro.',
+  },
+  {
+    id: 'foreach',
+    title: 'foreach / matrix stages',
+    body: 'dvc stage add --foreach expands one stage into many (e.g. per-model). Course-level alternative to copy-pasting stages.',
+  },
+  {
+    id: 'external-outs',
+    title: 'External data / no-cache',
+    body: 'Deps/outs may live outside the project (s3://…). Use cache: false / -O when DVC must not copy bytes. update/track external datasets with import-url.',
+  },
+  {
+    id: 'api',
+    title: 'dvc.api',
+    body: 'Python API to open/read tracked data and exp_show() from a DVC repo without dvc checkout — useful in apps and notebooks.',
+  },
+  {
+    id: 'registry-promote',
+    title: 'Model registry',
+    body: 'Later DVC releases treat artifacts/models as first-class (dvc artifacts, stages like dev/prod). Promote a git tag + pulled model instead of emailing weights.',
+  },
+  {
+    id: 'dvcignore',
+    title: '.dvcignore',
+    body: 'Path patterns DVC should skip — speed on huge trees. Not the same as .gitignore (Git) or the data path ignore written by dvc add.',
+  },
+  {
     id: 'incident',
     title: 'Incident question',
     body: '“Which data produced this model?” Answer = Git commit of the release → pointer md5s → cache/remote object. If pointers were never committed, the answer does not exist.',
