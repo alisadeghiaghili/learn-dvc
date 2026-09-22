@@ -6,7 +6,79 @@ export function escapeHtml(s: string): string {
     .replaceAll('"', '&quot;');
 }
 
-/** Tiny markdown subset: code, bold, pre blocks. */
+function renderInline(raw: string): string {
+  let t = escapeHtml(raw);
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  return t;
+}
+
+function isTableRow(line: string): boolean {
+  const s = line.trim();
+  return s.startsWith('|') && s.endsWith('|') && s.length >= 3;
+}
+
+function isTableSeparator(line: string): boolean {
+  const s = line.trim();
+  return /^\|[\s:|-]+\|$/.test(s) && s.includes('-');
+}
+
+function splitTableRow(line: string): string[] {
+  const s = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  return s.split('|').map((c) => c.trim());
+}
+
+function renderTable(rows: string[]): string {
+  if (rows.length < 2) return '';
+  const header = splitTableRow(rows[0]!);
+  const body = rows.slice(2);
+  const headHtml = header.map((h) => `<th>${renderInline(h)}</th>`).join('');
+  const bodyHtml = body
+    .map((r) => `<tr>${splitTableRow(r).map((c) => `<td>${renderInline(c)}</td>`).join('')}</tr>`)
+    .join('');
+  return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+}
+
+function renderProse(text: string): string {
+  const lines = text.split('\n');
+  const out: string[] = [];
+  let para: string[] = [];
+
+  const flushPara = () => {
+    if (!para.length) return;
+    out.push(`<p>${para.map(renderInline).join('<br/>')}</p>`);
+    para = [];
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1]!)) {
+      flushPara();
+      const rows = [line, lines[i + 1]!];
+      i += 2;
+      while (i < lines.length && isTableRow(lines[i]!) && !isTableSeparator(lines[i]!)) {
+        rows.push(lines[i]!);
+        i += 1;
+      }
+      out.push(renderTable(rows));
+      continue;
+    }
+    if (!line.trim()) {
+      flushPara();
+      i += 1;
+      continue;
+    }
+    para.push(line);
+    i += 1;
+  }
+  flushPara();
+  return out.join('');
+}
+
+/**
+ * Markdown subset used in dialogs: fenced code, tables, bold, inline code, paragraphs.
+ */
 export function renderMarkdown(md: string): string {
   const blocks = md.split(/```/);
   let html = '';
@@ -15,14 +87,7 @@ export function renderMarkdown(md: string): string {
       html += `<pre>${escapeHtml(block.replace(/^\w*\n/, ''))}</pre>`;
       return;
     }
-    let t = escapeHtml(block);
-    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
-    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    t = t
-      .split(/\n\n+/)
-      .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
-      .join('');
-    html += t;
+    html += renderProse(block);
   });
   return html;
 }

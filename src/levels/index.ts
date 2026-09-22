@@ -151,11 +151,6 @@ export const basicsLevels: LevelDef[] = [
           'You have `data/data.xml` in the workspace (raw data).\n\nGoal: version it **without** putting bytes in Git.\n\n```\ndvc add data/data.xml\n```\n\nThen commit the *metadata* Git can review:\n\n```\ngit add data/data.xml.dvc data/.gitignore\ngit commit -m "Add raw data"\n```',
       },
       {
-        title: 'What happens under the hood',
-        markdown:
-          'After `dvc add`:\n\n| Place | Content |\n| --- | --- |\n| Workspace | still has `data/data.xml` (linked to cache) |\n| `.dvc/cache/.../md5/xx/…` | the actual bytes, content-addressed |\n| `data/data.xml.dvc` | YAML: path + md5 — **what Git stores** |\n| `data/.gitignore` | ignores the raw path |\n\nTwo systems, one workflow:\n\n- **Git** → code + pointers (small, reviewable)\n- **DVC cache/remote** → data payloads',
-      },
-      {
         title: 'Common mistake',
         markdown:
           'People `git add data/data.xml` out of habit.\n\nThat reintroduces the original problem. After DVC tracks a file, **only** the `.dvc` file and ignore rules belong in Git.\n\nOn the board, the data card should show `.dvc` + `gitignored`, and Cache should show the md5 object.',

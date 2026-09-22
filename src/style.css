@@ -1194,6 +1194,44 @@ button.ghost {
   font-size: 12.5px;
 }
 
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-family: var(--ui);
+}
+
+.md-table th,
+.md-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table th {
+  background: var(--panel-2);
+  color: var(--cache);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md-table tr:last-child td {
+  border-bottom: none;
+}
+
+.md-table td code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
 .modal-actions {
   display: flex;
   gap: 8px;
