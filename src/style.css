@@ -233,7 +233,7 @@ html[dir='rtl'] .lang-switch {
   min-height: 40px;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text);
   font-family: var(--ui);
