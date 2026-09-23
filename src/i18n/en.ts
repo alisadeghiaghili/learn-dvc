@@ -397,6 +397,7 @@ export const en: Catalog = {
     uiGuideTitle: 'UI guide — what each part does',
     close: 'Close',
     highlightRegions: 'Highlight regions',
+    highlightThis: 'Highlight',
     bestSoFar: (commands, par) =>
       `Best so far: ${commands} command${commands === 1 ? '' : 's'} · ideal: ${par}`,
     idealSolution: (par) =>

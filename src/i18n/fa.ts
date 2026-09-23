@@ -401,6 +401,7 @@ export const fa: Catalog = {
     uiGuideTitle: 'راهنمای UI — هر بخش چه می‌کند',
     close: 'بستن',
     highlightRegions: 'برجسته‌سازی نواحی',
+    highlightThis: 'برجسته‌سازی',
     bestSoFar: (commands, par) =>
       `بهترین تاکنون: ${commands} فرمان · ایده‌آل: ${par}`,
     idealSolution: (par) =>

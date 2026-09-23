@@ -969,6 +969,36 @@ button.ghost {
   color: var(--cache);
 }
 
+.ui-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.ui-help-head h3 {
+  margin: 0;
+}
+
+.ui-help-focus {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ui-help-focus:hover {
+  border-color: var(--haze);
+  background: var(--panel-2);
+}
+
 .ui-help-what {
   margin-bottom: 6px;
   font-size: 13px;

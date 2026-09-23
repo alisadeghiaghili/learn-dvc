@@ -30,7 +30,10 @@ export function uiHelpModalHtml(): string {
     .map(
       (e) => `
       <section class="ui-help-item" data-help-id="${e.id}">
-        <h3>${e.title}</h3>
+        <div class="ui-help-head">
+          <h3>${e.title}</h3>
+          <button type="button" class="ui-help-focus" data-focus-id="${e.id}">${escapeAttr(u.highlightThis)}</button>
+        </div>
         <div class="ui-help-what">${formatInline(e.what)}</div>
         <div class="ui-help-how"><strong>${u.useIt}</strong> ${formatInline(e.how)}</div>
       </section>
@@ -38,6 +41,14 @@ export function uiHelpModalHtml(): string {
     )
     .join('');
   return `<div class="ui-help">${sections}</div>`;
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 function formatInline(text: string): string {
@@ -50,9 +61,10 @@ function formatInline(text: string): string {
 }
 
 /** Outline live regions briefly so learners connect docs to pixels. */
-export function startUiTour(root: ParentNode): () => void {
+export function startUiTour(root: ParentNode, focusId?: string): () => void {
   root.querySelectorAll('.ui-tour-on').forEach((el) => el.classList.remove('ui-tour-on'));
-  const nodes = uiElements()
+  const elements = uiElements().filter((e) => !focusId || e.id === focusId);
+  const nodes = elements
     .map((e) => root.querySelector(e.selector))
     .filter(Boolean) as Element[];
   nodes.forEach((n) => n.classList.add('ui-tour-on'));

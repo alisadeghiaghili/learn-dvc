@@ -233,19 +233,15 @@ export class App {
     const modal = showModal({
       title: ui().uiGuideTitle,
       bodyHtml: uiHelpModalHtml(),
-      actions: [
-        { label: ui().close, className: 'ghost', onClick: () => modal.close() },
-        {
-          label: ui().highlightRegions,
-          className: 'primary',
-          onClick: () => {
-            startUiTour(this.root);
-            modal.close();
-            this.pushMeta(ui().uiTourMeta);
-          },
-        },
-      ],
+      actions: [{ label: ui().close, className: 'ghost', onClick: () => modal.close() }],
       onClose: () => this.terminal.focus(),
+    });
+    modal.el.querySelectorAll<HTMLButtonElement>('[data-focus-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.focusId;
+        if (!id) return;
+        startUiTour(this.root, id);
+      });
     });
   }
 

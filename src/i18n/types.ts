@@ -88,6 +88,7 @@ export interface UiCopy {
   uiGuideTitle: string;
   close: string;
   highlightRegions: string;
+  highlightThis: string;
   bestSoFar: (commands: number, par: number) => string;
   idealSolution: (par: number) => string;
   guideAlwaysRight: string;

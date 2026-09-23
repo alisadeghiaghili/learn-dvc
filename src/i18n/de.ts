@@ -402,6 +402,7 @@ export const de: Catalog = {
     uiGuideTitle: 'UI-Guide — was jede Region macht',
     close: 'Schließen',
     highlightRegions: 'Regionen hervorheben',
+    highlightThis: 'Hervorheben',
     bestSoFar: (commands, par) =>
       `Bisher beste: ${commands} Befehl${commands === 1 ? '' : 'e'} · ideal: ${par}`,
     idealSolution: (par) =>
