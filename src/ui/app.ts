@@ -65,9 +65,10 @@ export class App {
 
   private mount(): void {
     const u = ui();
-    const langButtons = LOCALES.map(
+    const current = getLocale();
+    const langItems = LOCALES.map(
       (loc) =>
-        `<button type="button" class="lang-btn${getLocale() === loc ? ' on' : ''}" data-lang="${loc}" aria-pressed="${getLocale() === loc}">${loc.toUpperCase()}</button>`,
+        `<button type="button" class="lang-option${current === loc ? ' on' : ''}" data-lang="${loc}" role="menuitem" aria-checked="${current === loc}">${loc.toUpperCase()}</button>`,
     ).join('');
     this.root.innerHTML = `
       <div class="app-main">
@@ -75,7 +76,15 @@ export class App {
           <div class="brand" data-help-id="brand">Learn<span>DVC</span></div>
           <div class="level-title" id="level-title" data-help-id="level-title"></div>
           <div class="toolbar-actions" data-help-id="toolbar">
-            <div class="lang-switch" role="group" aria-label="${escapeHtml(u.language)}">${langButtons}</div>
+            <div class="lang-menu">
+              <button type="button" class="lang-btn" data-action="lang-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeHtml(u.language)}">
+                <span data-lang-label>${current.toUpperCase()}</span>
+                <span class="lang-caret" aria-hidden="true"></span>
+              </button>
+              <div class="lang-dropdown" id="lang-dropdown" role="menu" hidden>
+                ${langItems}
+              </div>
+            </div>
             <button type="button" class="nav-toggle" data-action="nav-toggle" aria-label="${escapeHtml(u.menuLabel)}" aria-expanded="false" aria-controls="nav-drawer">
               <span class="nav-bars" aria-hidden="true"></span>
             </button>
@@ -112,7 +121,12 @@ export class App {
           this.toggleNav();
           return;
         }
+        if (action === 'lang-toggle') {
+          this.toggleLang();
+          return;
+        }
         this.closeNav();
+        this.closeLang();
         if (action === 'levels') this.openLevels();
         if (action === 'goal') this.focusGuide();
         if (action === 'hint') this.handleCommand('hint');
@@ -128,7 +142,10 @@ export class App {
     this.root.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const loc = btn.dataset.lang as Locale | undefined;
-        if (!loc || loc === getLocale()) return;
+        if (!loc || loc === getLocale()) {
+          this.closeLang();
+          return;
+        }
         setLocale(loc);
         this.remountAfterLocale();
       });
@@ -142,6 +159,7 @@ export class App {
     const open = drawer.classList.toggle('is-open');
     drawer.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
+    if (open) this.closeLang();
   }
 
   private closeNav(): void {
@@ -150,6 +168,25 @@ export class App {
     if (!drawer || !btn) return;
     drawer.classList.remove('is-open');
     drawer.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  }
+
+  private toggleLang(): void {
+    const menu = this.root.querySelector<HTMLElement>('#lang-dropdown');
+    const btn = this.root.querySelector<HTMLButtonElement>('[data-action="lang-toggle"]');
+    if (!menu || !btn) return;
+    const open = menu.classList.toggle('is-open');
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) this.closeNav();
+  }
+
+  private closeLang(): void {
+    const menu = this.root.querySelector<HTMLElement>('#lang-dropdown');
+    const btn = this.root.querySelector<HTMLButtonElement>('[data-action="lang-toggle"]');
+    if (!menu || !btn) return;
+    menu.classList.remove('is-open');
+    menu.hidden = true;
     btn.setAttribute('aria-expanded', 'false');
   }
 
