@@ -1,8 +1,14 @@
 import type { RepoState } from '../engine/types';
-import { ui } from '../i18n';
+import { getLocale, ui } from '../i18n';
 
 function esc(s: string): string {
   return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+/** Translated zone name plus the English term so learners keep the DVC vocabulary. */
+function zoneTitle(translated: string, english: string): string {
+  if (getLocale() === 'en' || translated === english) return translated;
+  return `${translated} (${english})`;
 }
 
 /** Simple inline markdown for board notes (code + bold only). */
@@ -117,20 +123,20 @@ export function renderBoardHtml(state: RepoState): string {
       <div class="pill">experiments <strong>${state.experiments.length}</strong></div>
     </div>
     <div class="board">
-      <section class="zone workspace" data-help-id="workspace-zone" aria-label="${esc(u.workspace)}">
-        <h2><span class="dot" style="color:var(--text)"></span> ${esc(u.workspace)}</h2>
+      <section class="zone workspace" data-help-id="workspace-zone" aria-label="${esc(zoneTitle(u.workspace, 'Workspace'))}">
+        <h2><span class="dot" style="color:var(--text)"></span> ${esc(zoneTitle(u.workspace, 'Workspace'))}</h2>
         <p class="zone-hint">${esc(u.workspaceHint)}</p>
         <p class="zone-why">${note(u.workspaceWhy)}</p>
         ${renderWorkspace(state)}
       </section>
-      <section class="zone cache" data-help-id="cache-zone" aria-label="${esc(u.cache)}">
-        <h2><span class="dot"></span> ${esc(u.cache)}</h2>
+      <section class="zone cache" data-help-id="cache-zone" aria-label="${esc(zoneTitle(u.cache, 'Cache'))}">
+        <h2><span class="dot"></span> ${esc(zoneTitle(u.cache, 'Cache'))}</h2>
         <p class="zone-hint">${esc(u.cacheHint)}</p>
         <p class="zone-why">${note(u.cacheWhy)}</p>
         ${renderCache(state)}
       </section>
-      <section class="zone remote" data-help-id="remote-zone" aria-label="${esc(u.remote)}">
-        <h2><span class="dot"></span> ${esc(u.remote)}</h2>
+      <section class="zone remote" data-help-id="remote-zone" aria-label="${esc(zoneTitle(u.remote, 'Remote'))}">
+        <h2><span class="dot"></span> ${esc(zoneTitle(u.remote, 'Remote'))}</h2>
         <p class="zone-hint">${esc(u.remoteHint)}</p>
         <p class="zone-why">${note(u.remoteWhy)}</p>
         ${renderRemote(state)}
