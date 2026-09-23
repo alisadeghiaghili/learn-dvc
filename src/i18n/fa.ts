@@ -505,6 +505,7 @@ export const fa: Catalog = {
       'چرا مهم است: هم‌تیمی‌ها و CI همین‌جا بایت‌های یکسان می‌گیرند. remote خالی یعنی داده با git push تنها سفر نمی‌کند.',
     pipelineTitle: 'خط لوله · dvc.yaml',
     language: 'زبان',
+    menuLabel: 'منو',
     workspace: 'فضای کاری',
     cache: 'کش',
     remote: 'ریموت',

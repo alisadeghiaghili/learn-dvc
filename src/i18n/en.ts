@@ -497,6 +497,7 @@ export const en: Catalog = {
       'Why it matters: teammates and CI get the same bytes here. Empty remote = data does not travel with git push alone.',
     pipelineTitle: 'Pipeline · dvc.yaml',
     language: 'Language',
+    menuLabel: 'Menu',
     workspace: 'Workspace',
     cache: 'Cache',
     remote: 'Remote',

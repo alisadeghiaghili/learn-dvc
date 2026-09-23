@@ -507,6 +507,7 @@ export const de: Catalog = {
       'Warum es zählt: Teammates und CI bekommen hier dieselben Bytes. Leere Remote = Daten reisen nicht mit git push allein.',
     pipelineTitle: 'Pipeline · dvc.yaml',
     language: 'Sprache',
+    menuLabel: 'Menü',
     workspace: 'Workspace',
     cache: 'Cache',
     remote: 'Remote',

@@ -172,6 +172,7 @@ export interface UiCopy {
   remoteWhy: string;
   pipelineTitle: string;
   language: string;
+  menuLabel: string;
   workspace: string;
   cache: string;
   remote: string;
