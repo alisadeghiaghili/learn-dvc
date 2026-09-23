@@ -3,6 +3,7 @@ import { emptyState, ensureGit, makeFile } from '../engine/state';
 import { fakeMd5 } from '../engine/hash';
 import { compareLevels, metaLevels, registryLevels } from './gaps';
 import { campLevels } from './camp';
+import { advancedLevels } from './advanced';
 
 function rawRepo(): RepoState {
   const s = emptyState();
@@ -1094,6 +1095,7 @@ export const allLevels: LevelDef[] = [
   ...metaLevels,
   ...compareLevels,
   ...campLevels,
+  ...advancedLevels,
   ...registryLevels,
   ...fieldLevels,
 ];
