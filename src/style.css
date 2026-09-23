@@ -289,7 +289,12 @@ html[dir='rtl'] .lang-switch {
 }
 
 .tb-link.gh {
-  gap: 8px;
+  gap: 0;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
 .tb-link .gh-mark {
