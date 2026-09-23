@@ -228,19 +228,33 @@ export class App {
   }
 
   /** Explain every on-screen region; optional highlight tour. */
+  private helpReopenTimer: number | null = null;
+
   private openUiHelp(runTour = false): void {
     if (runTour) startUiTour(this.root);
     const modal = showModal({
       title: ui().uiGuideTitle,
       bodyHtml: uiHelpModalHtml(),
       actions: [{ label: ui().close, className: 'ghost', onClick: () => modal.close() }],
-      onClose: () => this.terminal.focus(),
+      onClose: () => {
+        if (this.helpReopenTimer !== null) {
+          window.clearTimeout(this.helpReopenTimer);
+          this.helpReopenTimer = null;
+        }
+        this.terminal.focus();
+      },
     });
     modal.el.querySelectorAll<HTMLButtonElement>('[data-focus-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.focusId;
         if (!id) return;
-        startUiTour(this.root, id);
+        modal.close();
+        startUiTour(this.root, id, 3000);
+        if (this.helpReopenTimer !== null) window.clearTimeout(this.helpReopenTimer);
+        this.helpReopenTimer = window.setTimeout(() => {
+          this.helpReopenTimer = null;
+          this.openUiHelp(false);
+        }, 3000);
       });
     });
   }

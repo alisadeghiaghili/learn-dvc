@@ -61,7 +61,7 @@ function formatInline(text: string): string {
 }
 
 /** Outline live regions briefly so learners connect docs to pixels. */
-export function startUiTour(root: ParentNode, focusId?: string): () => void {
+export function startUiTour(root: ParentNode, focusId?: string, durationMs = 6000): () => void {
   root.querySelectorAll('.ui-tour-on').forEach((el) => el.classList.remove('ui-tour-on'));
   const elements = uiElements().filter((e) => !focusId || e.id === focusId);
   const nodes = elements
@@ -71,6 +71,6 @@ export function startUiTour(root: ParentNode, focusId?: string): () => void {
   const stop = () => {
     nodes.forEach((n) => n.classList.remove('ui-tour-on'));
   };
-  window.setTimeout(stop, 6000);
+  window.setTimeout(stop, durationMs);
   return stop;
 }
