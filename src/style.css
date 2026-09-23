@@ -226,6 +226,31 @@ html[dir='rtl'] .lang-switch {
   display: contents;
 }
 
+.help-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-btn:hover {
+  border-color: var(--haze);
+  background: var(--panel-2);
+}
+
 .tb-link {
   display: inline-flex;
   align-items: center;
