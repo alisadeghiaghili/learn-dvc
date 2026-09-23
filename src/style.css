@@ -237,13 +237,15 @@ button.ghost {
   align-items: start;
 }
 
+/* —— Responsive: tablet and phone —— */
 @media (max-width: 1100px) {
   .board {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
   #app {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(180px, 36vh);
+    grid-template-rows: minmax(0, 1fr) minmax(160px, 34vh);
     height: 100vh;
     height: 100dvh;
   }
@@ -251,18 +253,193 @@ button.ghost {
     grid-column: 1;
     grid-row: 2;
     height: auto;
-    max-height: 36vh;
-    border-left: none;
+    max-height: 34vh;
+    border-inline-start: none;
     border-top: 1px solid var(--line);
   }
   .app-main {
     grid-row: 1;
     min-height: 0;
   }
+  .toolbar,
+  .board-wrap,
   .terminal {
-    height: 280px;
-    min-height: 200px;
-    max-height: 40vh;
+    border-inline-end: none;
+  }
+  .terminal {
+    height: 240px;
+    min-height: 180px;
+    max-height: 36vh;
+  }
+  .zone {
+    min-height: 0;
+  }
+  .toolbar-actions {
+    width: 100%;
+    margin-inline-start: 0;
+    justify-content: flex-start;
+  }
+  .level-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .brand {
+    font-size: 14px;
+  }
+  .toolbar button,
+  .tb-link,
+  .lang-btn {
+    min-height: 40px;
+    min-width: 40px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .toolbar-actions {
+    gap: 6px;
+  }
+  .board-wrap {
+    padding: 10px;
+  }
+  .zone {
+    padding: 10px;
+  }
+  .status-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pill {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .terminal {
+    height: 200px;
+    min-height: 160px;
+    max-height: 32vh;
+  }
+  .term-log {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .term-input {
+    font-size: 16px; /* avoid iOS focus zoom */
+  }
+  .modal {
+    width: 100%;
+    max-height: min(92dvh, 100%);
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .overlay {
+    padding: 10px;
+    align-items: flex-end;
+  }
+  .modal-celebrate {
+    width: 100%;
+  }
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .modal-actions button {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+  .share-row {
+    flex-wrap: wrap;
+  }
+  .share-btn {
+    flex: 1 1 42%;
+    min-height: 44px;
+  }
+  .level-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'id dots'
+      'name name'
+      'par par';
+    gap: 6px 10px;
+  }
+  .level-row .id {
+    grid-area: id;
+  }
+  .level-row .name {
+    grid-area: name;
+  }
+  .level-row .par-note {
+    grid-area: par;
+  }
+  .level-row .chip {
+    grid-area: dots;
+    justify-self: end;
+  }
+  .goal-list li {
+    padding: 8px 0;
+  }
+  .dock {
+    padding: 10px;
+    max-height: 38vh;
+  }
+  .ui-help-item h3 {
+    font-size: 13px;
+  }
+  .md-table {
+    font-size: 11.5px;
+  }
+  .celebrate-stats {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .lang-switch {
+    margin-inline-end: 4px;
+    padding-inline-end: 4px;
+  }
+  .toolbar button[data-action='help'],
+  .toolbar button[data-action='sandbox'] {
+    /* keep visible — critical for orientation */
+  }
+  .tb-link.support span,
+  .tb-link.gh span {
+    /* icon-sized chips on very small screens */
+  }
+  .tb-link.gh span {
+    display: none;
+  }
+  .tb-link.support {
+    font-size: 11px;
+    padding: 8px;
+  }
+  .terminal {
+    height: 180px;
+    max-height: 30vh;
+  }
+  .level-title {
+    font-size: 11px;
+  }
+  .legend-list {
+    padding-inline-start: 14px;
+  }
+}
+
+/* Safe areas on notched phones */
+@supports (padding: max(0px)) {
+  .toolbar {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-inline: max(14px, env(safe-area-inset-left));
+    padding-inline-end: max(14px, env(safe-area-inset-right));
+  }
+  .term-input-row {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
 }
 
