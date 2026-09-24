@@ -636,6 +636,49 @@ export const fa: Catalog = {
         ],
         correct: 1,
       },
+      {
+        q: 'کلید secret س S3 کجا باید باشد؟',
+        a: ['.dvc/config در گیت', 'CI secrets / env / role ابری', 'README'],
+        correct: 1,
+      },
+      {
+        q: 'هم‌تیمی به دیتاست ۴ گیگی شما نیاز دارد. شما…',
+        a: ['zip ایمیل می‌کنید', 'به remote داده push می‌کنید و SHA کامیت را می‌فرستید', 'دوباره از لپ‌تاپ zip می‌کنید'],
+        correct: 1,
+      },
+      {
+        q: 'dvc fetch در برابر dvc pull؟',
+        a: ['یکسان', 'fetch = remote→cache؛ pull = fetch + checkout در فضای کاری', 'pull همیشه سریع‌تر است'],
+        correct: 1,
+      },
+      {
+        q: 'حادثه: کدام داده این مدل را آموزش داده؟',
+        a: [
+          'از کارآموز بپرسید',
+          'commit release → md5های pointer → اشیای cache/remote',
+          'در چت بگردید',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'بعد از exp apply چه چیزی تا تولید باقی است؟',
+        a: [
+          'هیچ — apply یعنی deploy',
+          'dvc repro آرتیفکت‌ها، dvc push، git commit release',
+          'تغییر نام شاخه',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'محتوای امن برای .dvc/config؟',
+        a: ['secret_access_key', 'آدرس remote و گزینه‌های non-secret', 'رمز عبور'],
+        correct: 1,
+      },
+      {
+        q: 'بدنه‌ی PR جدی ML چه چیزی دارد؟',
+        a: ['فقط حس', 'params diff + metrics diff + plots diff', 'فقط diff کد'],
+        correct: 1,
+      },
     ],
     helpSections: [
       {

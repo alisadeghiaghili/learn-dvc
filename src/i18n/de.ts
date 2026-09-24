@@ -639,6 +639,53 @@ export const de: Catalog = {
         ],
         correct: 1,
       },
+      {
+        q: 'Wohin gehören S3-Secret-Keys?',
+        a: ['.dvc/config in Git', 'CI-Secrets / env / Cloud-Rollen', 'README'],
+        correct: 1,
+      },
+      {
+        q: 'Ein Teammate braucht deinen 4GB-Datensatz. Du…',
+        a: ['Schickst ein Zip per Mail', 'Pusht zur DVC-Remote und schickst die Commit-SHA', 'Zipst vom Laptop neu'],
+        correct: 1,
+      },
+      {
+        q: 'dvc fetch vs. dvc pull?',
+        a: [
+          'Dasselbe',
+          'fetch = remote→cache; pull = fetch + checkout in den Workspace',
+          'pull ist immer schneller',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'Incident: Welche Daten haben dieses Modell trainiert?',
+        a: [
+          'Praktikant fragen',
+          'Release-Commit → .dvc-Pointer-md5s → Cache/Remote-Objekte',
+          'In Slack schauen',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'Nach exp apply — was fehlt noch vor Produktion?',
+        a: [
+          'Nichts — apply deployed',
+          'dvc repro Artefakte, dvc push, Release in Git committen',
+          'Branch umbenennen',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'Sicherer Inhalt für .dvc/config?',
+        a: ['secret_access_key', 'Remote-URL und Nicht-Secret-Optionen', 'Passwort'],
+        correct: 1,
+      },
+      {
+        q: 'Was gehört in einen ernsthaften ML-PR-Body?',
+        a: ['Nur Vibes', 'params diff + metrics diff + plots diff', 'Nur der Code-Diff'],
+        correct: 1,
+      },
     ],
     helpSections: [
       {

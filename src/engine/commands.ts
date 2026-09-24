@@ -754,8 +754,10 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'add') {
     const err = requireInit(state);
     if (err) return { state, result: err };
+    const flags = args.slice(1).filter((a) => a.startsWith('-'));
+    const noCommit = flags.includes('--no-commit') || flags.includes('-O');
     const path = args.slice(1).filter((a) => !a.startsWith('-'))[0];
-    if (!path) return { state, result: fail('Usage: dvc add <path>') };
+    if (!path) return { state, result: fail('Usage: dvc add [--no-commit] <path>') };
     const f = state.files[path];
     if (!f || !f.present) return { state, result: fail(`ERROR: bad path '${path}' — nothing in the workspace.`) };
     if (f.kind === 'code' || f.kind === 'params' || f.kind === 'yaml') {
@@ -766,7 +768,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     f.pointerMd5 = md5;
     f.gitignored = true;
     f.dirty = false;
-    addCache(state, md5);
+    if (!noCommit) addCache(state, md5);
     state.files[`${path}.dvc`] = makeFile(`${path}.dvc`, 'dvc', {
       contentId: fakeMd5(`dvcfile:${path}:${md5}`),
       present: true,
@@ -782,10 +784,14 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return finish(state, ok(
       [
         `100% ${path}`,
-        `Pointer file written: ${path}.dvc  (md5 ${md5.slice(0, 8)}…)`,
+        `Pointer file written: ${path}.dvc`,
+        `  md5: ${md5}`,
+        `  size: ${(f.contentId.length * 1024).toLocaleString()} bytes (simulated)`,
         `Cache object: .dvc/cache/files/md5/${md5.slice(0, 2)}/${md5.slice(2)}`,
-        `${path} is now gitignored — Git will track the pointer, not the bytes.`,
-        `Next in Git: git add ${path}.dvc data/.gitignore`,
+        noCommit
+          ? '--no-commit: pointer updated but cache object NOT committed yet. Run `dvc commit`.'
+          : `${path} is now gitignored — Git will track the pointer, not the bytes.`,
+        `Next in Git: git add ${path}.dvc ${gitignorePath}`,
       ].join('\n'),
     ));
   }
