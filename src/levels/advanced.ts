@@ -815,4 +815,140 @@ export const advancedLevels: LevelDef[] = [
       'dvc status',
     ],
   },
+  {
+    id: 'collab-3',
+    series: 'collab-ci',
+    seriesTitle: 'Collab & CI',
+    name: 'Teammate handoff: push then clean clone story',
+    difficulty: 5,
+    par: 5,
+    hint: 'dvc push; git add data/data.xml.dvc; git commit -m "data: publish raw snapshot"; dvc status; dvc pull',
+    objective:
+      'Publish a data change so a teammate can reproduce: push objects, commit the pointer, and finish with a clean status after pull.',
+    learning: [
+      'Handoff = remote objects + Git pointer commit, not a zip file',
+      'Push without pointer commit strands bytes nobody can find',
+      'status after pull is the acceptance test for handoff',
+    ],
+    fieldNotes: [
+      'Definition of done for data work: teammate pull succeeds on a clean machine',
+      'Never Slack a 2GB file — push and send the commit SHA',
+    ],
+    startDialog: [
+      {
+        title: 'The handoff contract',
+        markdown:
+          'A change is shared only when:\n\n1. bytes are on the **DVC remote**\n2. the **pointer** is in Git history\n3. `dvc pull` on a clean tree restores it\n\nSkip any line and you have a private laptop artifact.',
+      },
+    ],
+    startState: (() => {
+      const s = tracked('data/data.xml');
+      const md5 = fakeMd5('file:data/data.xml:v1');
+      s.dataVersions['data/data.xml'] = 1;
+      s.files['data/data.xml'] = makeFile('data/data.xml', 'data', {
+        contentId: md5,
+        tracked: true,
+        pointerMd5: fakeMd5('file:data/data.xml:v0'),
+        dirty: true,
+        present: true,
+        gitignored: true,
+      });
+      s.cache = [fakeMd5('file:data/data.xml:v0')];
+      s.remotes = [{ name: 'myremote', url: '/tmp/dvcstore', isDefault: true }];
+      return s;
+    })(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'notDirty' },
+        { kind: 'remoteHas', md5s: [] },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'data',
+          requireFilesAny: ['data/data.xml.dvc'],
+        },
+      ],
+    },
+    solution: [
+      'dvc push',
+      'git add data/data.xml.dvc',
+      'git commit -m "data: publish raw snapshot"',
+      'dvc status',
+      'dvc pull',
+    ],
+  },
+  {
+    id: 'api-1',
+    series: 'collab-ci',
+    seriesTitle: 'Collab & CI',
+    name: 'Read tracked data without checkout (dvc.api)',
+    difficulty: 4,
+    par: 3,
+    hint: 'dvc api; dvc status; dvc checkout',
+    objective:
+      'Use the DVC API surface in the simulator, then prove the workspace still matches pointers — apps read data without breaking the contract.',
+    learning: [
+      'dvc.api opens tracked data from a DVC repo in Python apps/notebooks',
+      'API does not replace checkout when you need files on disk',
+      'status remains the honesty check after any reader',
+    ],
+    fieldNotes: [
+      'Dashboards and batch jobs should use dvc.api + pinned commit, not ad-hoc downloads',
+      'If the API path and the workspace disagree, stop and pull',
+    ],
+    startDialog: [
+      {
+        title: 'Borrow bytes in code',
+        markdown:
+          '`dvc.api` is for **apps** that read data.\n`dvc checkout` is for **workspaces** that need files.\n\nSame md5 contract either way.',
+      },
+    ],
+    startState: tracked('data/data.xml', { remote: true }),
+    goal: {
+      kind: 'allOf',
+      checks: [{ kind: 'notDirty' }, { kind: 'tracked', paths: ['data/data.xml'] }],
+    },
+    solution: ['dvc api', 'dvc status', 'dvc checkout'],
+  },
+  {
+    id: 'cmp-5',
+    series: 'compare',
+    seriesTitle: 'Review & compare',
+    name: 'Full ML review pack',
+    difficulty: 5,
+    par: 5,
+    hint: 'edit params.yaml lr=0.05; dvc params diff; dvc repro; dvc metrics diff; dvc plots diff',
+    objective:
+      'Produce the complete PR evidence pack in one change: params diff, metrics diff, plots diff after repro.',
+    learning: [
+      'A serious ML PR ships intent + effect + curves',
+      'Skip metrics/plots and reviewers rubber-stamp',
+      'This pack is what CI should post automatically',
+    ],
+    fieldNotes: [
+      'Template the PR body with three slots: params / metrics / plots',
+      'If any slot is empty, the PR is not ready',
+    ],
+    startDialog: [
+      {
+        title: 'The minimum serious PR',
+        markdown: '1. `dvc params diff`\n2. `dvc repro`\n3. `dvc metrics diff`\n4. `dvc plots diff`\n\nPaste all four into review.',
+      },
+    ],
+    startState: pipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'paramsAt', key: 'lr', value: 0.05 },
+        { kind: 'stageUpToDate', name: 'train' },
+      ],
+    },
+    solution: [
+      'edit params.yaml lr=0.05',
+      'dvc params diff',
+      'dvc repro',
+      'dvc metrics diff',
+      'dvc plots diff',
+    ],
+  },
 ];

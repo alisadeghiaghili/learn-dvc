@@ -476,4 +476,296 @@ export const faLevels: Record<string, LevelCopy> = {
       },
     ],
   },
+  'cache-1': {
+    seriesTitle: 'انضباط cache',
+    name: 'اشیای بی‌استفاده و gc',
+    objective:
+      'یک شیء بی‌ارجاع cache بسازید (داده‌ی dirty + نسخه جدید) و با `dvc gc` جا خالی کنید، بدون از دست دادن pointer فعلی.',
+    learning: [
+      'cache محتوانشان هش‌های قدیمی را تا gc نگه می‌دارد',
+      'dvc gc اشیای بدون ارجاع workspace/Git را حذف می‌کند',
+      'فقط وقتی gc امن است که remote هنوز چیزی را دارد که تیم لازم دارد',
+    ],
+    fieldNotes: [
+      'CI runner: بعد از pull+repro همان SHA که shipping می‌کنید gc کنید',
+      'لپ‌تاپ‌ها از md5 یتیم پر می‌شوند — gc را زمان‌بندی کنید',
+      'اگر مدل release فقط در cache محلی باشد، gc می‌تواند آخرین نسخه را بکشد',
+    ],
+    startDialog: [
+      {
+        title: 'cache انبار است، نه سطل زباله',
+        markdown:
+          'هر `dvc add`/`commit` یک شیء **جدید** می‌نویسد. قدیمی‌ها برای checkout تاریخچه می‌مانند.\n\n`dvc gc` جارو است — فقط چیزی که ارجاع دارد می‌ماند.',
+      },
+    ],
+  },
+  'cache-2': {
+    seriesTitle: 'انضباط cache',
+    name: 'جدول واقعیت workspace / cache / remote',
+    objective:
+      'فایل ترک‌شده را حذف کنید، `dvc status` بخوانید، با `dvc pull` برگردانید و status تمیز بگیرید.',
+    learning: [
+      'فایل جامانده ≠ داده گم‌شده اگر cache/remote هش را داشته باشند',
+      'dvc pull = fetch + checkout',
+      'status نقشه‌ی صادق pointer ↔ بایت است',
+    ],
+    fieldNotes: ['روال: status → pull → status. بعد اگر dirty بود escalate'],
+    startDialog: [
+      {
+        title: 'سه جا، یک جدول',
+        markdown: 'Workspace / Cache / Remote — `dvc status` و `dvc pull` این جدول را می‌خوانند.',
+      },
+    ],
+  },
+  'remote-4': {
+    seriesTitle: 'Remoteها',
+    name: 'remote دوم + تعویض default',
+    objective: 'remote پشتیبان بسازید، لیست را ببینید، default را عوض کنید و push کنید.',
+    learning: [
+      'چند remote (origin، backup، team، region) عادی است',
+      'push/pull بدون -r از default می‌خوانند',
+      'کانفیگ remote در .dvc/config است و به اشتراک می‌رود',
+    ],
+    fieldNotes: ['remote تیم برای کار روزانه + backup سرد برای DR', 'credentials هرگز در .dvc/config'],
+    startDialog: [
+      {
+        title: 'چرا بیش از یک remote',
+        markdown: 'انبار همکاری ≠ انبار disaster recovery.',
+      },
+    ],
+  },
+  'remote-5': {
+    seriesTitle: 'Remoteها',
+    name: 'fetch در برابر pull روی ماشین تازه',
+    objective: 'cache خالی، remote پر: `fetch` فقط cache را پر می‌کند، `pull` فضای کاری را مادی می‌کند.',
+    learning: [
+      'fetch: remote → cache',
+      'pull: fetch + checkout',
+      'CI می‌تواند prefetch کند بدون خراب کردن tree',
+    ],
+    fieldNotes: ['CI قبل از build prefetch؛ pull فقط جایی که بایت لازم است'],
+    startDialog: [
+      {
+        title: 'دو فعل، یک انبار',
+        markdown: '`fetch` انبار را پر می‌کند. `pull` به آشپزخانه هم تحویل می‌دهد.',
+      },
+    ],
+  },
+  'pipe-4': {
+    seriesTitle: 'Pipelineها',
+    name: 'wdir, always-changed, no-cache',
+    objective: 'stage را با `--wdir` و `--always-changed` تعریف کنید، no-cache را بفهمید، repro + DAG.',
+    learning: [
+      '--wdir پوشه‌ی کاری stage را جابه‌جا می‌کند',
+      '--always-changed repro را اجباری می‌کند',
+      'خروجی cache:false هویت را ترک می‌کند بدون بایت cache',
+    ],
+    fieldNotes: ['always-changed برای API/scrape', 'no-cache برای خروجی‌های عظیم warehouse'],
+    startDialog: [
+      {
+        title: 'فلگ‌های stage از تولید',
+        markdown: '`--wdir` · `--always-changed` · `--no-cache` — تزیینی نیستند.',
+      },
+    ],
+  },
+  'pipe-5': {
+    seriesTitle: 'Pipelineها',
+    name: 'ماتریس foreach + DAG',
+    objective: 'یک stage را با `--foreach` به ماتریس باز کنید، لیست کنید و DAG بخوانید.',
+    learning: ['--foreach یک قالب را N stage می‌کند', 'هر خانه outs خودش را دارد', 'DAG قرارداد ریویو است'],
+    fieldNotes: ['ماتریس برای «این مدل‌ها باید با هم بیایند»', 'جست‌وجو در `dvc exp`، محصول در stage'],
+    startDialog: [
+      {
+        title: 'foreach در برابر آزمایش',
+        markdown: '**foreach** = ماتریس محصول. **dvc exp** = جست‌وجو.',
+      },
+    ],
+  },
+  'exp-4': {
+    seriesTitle: 'آزمایش‌ها',
+    name: 'دو sweep + exp show',
+    objective: 'دو مجموعه‌پارامتر اجرا کنید و با `dvc exp show` مقایسه کنید.',
+    learning: ['-S هر set را آزمایش ثبت می‌کند', 'exp show جدول شاهد است', '--queue کار را پارک می‌کند'],
+    fieldNotes: ['sweep جمعه: صف کنید، شنبه show بخوانید'],
+    startDialog: [
+      {
+        title: 'جست‌وجو بدون بیسیت',
+        markdown: 'sweep با `-S` و بعد `dvc exp show`.',
+      },
+    ],
+  },
+  'exp-5': {
+    seriesTitle: 'آزمایش‌ها',
+    name: 'اعمال برنده + بازبینی پارامتر',
+    objective: 'sweep، `exp show`، `exp apply`، `params show`، بعد repro.',
+    learning: ['apply پیکربندی را به workspace می‌نویسد — deploy نیست', 'بعدش repro/push برای تولید', 'params show بازبینی است'],
+    fieldNotes: ['PR باید exp id و دلیل را بنویسد', 'apply بدون repro مدل را کهنه می‌گذارد'],
+    startDialog: [
+      {
+        title: 'برده release نیست',
+        markdown: '`exp apply` → `dvc repro` → `dvc push`.',
+      },
+    ],
+  },
+  'cmp-3': {
+    seriesTitle: 'ریویو و مقایسه',
+    name: 'تمرین params + metrics diff',
+    objective: 'هایپرپارامتر را عوض کنید، `params diff`، repro، `metrics diff` — بسته‌ی ریویوی ML.',
+    learning: ['params diff = نیت', 'metrics diff = اثر', 'حداقلِ ریویوی ML همین دو است'],
+    fieldNotes: ['هر دو diff را در PR بگذارید. ریویور نوت‌بوک باز نکند'],
+    startDialog: [
+      {
+        title: 'ریویوی بالغ',
+        markdown: '`dvc params diff` + `dvc metrics diff`.',
+      },
+    ],
+  },
+  'cmp-4': {
+    seriesTitle: 'ریویو و مقایسه',
+    name: 'plots show + diff',
+    objective: 'repro کنید تا سری بیاید، با قالب Vega رندر کنید، `plots diff` بگیرید.',
+    learning: ['plot آرتیفکت ریویوست', 'قالب نحوه‌ی خواندن را کد می‌کند', 'plots diff دوقلو metrics diff است'],
+    fieldNotes: ['CML تصویر plot را به PR می‌زند'],
+    startDialog: [
+      {
+        title: 'نمودار تزیین نیست',
+        markdown: '`dvc plots show` / `dvc plots diff`.',
+      },
+    ],
+  },
+  'meta-4': {
+    seriesTitle: 'متا و فایل‌های قرارداد',
+    name: 'freeze آگاهانه‌ی یک stage',
+    objective: '`train` را freeze کنید، رفتار را ببینید، بعد آگاهانه unfreeze.',
+    learning: ['freeze در برابر repro ناشی از invalidate', 'unfreeze رویداد تولید است', 'stage یخ‌زده در DAG می‌ماند'],
+    fieldNotes: ['مدل طلایی را freeze کنید موقع آزمایش پایین‌دست', 'unfreeze با ریویو + repro + push'],
+    startDialog: [
+      {
+        title: 'میخ با تبعات',
+        markdown: 'freeze محافظت می‌کند؛ اما staleness را هم پنهان می‌کند.',
+      },
+    ],
+  },
+  'meta-5': {
+    seriesTitle: 'متا و فایل‌های قرارداد',
+    name: 'lock رسید است',
+    objective: 'پارامتر را بشکنید، repro، yaml در برابر lock — تعریف در برابر رسید اجرا.',
+    learning: ['dvc.yaml = قرارداد', 'dvc.lock = رسید', 'ویرایش دستی lock دروغ است'],
+    fieldNotes: ['yaml ریویوی انسانی می‌خواهد؛ lock از CI repro می‌آید'],
+    startDialog: [
+      {
+        title: 'قرارداد یا رسید',
+        markdown: '`cat dvc.yaml` · `cat dvc.lock`.',
+      },
+    ],
+  },
+  'reg-3': {
+    seriesTitle: 'رجیستری و بازاستفاده',
+    name: 'import و status تمیز',
+    objective: 'آرتیفکت upstream را با نسخه‌ی pinned import کنید و status را تمیز نگه دارید.',
+    learning: ['import نسخه‌ی upstream را میخکوب می‌کند', 'update یک bump عمدی است', 'نه zip در چت'],
+    fieldNotes: ['خروجی feature store می‌شود import، نه کپی'],
+    startDialog: [
+      {
+        title: 'قرض بگیر، انبار نکن',
+        markdown: '`dvc get` = کپی. `dvc import` = pin + مسیر update.',
+      },
+    ],
+  },
+  'camp-6': {
+    seriesTitle: 'همکاری و CI',
+    name: 'اسکلت CI: pull، repro، comment',
+    objective: 'حلقه‌ی استاندارد CI: pull، repro، خواندن metrics، نظر CML، commit رسید.',
+    learning: ['CI: clone → pull → repro → cml comment', 'بایت سنگین در remote داده', 'CML metrics را قابل ریویو می‌کند'],
+    fieldNotes: ['همان YAML الگوهای GitHub Actions'],
+    startDialog: [
+      {
+        title: 'مذهب CI در سه خط',
+        markdown: '```\ndvc pull\ndvc repro\ndvc cml "…"\n```',
+      },
+    ],
+  },
+  'camp-7': {
+    seriesTitle: 'همکاری و CI',
+    name: 'metrics های DVCLive تا exp show',
+    objective: 'اجرا را با DVCLive ابزارک‌گذاری کنید و در جدول آزمایش ببینید.',
+    learning: ['DVCLive پل کد آموزش به metrics/plot است', 'اسکالر metrics، سری plot'],
+    fieldNotes: ['یک Live() در train.py بهتر از ده echo است'],
+    startDialog: [
+      {
+        title: 'منحنی loss کپی‌پیست نکنید',
+        markdown: 'DVCLive به همان شکلی می‌نویسد که DVC می‌فهمد.',
+      },
+    ],
+  },
+  'collab-1': {
+    seriesTitle: 'همکاری و CI',
+    name: 'انضباط PR مبتنی بر pointer',
+    objective: 'مسیر کامل PR داده: dirty → status → add/commit → git commit فقط pointer.',
+    learning: ['ریویوی PR یعنی md5 pointer + lock، نه گیگابایت', 'بدون dvc commit، pointer دروغ می‌گوید'],
+    fieldNotes: ['CI باید fail کند اگر کسی مسیر داده‌ی ترک‌شده را staged کند'],
+    startDialog: [
+      {
+        title: 'تنها PR امن داده',
+        markdown: 'Status → add → commit → git add فقط فایل‌های pointer → commit.',
+      },
+    ],
+  },
+  'collab-2': {
+    seriesTitle: 'همکاری و CI',
+    name: 'حادثه: کدام داده، کدام مدل؟',
+    objective: 'پرسش حادثه را با شاهد پاسخ دهید: pointer → git → remote → checkout تمیز.',
+    learning: ['commit release → md5 pointer → cache/remote', 'بدون pointer کامیت‌شده، پاسخ نیست'],
+    fieldNotes: ['این چک‌لیست postmortem برای «مدل بد در prod» است'],
+    startDialog: [
+      {
+        title: 'چک‌لیست ساعت ۲ بامداد',
+        markdown: 'Commit → pointer → md5 → روی remote؟ → checkout + `dvc checkout`.',
+      },
+    ],
+  },
+  'collab-3': {
+    seriesTitle: 'همکاری و CI',
+    name: 'تحویل به هم‌تیمی: push و commit pointer',
+    objective:
+      'تغییر داده را طوری منتشر کنید که هم‌تیمی بازتولید کند: push، commit pointer، و status تمیز بعد از pull.',
+    learning: [
+      'تحویل = اشیای remote + commit pointer در گیت، نه zip',
+      'push بدون commit pointer بایت‌ها را بی‌صاحب می‌کند',
+      'status بعد از pull آزمون پذیرش است',
+    ],
+    fieldNotes: ['تعریف Done برای کار داده: pull موفق روی ماشین تمیز'],
+    startDialog: [
+      {
+        title: 'قرارداد تحویل',
+        markdown: 'تغییر مشترک است وقتی: بایت روی remote + pointer در گیت + `dvc pull` جواب دهد.',
+      },
+    ],
+  },
+  'api-1': {
+    seriesTitle: 'همکاری و CI',
+    name: 'خواندن داده بدون checkout (dvc.api)',
+    objective: 'سطح API داده را در شبیه‌ساز بیازمایید و قرارداد pointer را بررسی کنید.',
+    learning: ['dvc.api داده‌ی ترک‌شده را در اپ/نوت‌بوک می‌خواند', 'API جای checkout فایل روی دیسک را نمی‌گیرد'],
+    fieldNotes: ['داشبورد با dvc.api + commit pinned، نه دانلود دستی'],
+    startDialog: [
+      {
+        title: 'قرض گرفتن بایت در کد',
+        markdown: '`dvc.api` برای اپ. `dvc checkout` برای فضای کاری.',
+      },
+    ],
+  },
+  'cmp-5': {
+    seriesTitle: 'ریویو و مقایسه',
+    name: 'بسته‌ی کامل ریویوی ML',
+    objective: 'یک تغییر، کل بسته: params diff، metrics diff، plots diff بعد از repro.',
+    learning: ['PR جدی ML یعنی نیت + اثر + منحنی', 'بدون metrics/plots ریویور مهر لاستیکی می‌زند'],
+    fieldNotes: ['بدنه‌ی PR با سه جا: params / metrics / plots'],
+    startDialog: [
+      {
+        title: 'حداقل PR جدی',
+        markdown: 'params diff → repro → metrics diff → plots diff.',
+      },
+    ],
+  },
 };

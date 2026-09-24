@@ -6,13 +6,11 @@ import { allLevels } from '../src/levels';
 import { CONCEPT_IDS } from '../src/engine/glossary';
 
 describe('i18n locale completeness', () => {
-  it('covers every legacy level id in de and fa', () => {
-    const legacy = allLevels.filter((l) => de.levels[l.id]);
-    expect(legacy.length).toBeGreaterThan(20);
-    for (const level of legacy) {
+  it('covers every level id in de and fa', () => {
+    for (const level of allLevels) {
+      expect(de.levels[level.id], `de missing ${level.id}`).toBeTruthy();
       expect(fa.levels[level.id], `fa missing ${level.id}`).toBeTruthy();
     }
-    expect(allLevels.length).toBeGreaterThanOrEqual(30);
   });
 
   it('keeps solution and hint in English structural form (not empty)', () => {
