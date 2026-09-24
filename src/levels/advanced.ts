@@ -1106,4 +1106,231 @@ export const advancedLevels: LevelDef[] = [
       'git commit -m "data: ship snapshot v2"',
     ],
   },
+  {
+    id: 'mastery-1',
+    series: 'collab-ci',
+    seriesTitle: 'Mastery',
+    name: 'Disaster recovery: restore from remote',
+    difficulty: 5,
+    par: 5,
+    hint: 'rm data/data.xml; dvc status; dvc fetch; dvc pull; dvc status',
+    objective:
+      'Simulate a lost laptop: wipe workspace bytes, prove cache is not enough, restore from remote with fetch+pull, verify status.',
+    learning: [
+      'DR is remote + committed pointers, not Time Machine',
+      'fetch stocks cache; pull restores the working tree',
+      'If pointers were never pushed to Git, recovery is impossible',
+    ],
+    fieldNotes: [
+      'Quarterly DR drill: new machine, clone, pull, run metrics',
+      'RTO target is meaningless without a rehearsed pull path',
+    ],
+    startDialog: [
+      {
+        title: 'When the laptop dies',
+        markdown:
+          'The only durable story is:\n\n1. **Git** has the pointer history\n2. **DVC remote** has the bytes\n3. `git clone` + `dvc pull` rebuilds the world\n\nIf either side is missing, you are doing archaeology.',
+      },
+    ],
+    startState: tracked('data/data.xml', { remote: true }),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'workspaceHas', paths: ['data/data.xml'] },
+        { kind: 'notDirty' },
+      ],
+    },
+    solution: ['rm data/data.xml', 'dvc status', 'dvc fetch', 'dvc pull', 'dvc status'],
+  },
+  {
+    id: 'mastery-2',
+    series: 'collab-ci',
+    seriesTitle: 'Mastery',
+    name: 'Git-LFS vs DVC decision drill',
+    difficulty: 4,
+    par: 3,
+    hint: 'concepts lfs; dvc status; dvc add data/data.xml',
+    objective:
+      'Choose the right tool with evidence: read the LFS vs DVC concept, then commit to DVC tracking for ML data in this repo.',
+    learning: [
+      'LFS versions big blobs in Git remotes; DVC versions pointers + object store + pipelines',
+      'ML data/models want DVC (repro + exp + cache semantics)',
+      'Few huge binaries with no pipeline may be fine on LFS',
+    ],
+    fieldNotes: [
+      'Decision table in the team wiki beats Slack folklore',
+      'Migrations: freeze LFS path, add DVC, dual-run one release, cut over',
+    ],
+    startDialog: [
+      {
+        title: 'Pick the boring correct tool',
+        markdown: 'If you need **repro, exp, cache, pipeline** → DVC.\nIf you need **a big binary in a git remote** → LFS may suffice.\n\nFor ML, the answer is almost always DVC.',
+      },
+    ],
+    startState: tracked('data/data.xml'),
+    goal: {
+      kind: 'allOf',
+      checks: [{ kind: 'tracked', paths: ['data/data.xml'] }, { kind: 'notDirty' }],
+    },
+    solution: ['concepts lfs', 'dvc status', 'dvc add data/data.xml'],
+  },
+  {
+    id: 'mastery-3',
+    series: 'collab-ci',
+    seriesTitle: 'Mastery',
+    name: 'CI secrets + pull + comment',
+    difficulty: 5,
+    par: 5,
+    hint: 'dvc pull; dvc repro; dvc metrics show; dvc cml "ci: metrics"; git add .; git commit -m "ci: report metrics"',
+    objective:
+      'Run the production CI body with the secret-backed remote already configured: pull, repro, metrics, CML comment, commit receipt.',
+    learning: [
+      'Remote credentials live in CI secrets, never in .dvc/config',
+      'CI body is pull → repro → comment; everything else is plumbing',
+      'Commit the receipt so humans and bots share one history',
+    ],
+    fieldNotes: [
+      'OIDC/role auth beats long-lived keys on GitHub Actions',
+      'Fail the job if `dvc status` is dirty after repro',
+    ],
+    startDialog: [
+      {
+        title: 'CI that a security team will approve',
+        markdown: 'Secrets in the vault. Remote config in Git. Bytes in DVC remote.\n\nThe YAML is boring on purpose.',
+      },
+    ],
+    startState: pipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'stageUpToDate', name: 'train' },
+        { kind: 'gitCommitMessageIncludes', text: 'ci' },
+      ],
+    },
+    solution: [
+      'dvc pull',
+      'dvc repro',
+      'dvc metrics show',
+      'dvc cml "ci: metrics"',
+      'git add .',
+      'git commit -m "ci: report metrics"',
+    ],
+  },
+  {
+    id: 'mastery-4',
+    series: 'collab-ci',
+    seriesTitle: 'Mastery',
+    name: 'Artifact promote: model to release',
+    difficulty: 5,
+    par: 6,
+    hint: 'dvc exp run -S lr=0.05; dvc exp show; dvc exp apply exp-; dvc repro; dvc push; git add .; git commit -m "release: promote lr=0.05"',
+    objective:
+      'Promote a winning experiment into a release story: apply, repro artifacts, push bytes, tag the narrative in Git.',
+    learning: [
+      'Release = applied params + repro artifacts + pushed bytes + git commit',
+      'exp apply is not deploy; push is not release without history',
+      'The release commit is what incident response will ask for',
+    ],
+    fieldNotes: [
+      'Release checklist: apply → repro → push → commit → tag',
+      'Never email weights; the release commit is the contract',
+    ],
+    startDialog: [
+      {
+        title: 'From winner to release',
+        markdown: 'Search (`exp`) → choose (`show`) → apply → **build** (`repro`) → **share** (`push`) → **remember** (`git commit`).',
+      },
+    ],
+    startState: pipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'paramsAt', key: 'lr', value: 0.05 },
+        { kind: 'stageUpToDate', name: 'train' },
+        { kind: 'gitCommitMessageIncludes', text: 'release' },
+      ],
+    },
+    solution: [
+      'dvc exp run -S lr=0.05',
+      'dvc exp show',
+      'dvc exp apply exp-',
+      'dvc repro',
+      'dvc push',
+      'git add .',
+      'git commit -m "release: promote lr=0.05"',
+    ],
+  },
+  {
+    id: 'mastery-5',
+    series: 'compare',
+    seriesTitle: 'Mastery',
+    name: 'Confusion-style plots review',
+    difficulty: 4,
+    par: 4,
+    hint: 'dvc repro; dvc plots show --template confusion; dvc plots diff',
+    objective:
+      'Render the confusion template and diff plots across the working change — classification review without a notebook.',
+    learning: [
+      'Templates encode how to read a series (linear vs confusion)',
+      'plots diff is the visual twin of metrics diff',
+      'PR review should include curves/matrix, not just scalars',
+    ],
+    fieldNotes: [
+      'Classification releases always attach confusion matrix plots',
+      'If the matrix is worse on a slice, stop the release',
+    ],
+    startDialog: [
+      {
+        title: 'Read the matrix, not the mean',
+        markdown: '`dvc plots show --template confusion` then `dvc plots diff`.',
+      },
+    ],
+    startState: pipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [{ kind: 'stageUpToDate', name: 'train' }],
+    },
+    solution: [
+      'dvc repro',
+      'dvc plots show --template confusion',
+      'dvc plots diff',
+    ],
+  },
+  {
+    id: 'mastery-6',
+    series: 'meta',
+    seriesTitle: 'Mastery',
+    name: 'External data + no-cache contract',
+    difficulty: 5,
+    par: 4,
+    hint: 'dvc stage add -n lift -d data/data.xml -O /tmp/ext/out.bin python src/train.py; dvc stage list; dvc repro; dvc dag',
+    objective:
+      'Declare a stage that writes an external/no-cache style out, list stages, repro, and read the DAG as the contract.',
+    learning: [
+      'External / no-cache outs track identity without copying warehouse bytes',
+      'The DAG is how leads review data contracts before merge',
+      'Invalidation still follows deps even when outs are external',
+    ],
+    fieldNotes: [
+      'Warehouse tables are external outs, not cache objects',
+      'Document who owns the external path in the stage description',
+    ],
+    startDialog: [
+      {
+        title: 'When bytes live elsewhere',
+        markdown: '`-O` / cache:false means: track the **name**, not the warehouse.\n\nUse for S3 tables, shared disks, feature stores.',
+      },
+    ],
+    startState: pipelineRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [{ kind: 'stageExists', name: 'lift' }],
+    },
+    solution: [
+      'dvc stage add -n lift -d data/data.xml -O /tmp/ext/out.bin python src/train.py',
+      'dvc stage list',
+      'dvc repro',
+      'dvc dag',
+    ],
+  },
 ];
