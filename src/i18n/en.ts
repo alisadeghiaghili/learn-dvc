@@ -610,6 +610,41 @@ export const en: Catalog = {
         a: ['Identical', 'LFS = big blobs in Git remotes; DVC = pointers in Git + object remote + pipeline/exp', 'LFS is for Python'],
         correct: 1,
       },
+      {
+        q: 'Where do S3 secret keys belong?',
+        a: ['.dvc/config in Git', 'CI secrets / env / cloud roles', 'README'],
+        correct: 1,
+      },
+      {
+        q: 'A teammate needs your 4GB dataset. You…',
+        a: ['Email a zip', 'Push to DVC remote and send the commit SHA', 'Re-zip from the laptop'],
+        correct: 1,
+      },
+      {
+        q: 'dvc fetch vs dvc pull?',
+        a: ['Same command', 'fetch = remote→cache; pull = fetch + checkout into workspace', 'pull is always faster'],
+        correct: 1,
+      },
+      {
+        q: 'Incident: which data trained this model?',
+        a: ['Ask the intern', 'Release commit → .dvc pointer md5s → cache/remote objects', 'Check Slack'],
+        correct: 1,
+      },
+      {
+        q: 'After exp apply, what still must happen before prod?',
+        a: ['Nothing — apply deploys', 'dvc repro artifacts, dvc push, git commit the release', 'Rename the branch'],
+        correct: 1,
+      },
+      {
+        q: 'Safe content for .dvc/config?',
+        a: ['secret_access_key', 'remote URL and non-secret options', 'password'],
+        correct: 1,
+      },
+      {
+        q: 'What does a serious ML PR body include?',
+        a: ['Vibes only', 'params diff + metrics diff + plots diff', 'Only the code diff'],
+        correct: 1,
+      },
     ],
     helpSections: [
       {
