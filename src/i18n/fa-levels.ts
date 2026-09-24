@@ -768,4 +768,28 @@ export const faLevels: Record<string, LevelCopy> = {
       },
     ],
   },
+  'collab-4': {
+    seriesTitle: 'همکاری و CI',
+    name: 'تعارض lock/pointer در PR داده',
+    objective: 'تعارض PR را حل کنید: پارامتر عوض شده، lock کهنه. repro، commit رسید، status تمیز.',
+    learning: ['yaml نیت، lock رسید', 'lock را دستی merge نکنید'],
+    fieldNotes: ['روال: status → repro → commit → status'],
+    startDialog: [{ title: 'دو نفر، یک قرارداد', markdown: 'repro، بعد رسید جدید را commit کنید.' }],
+  },
+  'reg-4': {
+    seriesTitle: 'رجیستری و بازاستفاده',
+    name: 'pin کردن upstream و update',
+    objective: 'import را با pin بخوانید، بعد عمداً `dvc update`.',
+    learning: ['import مسیر + md5 را میخکوب می‌کند', 'update رویداد ریویو است'],
+    fieldNotes: ['bump را با changelog در PR بگذارید'],
+    startDialog: [{ title: 'قرض با رسید', markdown: 'get کپی · import pin · update جابه‌جایی pin.' }],
+  },
+  'capstone-2': {
+    seriesTitle: 'همکاری و CI',
+    name: 'چک‌پوینت پایانی end-to-end',
+    objective: 'تمرین فارغ‌التحصیلی: dirty → status → add/commit → push → git commit فقط pointer.',
+    learning: ['end-to-end یک روایت است', 'بدون push/pointer هم‌تیمی بعدی می‌شکند'],
+    fieldNotes: ['گیت آن‌بوردینگ کار داده'],
+    startDialog: [{ title: 'فارغ‌التحصیلی', markdown: 'فرمان جدید نیست. **یک داستان منسجم.**' }],
+  },
 };

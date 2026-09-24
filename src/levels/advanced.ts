@@ -951,4 +951,159 @@ export const advancedLevels: LevelDef[] = [
       'dvc plots diff',
     ],
   },
+  {
+    id: 'collab-4',
+    series: 'collab-ci',
+    seriesTitle: 'Collab & CI',
+    name: 'Lock/pointer conflict in a data PR',
+    difficulty: 5,
+    par: 6,
+    hint: 'dvc status; dvc repro; git add dvc.lock params.yaml; git commit -m "pipeline: resolve lock after param change"; dvc status',
+    objective:
+      'Resolve a realistic PR conflict: params changed, lock is stale, pointer still valid. Repro, commit the receipt, leave status clean.',
+    learning: [
+      'yaml is intent, lock is receipt — stale lock blocks honest review',
+      'Pointer conflict is data; lock conflict is pipeline — fix order matters',
+      'status after commit is the merge acceptance test',
+    ],
+    fieldNotes: [
+      'Conflict playbook: status → repro → commit lock+yaml → status',
+      'Never hand-merge lock hashes; re-run repro and take the new receipt',
+    ],
+    startDialog: [
+      {
+        title: 'When two people touch the same contract',
+        markdown:
+          'Teammate A changes `params.yaml`.\nTeammate B changes a stage command.\n\nGit will fight over `dvc.lock`.\n\n**Do not hand-edit lock.** Repro, then commit the new receipt with a clear message.',
+      },
+    ],
+    startState: (() => {
+      const s = pipelineRepo();
+      s.pipeline = [
+        {
+          name: 'train',
+          deps: ['data/data.xml', 'src/train.py'],
+          outs: ['model.pkl', 'metrics.json'],
+          cmd: 'python src/train.py',
+          params: ['lr', 'n_estimators'],
+          metrics: ['metrics.json'],
+          frozen: false,
+          upToDate: false,
+        },
+      ];
+      s.params = { lr: 0.05, n_estimators: 10 };
+      return s;
+    })(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'stageUpToDate', name: 'train' },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'lock',
+          requireFilesAny: ['dvc.lock', 'dvc.yaml', 'params.yaml'],
+        },
+      ],
+    },
+    solution: [
+      'dvc status',
+      'dvc repro',
+      'git add dvc.lock params.yaml',
+      'git commit -m "pipeline: resolve lock after param change"',
+      'dvc status',
+    ],
+  },
+  {
+    id: 'reg-4',
+    series: 'registry',
+    seriesTitle: 'Registry & reuse',
+    name: 'Pin upstream and update deliberately',
+    difficulty: 5,
+    par: 5,
+    hint: 'dvc import /tmp/registry data/external.csv; cat data/external.csv.dvc; dvc update data/external.csv.dvc; dvc status',
+    objective:
+      'Import upstream data as a pinned dependency, read the pin, then `dvc update` on purpose — version bumps are reviewed events.',
+    learning: [
+      'import writes a pin (path + md5) you can read in the .dvc file',
+      'update is a deliberate bump, like upgrading a library',
+      'status proves the bump landed cleanly',
+    ],
+    fieldNotes: [
+      'Feature-store exports become imports, never Slack zips',
+      'PR the update bump with the upstream changelog link',
+    ],
+    startDialog: [
+      {
+        title: 'Borrow with a receipt',
+        markdown:
+          '`dvc get` copies.\n`dvc import` copies **and** pins.\n`dvc update` moves the pin on purpose.\n\nRead `cat …​.dvc` before you update — know what you are leaving.',
+      },
+    ],
+    startState: (() => {
+      const s = baseRepo();
+      s.remotes = [{ name: 'myremote', url: '/tmp/registry', isDefault: true }];
+      s.remoteObjects = [fakeMd5('upstream:external:v1'), fakeMd5('upstream:external:v2')];
+      return s;
+    })(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'tracked', paths: ['data/external.csv'] },
+        { kind: 'workspaceHas', paths: ['data/external.csv'] },
+      ],
+    },
+    solution: [
+      'dvc import /tmp/registry data/external.csv',
+      'dvc status',
+    ],
+  },
+  {
+    id: 'capstone-2',
+    series: 'collab-ci',
+    seriesTitle: 'Collab & CI',
+    name: 'Final checkpoint: ship a data change end-to-end',
+    difficulty: 5,
+    par: 7,
+    hint: 'edit data/data.xml; dvc status; dvc add data/data.xml; dvc commit; dvc push; git add data/data.xml.dvc data/.gitignore; git commit -m "data: ship snapshot v2"',
+    objective:
+      'Graduate drill: dirty data → status → add/commit → push remote → pointer-only git commit. One clean story a lead can audit.',
+    learning: [
+      'End-to-end is one narrative: bytes, cache, remote, pointer, history',
+      'Skipping push or pointer commit breaks the next teammate',
+      'This checklist is the production definition of done',
+    ],
+    fieldNotes: [
+      'Use this as the onboarding gate for anyone touching data',
+      'If you cannot explain each step, you are not ready for a real remote',
+    ],
+    startDialog: [
+      {
+        title: 'Graduation',
+        markdown:
+          'No new commands. **One coherent story.**\n\nIf you can run this drill from memory on a clean repo, you are ready for production DVC.',
+      },
+    ],
+    startState: tracked('data/data.xml', { remote: true }),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'notDirty' },
+        { kind: 'tracked', paths: ['data/data.xml'] },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'data',
+          requireFilesAny: ['data/data.xml.dvc'],
+        },
+      ],
+    },
+    solution: [
+      'edit data/data.xml',
+      'dvc status',
+      'dvc add data/data.xml',
+      'dvc commit',
+      'dvc push',
+      'git add data/data.xml.dvc data/.gitignore',
+      'git commit -m "data: ship snapshot v2"',
+    ],
+  },
 ];

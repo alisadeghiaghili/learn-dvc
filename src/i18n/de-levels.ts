@@ -757,6 +757,37 @@ export const deLevels: Record<string, LevelCopy> = {
       },
     ],
   },
+  'collab-4': {
+    seriesTitle: 'Collab & CI',
+    name: 'Lock/Pointer-Konflikt im Daten-PR',
+    objective:
+      'PR-Konflikt lösen: Params geändert, Lock stale. Repro, Receipt committen, Status sauber.',
+    learning: ['yaml = Absicht, lock = Quittung', 'Lock nie von Hand mergen'],
+    fieldNotes: ['Playbook: status → repro → commit → status'],
+    startDialog: [
+      { title: 'Zwei Personen, ein Vertrag', markdown: 'Repro, dann neue Quittung committen.' },
+    ],
+  },
+  'reg-4': {
+    seriesTitle: 'Registry & Wiederverwendung',
+    name: 'Upstream pinnen und updaten',
+    objective: 'Import mit Pin lesen, dann bewusst `dvc update`.',
+    learning: ['import pinnt path + md5', 'update ist ein Review-Ereignis'],
+    fieldNotes: ['Update-Bump im PR mit Changelog-Link'],
+    startDialog: [
+      { title: 'Mit Quittung leihen', markdown: 'get kopiert · import pinnt · update bewegt den Pin.' },
+    ],
+  },
+  'capstone-2': {
+    seriesTitle: 'Collab & CI',
+    name: 'Abschluss-Checkpoint end-to-end',
+    objective: 'Abschlussdrill: dirty → status → add/commit → push → Pointer-only git commit.',
+    learning: ['End-to-end ist eine Erzählung', 'Ohne Push/Pointer-Commit bricht der nächste Teammate'],
+    fieldNotes: ['Onboarding-Gate für Datenarbeit'],
+    startDialog: [
+      { title: 'Abschluss', markdown: 'Keine neuen Befehle. **Eine stimmige Geschichte.**' },
+    ],
+  },
   'api-1': {
     seriesTitle: 'Collab & CI',
     name: 'Daten lesen ohne checkout (dvc.api)',
