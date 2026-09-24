@@ -862,4 +862,20 @@ export const deLevels: Record<string, LevelCopy> = {
     fieldNotes: ['Warehouse-Tabellen sind external outs, keine Cache-Objekte'],
     startDialog: [{ title: 'Wenn Bytes woanders liegen', markdown: '`-O` / cache:false trackt den **Namen**, nicht das Lager.' }],
   },
+  'mastery-7': {
+    seriesTitle: 'Remotes',
+    name: 'Remote-Auth ohne Secret-Leaks',
+    objective: 'Team-Remote konfigurieren: Nicht-Secrets in Config, Secrets aus env/CI — nie Credentials committen.',
+    learning: ['URL und Non-Secrets in .dvc/config', 'Secrets aus env/CI/Rollen', 'remote modify kodiert Auth-Policy'],
+    fieldNotes: ['.dvc/config im PR reviewen — keine langlebigen Keys', 'OIDC/Rollen statt access_key_id in CI'],
+    startDialog: [{ title: 'Credentials sind keine Projektdateien', markdown: 'URL/Profil teilen. `secret_access_key` niemals.' }],
+  },
+  'mastery-8': {
+    seriesTitle: 'Collab & CI',
+    name: 'Transfer: Datenänderung ohne Rezept',
+    objective: 'Keine Schrittliste. Daten dirty machen, Pointer committen, Objekte pushen.',
+    learning: ['Transfer-Test: Pfad selbst entwerfen', 'Done = sauberer Status + Pointer in Git + Bytes auf Remote'],
+    fieldNotes: ['Onboarding-/Hiring-Gate für Data Engineers'],
+    startDialog: [{ title: 'Open Lab', markdown: 'Dieses Level **kein Rezept**. Ziel ist ein Zustand.' }],
+  },
 };

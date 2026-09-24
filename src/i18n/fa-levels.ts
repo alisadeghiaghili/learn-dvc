@@ -840,4 +840,20 @@ export const faLevels: Record<string, LevelCopy> = {
     fieldNotes: ['جدول‌های warehouse خروجی external هستند، نه شیء cache'],
     startDialog: [{ title: 'وقتی بایت جای دیگری است', markdown: '`-O` / cache:false **نام** را ترک می‌کند، نه انبار را.' }],
   },
+  'mastery-7': {
+    seriesTitle: 'Remoteها',
+    name: 'auth مسیر بدون نشتی secret',
+    objective: 'remote تیم را پیکربندی کنید: non-secret در config، secret از env/CI — credentials هرگز commit نشود.',
+    learning: ['URL و non-secret در .dvc/config', 'secret از env/CI/role', 'remote modify سیاست auth را کد می‌کند'],
+    fieldNotes: ['.dvc/config را در PR ببینید — کلید بلندمدت نه', 'OIDC/role بهتر از access_key_id در CI'],
+    startDialog: [{ title: 'credential فایل پروژه نیست', markdown: 'URL/پروفایل را به اشتراک بگذارید. `secret_access_key` هرگز.' }],
+  },
+  'mastery-8': {
+    seriesTitle: 'همکاری و CI',
+    name: 'Transfer: تغییر داده بدون دستورالعمل',
+    objective: 'بدون لیست مراحل. داده dirty، pointer commit، اشیا push.',
+    learning: ['آزمون transfer: مسیر را خودتان طراحی کنید', 'Done = status تمیز + pointer در گیت + بایت روی remote'],
+    fieldNotes: ['گیت آن‌بوردینگ/استخدام مهندس داده'],
+    startDialog: [{ title: 'آزمایشگاه باز', markdown: 'این level **دستورالعمل نمی‌دهد**. هدف یک وضعیت است.' }],
+  },
 };

@@ -887,7 +887,23 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       }
       return { state, result: ok(`Removed remote '${name}'`) };
     }
-    return { state, result: fail('Usage: dvc remote [add|list|default|remove]') };
+    if (rsub === 'modify') {
+      const name = args[2];
+      const key = args[3];
+      const value = args[4];
+      const remote = state.remotes.find((r) => r.name === name);
+      if (!remote) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
+      if (!key) return { state, result: fail('Usage: dvc remote modify <name> <key> <value>') };
+      const secretKeys = ['secret_access_key', 'token', 'password', 'private_key_password'];
+      const hidden = secretKeys.includes(key) ? '***' : (value ?? '');
+      return finish(state, ok([
+        `Updated remote '${name}' ${key}=${hidden}`,
+        secretKeys.includes(key)
+          ? 'Secret values never belong in .dvc/config — use env/CI secrets.'
+          : 'Non-secret option stored in .dvc/config and shared via Git.',
+      ].join('\n')));
+    }
+    return { state, result: fail('Usage: dvc remote [add|list|default|remove|modify]') };
   }
 
   if (sub === 'push') {

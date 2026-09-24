@@ -1331,4 +1331,90 @@ export const advancedLevels: LevelDef[] = [
       'dvc dag',
     ],
   },
+  {
+    id: 'mastery-7',
+    series: 'remotes',
+    seriesTitle: 'Mastery',
+    name: 'Remote auth without leaking secrets',
+    difficulty: 5,
+    par: 5,
+    hint: 'dvc remote add team s3://ml-team/dvcstore; dvc remote modify team profile ml-prod; dvc remote modify team secret_access_key CI_SECRET; dvc remote list',
+    objective:
+      'Configure a team remote with non-secret options in config and secrets via env/CI — never commit credentials.',
+    learning: [
+      'URL and non-secret options live in .dvc/config (shared via Git)',
+      'Secrets (keys, tokens) must come from env / CI secrets / cloud roles',
+      'remote modify encodes auth policy without leaking secrets',
+    ],
+    fieldNotes: [
+      'Audit .dvc/config in PR review — no long-lived keys, ever',
+      'Prefer OIDC/instance roles over access_key_id in CI',
+    ],
+    startDialog: [
+      {
+        title: 'Credentials are not project files',
+        markdown:
+          'Safe to share: remote URL, profile name, region.\nNever safe: `secret_access_key`, tokens, passwords.\n\n`dvc remote modify` distinguishes them — keep secrets out of Git.',
+      },
+    ],
+    startState: baseRepo(),
+    goal: {
+      kind: 'allOf',
+      checks: [{ kind: 'remoteConfigured', name: 'team' }],
+    },
+    solution: [
+      'dvc remote add team s3://ml-team/dvcstore',
+      'dvc remote modify team profile ml-prod',
+      'dvc remote modify team secret_access_key CI_SECRET',
+      'dvc remote list',
+    ],
+  },
+  {
+    id: 'mastery-8',
+    series: 'collab-ci',
+    seriesTitle: 'Mastery',
+    name: 'Transfer: design the data change without a recipe',
+    difficulty: 5,
+    par: 6,
+    hint: 'edit data/data.xml; dvc status; dvc add data/data.xml; dvc commit; dvc push; git add data/data.xml.dvc data/.gitignore; git commit -m "data: ship reviewed snapshot"',
+    objective:
+      'No step list to copy. Dirty the dataset and finish with pointer committed and objects pushed — the production definition of done.',
+    learning: [
+      'Transfer test: you design the path, not the checklist',
+      'Done = clean status + pointer in Git + bytes on remote',
+    ],
+    fieldNotes: [
+      'Use this as a hiring/onboarding gate for data engineers',
+      'Interviewers watch the order: status before commit, push before claim',
+    ],
+    startDialog: [
+      {
+        title: 'Open lab',
+        markdown:
+          'This level **does not hand you a recipe**.\n\nGoal is a state, not a command list. Think, type, verify with `dvc status`.',
+      },
+    ],
+    startState: tracked('data/data.xml', { remote: true }),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'notDirty' },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'data',
+          requireFilesAny: ['data/data.xml.dvc'],
+        },
+        { kind: 'remoteHas', md5s: [] },
+      ],
+    },
+    solution: [
+      'edit data/data.xml',
+      'dvc status',
+      'dvc add data/data.xml',
+      'dvc commit',
+      'dvc push',
+      'git add data/data.xml.dvc data/.gitignore',
+      'git commit -m "data: ship reviewed snapshot"',
+    ],
+  },
 ];
