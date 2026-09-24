@@ -207,6 +207,38 @@ export const fa: Catalog = {
         'baseline را با شاهد انتخاب می‌کنید، نه با حافظه.',
       ],
     },
+    'dvc-gc': {
+      title: 'dvc gc',
+      lines: [
+        'اشیای cache بدون ارجاع workspace/Git را حذف می‌کند.',
+        'قبل از gc چیزی را که تولید لازم دارد push کنید — وگرنه آخرین نسخه را می‌کشید.',
+        'CI runner: همان SHA که shipping می‌شود را gc کنید، نه کل انبار را.',
+      ],
+    },
+    'dvc-plots': {
+      title: 'dvc plots',
+      lines: [
+        'plot آرتیفکت ریویو است (قالب Vega)، نه اسکرین‌شات نوت‌بوک.',
+        'plots show سری کاری را رندر می‌کند؛ plots diff revision را مقایسه می‌کند.',
+        'CML می‌تواند تصویر را به PR بچسباند — انسان منحنی را می‌خواند.',
+      ],
+    },
+    'dvc-diffs': {
+      title: 'params / metrics diff',
+      lines: [
+        'params diff = نیت. metrics diff = اثر.',
+        'هر دو را در بدنه‌ی PR بگذارید. ریویور نوت‌بوک باز نکند.',
+        'بدون حرکت metric ادغام نکنید.',
+      ],
+    },
+    'dvc-api': {
+      title: 'dvc.api',
+      lines: [
+        'API پایتون برای خواندن داده‌ی ترک‌شده / exp_show از ریپوی DVC.',
+        'اپ و نوت‌بوک بایت را قرض می‌گیرند بدون بازنویسی فضای کاری.',
+        'قرارداد md5 همچنان معتبر است — commit را pin کنید.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -324,6 +356,14 @@ export const fa: Catalog = {
     gc: {
       title: 'جمع‌آوری زباله',
       body: 'dvc gc اشیای cache را که workspace/refهای گیتی که نگه می‌دارید به آن‌ها ارجاع نمی‌دهند حذف می‌کند. بعد از gc اگر هش ارجاعی فقط روی remote بود شاید dvc pull لازم باشد.',
+    },
+    'api-handson': {
+      title: 'dvc.api در اپ‌های تولید',
+      body: 'commit گیت را pin کنید، مسیرهای ترک‌شده را با dvc.api بخوانید، هرگز «latest» را داغ نگیرید. داشبورد و jobهای batch باید fail-closed باشند اگر pointer نیست — نه اینکه بی‌صدا روی بایت کهنه آموزش ببینند.',
+    },
+    'pr-pack': {
+      title: 'بسته‌ی شاهد PR برای ML',
+      body: 'تغییر جدی ML حداقل این‌ها را می‌آورد: dvc params diff (نیت)، dvc metrics diff (اثر)، dvc plots diff (منحنی). سه جا در بدنه‌ی PR. جای خالی = آماده‌ی ریویو نیست.',
     },
   },
   ui: {

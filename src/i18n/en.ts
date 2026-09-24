@@ -207,6 +207,38 @@ export const en: Catalog = {
         'You are choosing baselines with evidence, not memory.',
       ],
     },
+    'dvc-gc': {
+      title: 'dvc gc',
+      lines: [
+        'Removes cache objects not referenced by the workspace/Git refs you keep.',
+        'Push what production still needs before you gc — or you delete the only copy.',
+        'CI runners should gc the SHA they ship, not the whole warehouse.',
+      ],
+    },
+    'dvc-plots': {
+      title: 'dvc plots',
+      lines: [
+        'Plots are review artifacts (Vega templates), not notebook screenshots.',
+        'plots show renders the working series; plots diff compares revisions.',
+        'CML can embed these images on the PR — humans actually read curves.',
+      ],
+    },
+    'dvc-diffs': {
+      title: 'params / metrics diff',
+      lines: [
+        'params diff = intent. metrics diff = effect.',
+        'Paste both into the ML PR body — reviewers should not open the notebook.',
+        'No metric movement means do not merge vibes.',
+      ],
+    },
+    'dvc-api': {
+      title: 'dvc.api',
+      lines: [
+        'Python API to read tracked data / exp_show from a DVC repo.',
+        'Apps and notebooks borrow bytes without rewriting the workspace.',
+        'Still honor the md5 contract — pin the commit you read.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -324,6 +356,14 @@ export const en: Catalog = {
     gc: {
       title: 'Garbage collection',
       body: 'dvc gc removes cache objects not referenced by current workspace/Git refs you keep. After gc you may need dvc pull if a referenced hash was on remote only.',
+    },
+    'api-handson': {
+      title: 'dvc.api in production apps',
+      body: 'Pin a Git commit, open tracked paths with dvc.api, never hot-pick “latest”. Dashboards and batch jobs should fail closed when the pointer is missing — not silently train on stale bytes.',
+    },
+    'pr-pack': {
+      title: 'ML PR evidence pack',
+      body: 'Minimum serious ML change ships: dvc params diff (intent), dvc metrics diff (effect), dvc plots diff (curves). Template three slots in the PR body. Empty slot = not ready for review.',
     },
   },
   ui: {

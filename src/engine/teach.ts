@@ -49,6 +49,10 @@ export function teachAfterCommand(raw: string, _state: RepoState): string | null
   if (/^dvc\s+unfreeze\b/.test(cmd)) return teachFromKey('dvc-unfreeze');
   if (/^dvc\s+diff\b/.test(cmd)) return teachFromKey('dvc-diff');
   if (/^dvc\s+exp\s+show\b/.test(cmd)) return teachFromKey('dvc-exp-show');
+  if (/^dvc\s+gc\b/.test(cmd)) return teachFromKey('dvc-gc');
+  if (/^dvc\s+plots\b/.test(cmd)) return teachFromKey('dvc-plots');
+  if (/^dvc\s+params\s+diff|^dvc\s+metrics\s+diff/.test(cmd)) return teachFromKey('dvc-diffs');
+  if (/^dvc\s+api\b/.test(cmd)) return teachFromKey('dvc-api');
 
   void ui;
   return null;

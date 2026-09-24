@@ -38,6 +38,8 @@ export const CONCEPT_IDS = [
   'ci',
   'freeze',
   'gc',
+  'api-handson',
+  'pr-pack',
 ] as const;
 
 export function localizedConcepts(): Concept[] {

@@ -207,6 +207,38 @@ export const de: Catalog = {
         'Baselines wählst du mit Evidenz, nicht aus dem Gedächtnis.',
       ],
     },
+    'dvc-gc': {
+      title: 'dvc gc',
+      lines: [
+        'Entfernt Cache-Objekte ohne Referenz aus Workspace/Git-Refs.',
+        'Erst pushen, was Produktion braucht, dann gc — sonst löschst du die letzte Kopie.',
+        'CI-Runner: gc die ausgelieferte SHA, nicht das ganze Lager.',
+      ],
+    },
+    'dvc-plots': {
+      title: 'dvc plots',
+      lines: [
+        'Plots sind Review-Artefakte (Vega-Templates), keine Notebook-Screenshots.',
+        'plots show rendert die Serie; plots diff vergleicht Revisionen.',
+        'CML kann die Bilder an den PR hängen — Menschen lesen Kurven.',
+      ],
+    },
+    'dvc-diffs': {
+      title: 'params / metrics diff',
+      lines: [
+        'params diff = Absicht. metrics diff = Wirkung.',
+        'Beide in den ML-PR. Reviewer öffnen kein Notebook.',
+        'Kein Metric-Move → nicht mergen.',
+      ],
+    },
+    'dvc-api': {
+      title: 'dvc.api',
+      lines: [
+        'Python-API, um getrackte Daten / exp_show aus einem DVC-Repo zu lesen.',
+        'Apps und Notebooks leihen Bytes, ohne den Workspace umzuschreiben.',
+        'md5-Vertrag gilt weiter — Commit pinnen.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -324,6 +356,14 @@ export const de: Catalog = {
     gc: {
       title: 'Garbage Collection',
       body: 'dvc gc entfernt Cache-Objekte, die von Workspace/Git-Refs, die du behältst, nicht referenziert sind. Nach gc ggf. dvc pull, wenn ein referenzierter Hash nur auf der Remote lag.',
+    },
+    'api-handson': {
+      title: 'dvc.api in Produktions-Apps',
+      body: 'Git-Commit pinnen, getrackte Pfade mit dvc.api öffnen, nie „latest“ hot-picken. Dashboards und Batch-Jobs müssen fail-closed sein, wenn der Pointer fehlt — nicht still auf stale Bytes trainieren.',
+    },
+    'pr-pack': {
+      title: 'ML-PR-Evidenzpaket',
+      body: 'Ernsthafter ML-Change liefert: dvc params diff (Absicht), dvc metrics diff (Wirkung), dvc plots diff (Kurven). Drei Slots im PR-Body. Leerer Slot = nicht reviewfertig.',
     },
   },
   ui: {
