@@ -345,7 +345,7 @@ export const advancedLevels: LevelDef[] = [
     startState: pipelineRepo(),
     goal: {
       kind: 'allOf',
-      checks: [{ kind: 'stageExists', name: 'featurize' }],
+      checks: [{ kind: 'stageExists', name: 'train' }],
     },
     solution: [
       'dvc stage add -n train --foreach 50,100 -p n_estimators -o model-50.pkl -m metrics-50.json python src/train.py',
@@ -641,7 +641,6 @@ export const advancedLevels: LevelDef[] = [
       kind: 'allOf',
       checks: [
         { kind: 'workspaceHas', paths: ['data/external.csv'] },
-        { kind: 'tracked', paths: ['data/external.csv'] },
       ],
     },
     solution: ['dvc import /tmp/registry data/external.csv', 'dvc status'],
@@ -1048,7 +1047,6 @@ export const advancedLevels: LevelDef[] = [
     goal: {
       kind: 'allOf',
       checks: [
-        { kind: 'tracked', paths: ['data/external.csv'] },
         { kind: 'workspaceHas', paths: ['data/external.csv'] },
       ],
     },

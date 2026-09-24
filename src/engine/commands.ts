@@ -1378,7 +1378,8 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     if (err) return { state, result: err };
     const url = args[1];
     const outIdx = args.indexOf('-o');
-    const out = outIdx >= 0 ? args[outIdx + 1] : sub === 'import-url' ? 'data/imported.bin' : 'data/registry.xml';
+    const positionalOut = args[2] && !args[2].startsWith('-') ? args[2] : undefined;
+    const out = outIdx >= 0 ? args[outIdx + 1] : positionalOut ?? (sub === 'import-url' ? 'data/imported.bin' : 'data/registry.xml');
     if (!url && sub !== 'import-url') {
       return { state, result: fail(`Usage: dvc ${sub} <url> [-o <path>]`) };
     }
