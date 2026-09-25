@@ -555,16 +555,16 @@ export const fa: Catalog = {
     coachNextSteps: (n, id) => `Ú¯Ø§Ù…â€ŒÙ‡Ø§ÛŒ Ø¨Ø¹Ø¯ÛŒ (${n} Ø¨Ø§Ù‚ÛŒ)${id ? ` Ø¨Ø±Ø§ÛŒ ${id}` : ''}:`,
     coachFooter: 'Ø¨Ø±Ø§ÛŒ ØªÚ©Ø±Ø§Ø± Ø§ÛŒÙ† ÙÙ‡Ø±Ø³Øª `steps` Â· `hint` Â· `show goal` ØªØ§ÛŒÙ¾ Ú©Ù†ÛŒØ¯',
     shareLinkedInHead:
-      'ÙˆØ§Ù‚Ø¹Ø§Ù‹ Ø®ÙˆØ´Ø­Ø§Ù„Ù… â€” ØªØ§Ø²Ù‡ Data Version Control Ú©Ø§Ø±Ø¨Ø±Ø¯ÛŒ Ø±Ø§ Ø¯Ø± LearnDVC ÛŒØ§Ø¯ Ú¯Ø±ÙØªÙ…!',
+      'خیلی خوشحالم — تازه Data Version Control کاربردی را با LearnDVC یاد گرفتم!',
     shareStarting: 'Ø³ÙØ± DVC Ù…Ù† Ø´Ø±ÙˆØ¹ Ø´Ø¯.',
     shareLatestWin: (name, id) => `Ø¢Ø®Ø±ÛŒÙ† Ù…ÙˆÙÙ‚ÛŒØª: ${name} (${id})`,
     shareCommands: (n, par) => ` â€” ${n} ÙØ±Ù…Ø§Ù† (Ø§ÛŒØ¯Ù‡â€ŒØ¢Ù„ ${par})`,
     shareLearnedSoFar: 'Ú†Ù‡ Ú†ÛŒØ²ÛŒ ØªØ§Ú©Ù†ÙˆÙ† ÛŒØ§Ø¯ Ú¯Ø±ÙØªÙ‡â€ŒØ§Ù…:',
     shareProgress: (solved, total) => `Ù¾ÛŒØ´Ø±ÙØª: ${solved}/${total} Ù…Ø±Ø­Ù„Ù‡.`,
     shareCta:
-      'Ø§Ú¯Ø± Ø¨Ø§ Ø¯Ø§Ø¯Ù‡ ÛŒØ§ Ù…Ø¯Ù„ ML Ú©Ø§Ø± Ù…ÛŒâ€ŒÚ©Ù†ÛŒØ¯ØŒ Ø§Ù…ØªØ­Ø§Ù† Ú©Ù†ÛŒØ¯ â€” Ø±Ø§ÛŒÚ¯Ø§Ù†ØŒ Ø¨Ø¯ÙˆÙ† ÙˆØ±ÙˆØ¯:',
+      'اگر با داده یا مدل ML سر و کار دارید، امتحانش کنید — رایگان و بدون ثبت‌نام:',
     shareXHead: (solved, total) =>
-      `ÙˆØ§Ù‚Ø¹Ø§Ù‹ Ø®ÙˆØ´Ø­Ø§Ù„Ù… â€” Ø¯Ø§Ø±Ù… DVC Ø±Ø§ Ø¯Ø± LearnDVC ÛŒØ§Ø¯ Ù…ÛŒâ€ŒÚ¯ÛŒØ±Ù… (${solved}/${total} Ù…Ø±Ø­Ù„Ù‡).`,
+      `خوشحالم که دارم DVC را با LearnDVC یاد می‌گیرم (${solved}/${total} مرحله).`,
     shareXFirst: 'Ø³Ù†Ø¯Ø¨Ø§Ú©Ø³ Ø¹Ù…Ù„ÛŒ.',
     shareHandson: 'Ø³Ù†Ø¯Ø¨Ø§Ú©Ø³ Ø¹Ù…Ù„ÛŒ.',
     titleLearnDvc: 'LearnDVC â€” Ø¢Ù…ÙˆØ²Ø´ Data Version Control',
