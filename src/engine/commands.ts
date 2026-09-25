@@ -463,6 +463,22 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     }
     const f = state.files[path];
     if (!f || !f.present) return { state, result: fail(`cat: ${path}: No such file`) };
+    if (path.endsWith('.dvc')) {
+      const dataPath = path.replace(/\.dvc$/, '');
+      const data = state.files[dataPath];
+      const md5 = data?.pointerMd5 ?? f.contentId;
+      return {
+        state,
+        result: ok(
+          [
+            'outs:',
+            `- path: ${dataPath}`,
+            '  md5: ' + md5,
+            '  size: ' + String(1024 + (md5.charCodeAt(0) * 32)).replace(/\B(?=(\d{3})+(?!\d))/g, ','),
+          ].join('\n'),
+        ),
+      };
+    }
     if (f.tracked) {
       return {
         state,
