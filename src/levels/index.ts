@@ -4,6 +4,7 @@ import { fakeMd5 } from '../engine/hash';
 import { compareLevels, metaLevels, registryLevels } from './gaps';
 import { campLevels } from './camp';
 import { advancedLevels } from './advanced';
+import { transferLevels } from './transfer';
 
 function rawRepo(): RepoState {
   const s = emptyState();
@@ -1096,6 +1097,7 @@ export const allLevels: LevelDef[] = [
   ...compareLevels,
   ...campLevels,
   ...advancedLevels,
+  ...transferLevels,
   ...registryLevels,
   ...fieldLevels,
 ];
