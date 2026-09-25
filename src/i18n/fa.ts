@@ -561,8 +561,8 @@ export const fa: Catalog = {
     shareCommands: (n, par) => ` â€” ${n} ÙØ±Ù…Ø§Ù† (Ø§ÛŒØ¯Ù‡â€ŒØ¢Ù„ ${par})`,
     shareLearnedSoFar: 'تا اینجا این‌ها را یاد گرفته‌ام:',
     shareProgress: (solved, total) => `Ù¾ÛŒØ´Ø±ÙØª: ${solved}/${total} Ù…Ø±Ø­Ù„Ù‡.`,
-    shareCta:
-      'اگر با داده یا مدل ML سر و کار دارید، امتحانش کنید — رایگان و بدون ثبت‌نام:',
+    shareCta: 'اگر با داده یا مدل ML سر و کار دارید، امتحانش کنید — رایگان و بدون ثبت‌نام:',
+    shareSupport: 'اگر این آموزش به دردتان خورد، می‌توانید از یادگیری حمایت کنید:',
     shareXHead: (solved, total) =>
       `خوشحالم که دارم DVC را با LearnDVC یاد می‌گیرم (${solved}/${total} مرحله).`,
     shareXFirst: 'تمرین عملی در مرورگر.',

@@ -553,6 +553,7 @@ export const en: Catalog = {
     shareLearnedSoFar: 'What I have learned so far:',
     shareProgress: (solved, total) => `Progress: ${solved}/${total} levels.`,
     shareCta: 'If you work with ML data or models, try it — free, no login:',
+    shareSupport: 'If this helps your learning, you can support the project here:',
     shareXHead: (solved, total) =>
       `Really happy — learning DVC on LearnDVC (${solved}/${total} levels).`,
     shareXFirst: 'Hands-on sandbox.',

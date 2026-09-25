@@ -563,8 +563,8 @@ export const de: Catalog = {
     shareCommands: (n, par) => ` — ${n} Befehl${n === 1 ? '' : 'e'} (ideal ${par})`,
     shareLearnedSoFar: 'Was ich bisher gelernt habe:',
     shareProgress: (solved, total) => `Fortschritt: ${solved}/${total} Levels.`,
-    shareCta:
-      'Wenn du mit ML-Daten oder Modellen arbeitest, probier es — kostenlos, ohne Login:',
+    shareCta: 'Wenn du mit ML-Daten oder Modellen arbeitest, probier es — kostenlos, ohne Login:',
+    shareSupport: 'Wenn dir das beim Lernen hilft, kannst du das Projekt hier unterstützen:',
     shareXHead: (solved, total) =>
       `Richtig glücklich — DVC lernen auf LearnDVC (${solved}/${total} Levels).`,
     shareXFirst: 'Praxis-Sandbox.',

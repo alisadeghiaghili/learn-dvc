@@ -187,6 +187,7 @@ export interface UiCopy {
   shareLearnedSoFar: string;
   shareProgress: (solved: number, total: number) => string;
   shareCta: string;
+  shareSupport: string;
   shareXHead: (solved: number, total: number) => string;
   shareXFirst: string;
   shareHandson: string;

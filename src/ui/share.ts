@@ -43,6 +43,9 @@ export function shareMessageLinkedIn(ctx: ShareContext): string {
     '',
     u.shareCta,
     SHARE_URL,
+    '',
+    u.shareSupport,
+    COFFEE_URL,
   ];
   return parts.filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n');
 }
