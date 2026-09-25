@@ -432,7 +432,7 @@ export const fa: Catalog = {
     undoMeta: 'Ø¨Ù‡ Ù…Ø±Ø­Ù„Ù‡ Ù‚Ø¨Ù„ Ø¨Ø±Ú¯Ø´ØªÛŒØ¯.',
     correct: 'âœ“ Ø¯Ø±Ø³Øª.',
     levelSolvedBanner: '*** Ù…Ø±Ø­Ù„Ù‡ Ø­Ù„ Ø´Ø¯ ***',
-    partyMode: '*** Ø­Ø§Ù„Øª Ø¬Ø´Ù† *** Ú©Ø§Ù†ÙÛŒ Ù…ÛŒâ€ŒØ¢ÛŒØ¯ â€” Ø¯Ú©Ù…Ù‡â€ŒÙ‡Ø§ÛŒ Ø§Ø´ØªØ±Ø§Ú© Ù¾Ø§ÛŒÛŒÙ†.',
+    partyMode: '*** جشن گرفتیم *** کاغذ رنگی می‌ریزد — دکمه‌های اشتراک پایین.',
     github: 'GitHub',
     githubTitle: 'GitHub â€” Ø³ÙˆØ±Ø³ Ùˆ Ø§ÛŒØ´Ùˆ',
     support: 'Buy me a coffee',
@@ -803,4 +803,5 @@ export const fa: Catalog = {
   },
   levels: faLevels,
 };
+
 

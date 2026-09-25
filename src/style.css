@@ -211,7 +211,7 @@ html[dir='rtl'] .lang-switch {
 .nav-bars::after {
   content: '';
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
 }
 
 .nav-bars::before {
@@ -553,7 +553,8 @@ button.ghost {
   .md-table {
     font-size: 11.5px;
   }
-  .celebrate-stats {
+  /* align follows UI direction */
+.celebrate-stats {
     max-width: 100%;
   }
 }
@@ -929,7 +930,7 @@ button.ghost {
 
 .legend-list {
   margin: 6px 0 0;
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 
 .legend-list li {
@@ -1142,7 +1143,7 @@ button.ghost {
 .field-box ul,
 .learning-box ul {
   margin: 6px 0 0;
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 
 .field-box li,
@@ -1307,6 +1308,7 @@ button.ghost {
   font-size: 15px;
 }
 
+/* align follows UI direction */
 .celebrate-stats {
   margin: 0 auto 12px;
   max-width: 420px;
@@ -1314,7 +1316,7 @@ button.ghost {
   background: var(--ink);
   border-radius: 10px;
   padding: 10px 12px;
-  text-align: left;
+  text-align: start;
 }
 
 .celebrate-stats p {
@@ -1348,7 +1350,7 @@ button.ghost {
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
-  text-align: left;
+  text-align: start;
 }
 
 .learned-preview {
@@ -1362,7 +1364,7 @@ button.ghost {
 
 .learned-preview ul {
   margin: 6px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   max-height: 120px;
   overflow: auto;
 }
@@ -1653,7 +1655,7 @@ samp {
 .term-ghost {
   position: absolute;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   height: 100%;
   display: none;
   align-items: center;
@@ -1773,7 +1775,7 @@ samp {
 
 .modal .markdown ul {
   margin: 0 0 12px;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .modal .markdown li {
@@ -1798,7 +1800,7 @@ samp {
 .md-table td {
   border-bottom: 1px solid var(--line);
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 
@@ -1852,7 +1854,7 @@ samp {
   border-radius: 10px;
   padding: 10px;
   background: var(--ink);
-  text-align: left;
+  text-align: start;
   width: 100%;
 }
 
@@ -2171,7 +2173,8 @@ samp {
     font-size: 11.5px;
   }
 
-  .celebrate-stats {
+  /* align follows UI direction */
+.celebrate-stats {
     max-width: 100%;
   }
 }
@@ -2213,4 +2216,37 @@ samp {
   .term-input-row {
     padding-bottom: max(6px, env(safe-area-inset-bottom));
   }
+}
+
+
+/* —— RTL audit: UI chrome follows writing mode; code/terminal stay LTR —— */
+html[dir='rtl'] .level-row,
+html[dir='rtl'] .celebrate-stats,
+html[dir='rtl'] .share-block,
+html[dir='rtl'] .learned-preview,
+html[dir='rtl'] .modal .markdown,
+html[dir='rtl'] .ui-help,
+html[dir='rtl'] .legend-list,
+html[dir='rtl'] .goal-list,
+html[dir='rtl'] .learning-box,
+html[dir='rtl'] .field-box,
+html[dir='rtl'] .status-bar,
+html[dir='rtl'] .dock {
+  text-align: start;
+}
+
+html[dir='rtl'] .level-row .id,
+html[dir='rtl'] .goal-list .g-label,
+html[dir='rtl'] .goal-list .g-detail,
+html[dir='rtl'] .goal-list code,
+html[dir='rtl'] .next-row,
+html[dir='rtl'] .next-row .g-cmd {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: isolate;
+}
+
+html[dir='rtl'] .term-ghost {
+  inset-inline-start: 0;
+  left: auto;
 }
