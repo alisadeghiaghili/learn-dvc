@@ -556,17 +556,17 @@ export const fa: Catalog = {
     coachFooter: 'Ø¨Ø±Ø§ÛŒ ØªÚ©Ø±Ø§Ø± Ø§ÛŒÙ† ÙÙ‡Ø±Ø³Øª `steps` Â· `hint` Â· `show goal` ØªØ§ÛŒÙ¾ Ú©Ù†ÛŒØ¯',
     shareLinkedInHead:
       'خیلی خوشحالم — تازه Data Version Control کاربردی را با LearnDVC یاد گرفتم!',
-    shareStarting: 'Ø³ÙØ± DVC Ù…Ù† Ø´Ø±ÙˆØ¹ Ø´Ø¯.',
-    shareLatestWin: (name, id) => `Ø¢Ø®Ø±ÛŒÙ† Ù…ÙˆÙÙ‚ÛŒØª: ${name} (${id})`,
+    shareStarting: 'سفر یادگیری‌ام با DVC همین‌جا جدی شد.',
+    shareLatestWin: (name, id) => `تازه‌ترین قدم: ${name} (${id})`,
     shareCommands: (n, par) => ` â€” ${n} ÙØ±Ù…Ø§Ù† (Ø§ÛŒØ¯Ù‡â€ŒØ¢Ù„ ${par})`,
-    shareLearnedSoFar: 'Ú†Ù‡ Ú†ÛŒØ²ÛŒ ØªØ§Ú©Ù†ÙˆÙ† ÛŒØ§Ø¯ Ú¯Ø±ÙØªÙ‡â€ŒØ§Ù…:',
+    shareLearnedSoFar: 'تا اینجا این‌ها را یاد گرفته‌ام:',
     shareProgress: (solved, total) => `Ù¾ÛŒØ´Ø±ÙØª: ${solved}/${total} Ù…Ø±Ø­Ù„Ù‡.`,
     shareCta:
       'اگر با داده یا مدل ML سر و کار دارید، امتحانش کنید — رایگان و بدون ثبت‌نام:',
     shareXHead: (solved, total) =>
       `خوشحالم که دارم DVC را با LearnDVC یاد می‌گیرم (${solved}/${total} مرحله).`,
-    shareXFirst: 'Ø³Ù†Ø¯Ø¨Ø§Ú©Ø³ Ø¹Ù…Ù„ÛŒ.',
-    shareHandson: 'Ø³Ù†Ø¯Ø¨Ø§Ú©Ø³ Ø¹Ù…Ù„ÛŒ.',
+    shareXFirst: 'تمرین عملی در مرورگر.',
+    shareHandson: 'تمرین عملی در مرورگر.',
     titleLearnDvc: 'LearnDVC â€” Ø¢Ù…ÙˆØ²Ø´ Data Version Control',
     welcomeTitle: 'LearnDVC',
     welcomeIntro: 'Ø¢Ù…ÙˆØ²Ø´ ØªØ¹Ø§Ù…Ù„ÛŒ **Data Version Control** â€” Ø³Ù†Ø¯Ø¨Ø§Ú©Ø³ + Ù…Ø±Ø§Ø­Ù„ Ù‡Ø¯Ø§ÛŒØªâ€ŒØ´Ø¯Ù‡.',
