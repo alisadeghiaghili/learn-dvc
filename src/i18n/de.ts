@@ -433,7 +433,7 @@ export const de: Catalog = {
     undoMeta: 'Rückgängig.',
     correct: '✓ Richtig.',
     levelSolvedBanner: '*** LEVEL GELÖST ***',
-    partyMode: '*** PARTY MODE *** Konfetti kommt — Share-Buttons unten.',
+    partyMode: '*** FEIERMODUS *** Konfetti kommt — Share-Buttons unten.',
     github: 'GitHub',
     githubTitle: 'GitHub — Quelle & Issues',
     support: 'Buy me a coffee',
@@ -567,8 +567,8 @@ export const de: Catalog = {
       'Wenn du mit ML-Daten oder Modellen arbeitest, probier es — kostenlos, ohne Login:',
     shareXHead: (solved, total) =>
       `Richtig glücklich — DVC lernen auf LearnDVC (${solved}/${total} Levels).`,
-    shareXFirst: 'Hands-on Sandbox.',
-    shareHandson: 'Hands-on Sandbox.',
+    shareXFirst: 'Praxis-Sandbox.',
+    shareHandson: 'Praxis-Sandbox.',
     titleLearnDvc: 'LearnDVC — Data Version Control Tutorial',
     welcomeTitle: 'LearnDVC',
     welcomeIntro:
@@ -683,7 +683,7 @@ export const de: Catalog = {
       },
       {
         q: 'Was gehört in einen ernsthaften ML-PR-Body?',
-        a: ['Nur Vibes', 'params diff + metrics diff + plots diff', 'Nur der Code-Diff'],
+        a: ['Ohne Belege', 'params diff + metrics diff + plots diff', 'Nur der Code-Diff'],
         correct: 1,
       },
     ],
