@@ -213,6 +213,11 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           'Daily collaboration store ≠ disaster recovery store.\n\nYou want `push` to the team remote and an occasional `push -r backup`.',
       },
+      {
+        title: 'Default vs -r',
+        markdown:
+          'Default remote is what `push`/`pull` use. `push -r backup` is deliberate.\n\nIf you mix them up, teammates fetch from the wrong store.',
+      },
     ],
     startState: tracked('data/data.xml'),
     goal: {
@@ -256,6 +261,10 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           '`fetch` stocks the warehouse (cache).\n`pull` also delivers to the kitchen (workspace).\n\nUse fetch when you want the objects but not a rewritten tree.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: (() => {
       const s = tracked('data/data.xml', { remote: true, cache: false });
@@ -295,6 +304,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Stage flags that production uses',
         markdown:
           '- `--wdir src` — run as if cwd is `src/`\n- `--always-changed` — always dirty on repro\n- `--no-cache` outs — track identity, skip cache bytes\n\nThese are not cosmetics; they encode *how* the stage lies or stays honest.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: (() => {
@@ -341,6 +354,10 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           '**foreach stages** = product matrix (must ship, reproducible contract).\n**dvc exp** = search (many tries, pick a winner).\n\nMixing them creates pipelines nobody can explain in an incident.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -378,6 +395,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Search without babysitting',
         markdown: 'Queue is a job board for hyperparameter sets. `queue start` / `--run-all` drains it.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -413,6 +434,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'Winner is not a release',
         markdown: '`exp apply` = write winning params back.\n`dvc repro` = rebuild what those params produce.\n`dvc push` = share the bytes.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -455,6 +480,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Review like a grown-up',
         markdown: 'Code review without metric evidence is superstition. DVC gives you two diffs:\n\n- `dvc params diff`\n- `dvc metrics diff`',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -496,6 +525,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Plots are not decoration',
         markdown: 'If the metric moved, show the curve. `dvc plots show` / `dvc plots diff`.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -527,6 +560,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'A pin with consequences',
         markdown: 'Freeze protects a production artifact. It also hides staleness if you forget it.\n\nName the unfreeze owner in the PR template.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: (() => {
@@ -582,6 +619,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Contract vs receipt',
         markdown: '`cat dvc.yaml` answers *what*.\n`cat dvc.lock` answers *what actually ran*.\n\nOnly the second is evidence.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: (() => {
       const s = pipelineRepo();
@@ -630,6 +671,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Borrow, do not hoard',
         markdown: '`dvc get` = copy (no version pin).\n`dvc import` = copy + version pin + update path.\n\nPrefer import for anything a pipeline depends on.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: (() => {
       const s = baseRepo();
@@ -668,6 +713,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'The three-line CI religion',
         markdown: '```\ndvc pull\ndvc repro\ndvc cml "…"\n```\n\nEverything else is plumbing.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -711,6 +760,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Stop copy-pasting loss curves',
         markdown: 'DVCLive writes metrics/plots in the shape DVC already understands.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -749,6 +802,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'The only safe data PR',
         markdown: '1. Change data\n2. `dvc status`\n3. `dvc add` + `dvc commit`\n4. `git add` **pointer files only**\n5. `git commit`\n\nAnything else is a data leak or a lie.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: tracked('data/data.xml', { remote: true }),
@@ -796,6 +853,10 @@ export const advancedLevels: LevelDef[] = [
         title: '2am checklist',
         markdown: '1. Which commit shipped?\n2. Which `.dvc` pointers?\n3. Which md5s?\n4. Are those objects on remote?\n5. Checkout that commit + `dvc checkout`',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: tracked('data/data.xml', { remote: true, cache: false }),
     goal: {
@@ -838,6 +899,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'The handoff contract',
         markdown:
           'A change is shared only when:\n\n1. bytes are on the **DVC remote**\n2. the **pointer** is in Git history\n3. `dvc pull` on a clean tree restores it\n\nSkip any line and you have a private laptop artifact.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: (() => {
@@ -901,6 +966,10 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           '`dvc.api` is for **apps** that read data.\n`dvc checkout` is for **workspaces** that need files.\n\nSame md5 contract either way.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: tracked('data/data.xml', { remote: true }),
     goal: {
@@ -932,6 +1001,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'The minimum serious PR',
         markdown: '1. `dvc params diff`\n2. `dvc repro`\n3. `dvc metrics diff`\n4. `dvc plots diff`\n\nPaste all four into review.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -974,6 +1047,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'When two people touch the same contract',
         markdown:
           'Teammate A changes `params.yaml`.\nTeammate B changes a stage command.\n\nGit will fight over `dvc.lock`.\n\n**Do not hand-edit lock.** Repro, then commit the new receipt with a clear message.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: (() => {
@@ -1037,6 +1114,10 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           '`dvc get` copies.\n`dvc import` copies **and** pins.\n`dvc update` moves the pin on purpose.\n\nRead `cat …​.dvc` before you update — know what you are leaving.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: (() => {
       const s = baseRepo();
@@ -1079,6 +1160,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Graduation',
         markdown:
           'No new commands. **One coherent story.**\n\nIf you can run this drill from memory on a clean repo, you are ready for production DVC.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: tracked('data/data.xml', { remote: true }),
@@ -1129,6 +1214,10 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           'The only durable story is:\n\n1. **Git** has the pointer history\n2. **DVC remote** has the bytes\n3. `git clone` + `dvc pull` rebuilds the world\n\nIf either side is missing, you are doing archaeology.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: tracked('data/data.xml', { remote: true }),
     goal: {
@@ -1164,6 +1253,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Pick the boring correct tool',
         markdown: 'If you need **repro, exp, cache, pipeline** → DVC.\nIf you need **a big binary in a git remote** → LFS may suffice.\n\nFor ML, the answer is almost always DVC.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: tracked('data/data.xml'),
     goal: {
@@ -1195,6 +1288,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'CI that a security team will approve',
         markdown: 'Secrets in the vault. Remote config in Git. Bytes in DVC remote.\n\nThe YAML is boring on purpose.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -1237,6 +1334,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'From winner to release',
         markdown: 'Search (`exp`) → choose (`show`) → apply → **build** (`repro`) → **share** (`push`) → **remember** (`git commit`).',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -1282,6 +1383,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Read the matrix, not the mean',
         markdown: '`dvc plots show --template confusion` then `dvc plots diff`.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -1317,6 +1422,10 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'When bytes live elsewhere',
         markdown: '`-O` / cache:false means: track the **name**, not the warehouse.\n\nUse for S3 tables, shared disks, feature stores.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -1356,6 +1465,10 @@ export const advancedLevels: LevelDef[] = [
         markdown:
           'Safe to share: remote URL, profile name, region.\nNever safe: `secret_access_key`, tokens, passwords.\n\n`dvc remote modify` distinguishes them — keep secrets out of Git.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: baseRepo(),
     goal: {
@@ -1392,6 +1505,10 @@ export const advancedLevels: LevelDef[] = [
         title: 'Open lab',
         markdown:
           'This level **does not hand you a recipe**.\n\nGoal is a state, not a command list. Think, type, verify with `dvc status`.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: tracked('data/data.xml', { remote: true }),

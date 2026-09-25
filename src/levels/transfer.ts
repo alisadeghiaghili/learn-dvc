@@ -108,6 +108,10 @@ export const transferLevels: LevelDef[] = [
         markdown:
           'This level does **not** teach new flags.\n\nIt asks you to **read evidence** and act on it.\n\n`cat data/data.xml.dvc` — what do you see?\n`dvc status` — is the workspace honest?',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: trackedRemote(),
     goal: {
@@ -143,6 +147,10 @@ export const transferLevels: LevelDef[] = [
         title: 'No safety net',
         markdown:
           'You are the on-call engineer. Dataset changed. Team needs it tomorrow.\n\n**Finish the handoff.**',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: trackedRemote(),
@@ -193,6 +201,10 @@ export const transferLevels: LevelDef[] = [
         markdown:
           'No copy-paste solution first.\n\nThink: what must the stage **depend on**? What should it **emit**?\n\nThen prove it with repro + dag.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -232,6 +244,10 @@ export const transferLevels: LevelDef[] = [
         title: 'First try is wrong on purpose',
         markdown:
           'Run a **bad** hyperparameter first.\n\nThen a better one. Choose with `exp show`.\n\nThen recover to a consistent release state.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
@@ -276,6 +292,10 @@ export const transferLevels: LevelDef[] = [
         markdown:
           'Change a hyperparameter.\n\nGather **all three** diffs.\n\nIf effect is missing, this level is not passed by “running commands” alone — the goal is a consistent evidence pack.',
       },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+      },
     ],
     startState: pipelineRepo(),
     goal: {
@@ -316,6 +336,10 @@ export const transferLevels: LevelDef[] = [
       {
         title: 'The file is gone',
         markdown: '`data/data.xml` disappeared from disk.\n\n**Repair without panicking.**',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: (() => {
@@ -363,6 +387,10 @@ export const transferLevels: LevelDef[] = [
       {
         title: 'The receipt must be true',
         markdown: 'Change params. See status complain.\n\nFix with `repro`, not with an editor.',
+      },
+      {
+        title: 'Production note',
+        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
       },
     ],
     startState: pipelineRepo(),
