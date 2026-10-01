@@ -436,6 +436,8 @@ export const de: Catalog = {
     partyMode: '*** FEIERMODUS *** Konfetti kommt — Share-Buttons unten.',
     github: 'GitHub',
     githubTitle: 'GitHub — Quelle & Issues',
+    visitors: (count) => `${count} Lernende`,
+    visitorsTitle: 'Eindeutige Lernende, die hier DVC üben',
     support: 'Buy me a coffee',
     supportTitle: 'Unterstütze den Publisher',
     guidePanel: 'Lern-Guide-Panel',

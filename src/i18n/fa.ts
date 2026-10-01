@@ -1,4 +1,4 @@
-﻿/** Persian catalog — full teaching copy. Commands and CLI stay English. UI is RTL. */
+/** Persian catalog — full teaching copy. Commands and CLI stay English. UI is RTL. */
 
 import type { Catalog } from './types';
 import { faLevels } from './fa-levels';
@@ -435,6 +435,8 @@ export const fa: Catalog = {
     partyMode: '*** جشن گرفتیم *** کاغذ رنگی می‌ریزد — دکمه‌های اشتراک پایین.',
     github: 'GitHub',
     githubTitle: 'GitHub — سورس و ایشو',
+    visitors: (count) => `${count} یادگیرنده`,
+    visitorsTitle: 'تعداد افراد یکتایی که در این سامانه DVC را تمرین کرده‌اند',
     support: 'Buy me a coffee',
     supportTitle: 'از ناشر حمایت کنید',
     guidePanel: 'پنل راهنمای یادگیری',
