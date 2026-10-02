@@ -588,8 +588,6 @@ export const fa: Catalog = {
       'انتشار و نگهداری توسط **Ali Sadeghi Aghili** — برنامه‌نویس، مهندس/دانشمند داده، مهندس ML. [linktr.ee/aliaghili](https://linktr.ee/aliaghili)',
     welcomeGithub: '- [GitHub — سورس و ایشو](https://github.com/alisadeghiaghili/learn-dvc)',
     welcomeCoffee: 'Buy Me a Coffee (از ناشر حمایت می‌کند):',
-    welcomeToolbar:
-      'نوار ابزار: **درس** (تکرار مقدمه) · **GitHub** · **Buy me a coffee**.',
     sandbox: 'سندباکس',
     openLevels: 'باز کردن مرحله‌ها',
     useIt: 'چطور استفاده کنید:',

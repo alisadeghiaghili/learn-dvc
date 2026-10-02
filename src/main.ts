@@ -41,8 +41,6 @@ if (!params.has('NODEMO')) {
         u.welcomeCoffee,
         '',
         COFFEE_BUTTON_HTML,
-        '',
-        u.welcomeToolbar,
       ].join('\n'),
     ),
     actions: [

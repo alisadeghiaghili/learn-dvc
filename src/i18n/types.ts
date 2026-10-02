@@ -206,7 +206,6 @@ export interface UiCopy {
   welcomePublisherBody: string;
   welcomeGithub: string;
   welcomeCoffee: string;
-  welcomeToolbar: string;
   sandbox: string;
   openLevels: string;
   useIt: string;

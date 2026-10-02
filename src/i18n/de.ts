@@ -591,8 +591,6 @@ export const de: Catalog = {
       'Veröffentlicht und gepflegt von **Ali Sadeghi Aghili** — Programmer, Data Engineer / Scientist, ML Engineer. [linktr.ee/aliaghili](https://linktr.ee/aliaghili)',
     welcomeGithub: '- [GitHub — Quelle & Issues](https://github.com/alisadeghiaghili/learn-dvc)',
     welcomeCoffee: 'Buy Me a Coffee (unterstützt den Publisher):',
-    welcomeToolbar:
-      'Toolbar: **Lektion** (Intro wiederholen) · **GitHub** · **Buy me a coffee**.',
     sandbox: 'Sandbox',
     openLevels: 'Levels öffnen',
     useIt: 'So nutzt du es:',
