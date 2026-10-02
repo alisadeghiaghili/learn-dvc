@@ -1030,23 +1030,24 @@ export const advancedLevels: LevelDef[] = [
     name: 'Lock/pointer conflict in a data PR',
     difficulty: 5,
     par: 6,
-    hint: 'dvc status; dvc repro; git add dvc.lock params.yaml; git commit -m "pipeline: resolve lock after param change"; dvc status',
+    hint: 'git merge origin/main; dvc status; dvc repro; git add dvc.lock params.yaml; git commit -m "pipeline: resolve lock after param change"; dvc status',
     objective:
-      'Resolve a realistic PR conflict: params changed, lock is stale, pointer still valid. Repro, commit the receipt, leave status clean.',
+      'Resolve a realistic PR conflict: git merge encounters conflict in dvc.lock. Never edit hashes manually; run `dvc repro`, commit the new receipt, and leave status clean.',
     learning: [
-      'yaml is intent, lock is receipt — stale lock blocks honest review',
+      'yaml is intent, lock is receipt — git merge conflict on dvc.lock is normal in teams',
       'Pointer conflict is data; lock conflict is pipeline — fix order matters',
+      'Never hand-merge lock hashes; re-run `dvc repro` to regenerate the verified receipt',
       'status after commit is the merge acceptance test',
     ],
     fieldNotes: [
-      'Conflict playbook: status → repro → commit lock+yaml → status',
-      'Never hand-merge lock hashes; re-run repro and take the new receipt',
+      'Conflict playbook: git merge → dvc status → dvc repro → commit lock+yaml → status',
+      'Hand-editing hashes produces invalid signatures that break run-cache',
     ],
     startDialog: [
       {
         title: 'When two people touch the same contract',
         markdown:
-          'Teammate A changes `params.yaml`.\nTeammate B changes a stage command.\n\nGit will fight over `dvc.lock`.\n\n**Do not hand-edit lock.** Repro, then commit the new receipt with a clear message.',
+          'Teammate A updates `params.yaml` on main.\nYou updated stage code on your branch.\n\nRunning `git merge origin/main` triggers a conflict on `dvc.lock`.\n\n**Do not hand-edit lock hashes.** Inspect with `dvc status`, run `dvc repro` to recompute the true receipt, then commit.',
       },
       {
         title: 'Production note',
@@ -1447,23 +1448,23 @@ export const advancedLevels: LevelDef[] = [
     name: 'Remote auth without leaking secrets',
     difficulty: 5,
     par: 5,
-    hint: 'dvc remote add team s3://ml-team/dvcstore; dvc remote modify team profile ml-prod; dvc remote modify team secret_access_key CI_SECRET; dvc remote list',
+    hint: 'dvc remote add team s3://ml-team/dvcstore; dvc remote modify team profile ml-prod; dvc remote modify --local team secret_access_key CI_SECRET; dvc remote list',
     objective:
-      'Configure a team remote with non-secret options in config and secrets via env/CI — never commit credentials.',
+      'Configure a team remote with non-secret options in config and secrets in local config via --local — never commit credentials.',
     learning: [
       'URL and non-secret options live in .dvc/config (shared via Git)',
-      'Secrets (keys, tokens) must come from env / CI secrets / cloud roles',
-      'remote modify encodes auth policy without leaking secrets',
+      'Secrets (keys, tokens) must be saved with --local in .dvc/config.local (gitignored)',
+      'remote modify --local keeps credentials completely out of Git commits',
     ],
     fieldNotes: [
       'Audit .dvc/config in PR review — no long-lived keys, ever',
-      'Prefer OIDC/instance roles over access_key_id in CI',
+      'Use --local for machine-specific secrets; prefer OIDC/instance roles in CI',
     ],
     startDialog: [
       {
         title: 'Credentials are not project files',
         markdown:
-          'Safe to share: remote URL, profile name, region.\nNever safe: `secret_access_key`, tokens, passwords.\n\n`dvc remote modify` distinguishes them — keep secrets out of Git.',
+          'Safe to share: remote URL, profile name, region (in `.dvc/config`).\nNever safe: `secret_access_key`, tokens, passwords.\n\nUse `dvc remote modify --local` to store secrets in `.dvc/config.local` (which is gitignored).\n\nKeep secrets completely out of Git commits.',
       },
       {
         title: 'Production note',
@@ -1473,12 +1474,15 @@ export const advancedLevels: LevelDef[] = [
     startState: baseRepo(),
     goal: {
       kind: 'allOf',
-      checks: [{ kind: 'remoteConfigured', name: 'team' }],
+      checks: [
+        { kind: 'remoteConfigured', name: 'team' },
+        { kind: 'workspaceHas', paths: ['.dvc/config.local'] },
+      ],
     },
     solution: [
       'dvc remote add team s3://ml-team/dvcstore',
       'dvc remote modify team profile ml-prod',
-      'dvc remote modify team secret_access_key CI_SECRET',
+      'dvc remote modify --local team secret_access_key CI_SECRET',
       'dvc remote list',
     ],
   },

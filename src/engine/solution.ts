@@ -212,6 +212,12 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
     return hit ? ok(`committed (${hit.hash})`) : fail(`commit with message containing "${msg}"`);
   }
 
+  if (/^git\s+merge\b/i.test(cmd)) {
+    return commandInHistory(state, (h) => /^git\s+merge\b/i.test(h))
+      ? ok('conflict examined')
+      : { command: cmd, done: false, note: 'run git merge' };
+  }
+
   if (/^dvc\s+add\b/.test(cmd)) {
     const path = parseArgs(cmd).filter((t) => !t.startsWith('-'))[2];
     const f = path ? state.files[path] : undefined;
@@ -228,6 +234,14 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
       (f) => f.tracked && (state.dataVersions[f.path] ?? 0) > 0,
     );
     return modified ? ok('data pointers committed to cache') : fail('modify data, then run `dvc commit`');
+  }
+
+  if (/^dvc\s+remote\s+modify\b/i.test(cmd)) {
+    const isLocal = cmd.includes('--local');
+    if (isLocal && !state.files['.dvc/config.local']) return fail('modify remote with --local');
+    return commandInHistory(state, (h) => matchSolutionCommand(h, cmd))
+      ? ok('remote modified')
+      : fail('modify remote');
   }
 
   if (/^dvc\s+remote\s+add\b/.test(cmd)) {

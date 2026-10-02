@@ -17,6 +17,8 @@ export interface WorkspaceFile {
   present: boolean;
   /** Listed in a .gitignore (data files after dvc add). */
   gitignored: boolean;
+  /** True when this path represents a directory of files (.dir manifest). */
+  isDir?: boolean;
 }
 
 export interface DvcPointer {

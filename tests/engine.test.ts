@@ -86,6 +86,53 @@ describe('engine basics', () => {
     expect(state.experiments.length).toBe(1);
     expect(state.params.lr).toBe(0.05);
   });
+
+  it('tracks dataset directories with .dir hash and manifest', () => {
+    const s = sandboxState();
+    s.files['data/images/img1.jpg'] = {
+      path: 'data/images/img1.jpg',
+      kind: 'data',
+      contentId: 'abc1',
+      tracked: false,
+      present: true,
+      gitignored: false,
+    };
+    s.files['data/images'] = {
+      path: 'data/images',
+      kind: 'data',
+      contentId: 'dir0',
+      tracked: false,
+      present: true,
+      gitignored: false,
+      isDir: true,
+    };
+    const { state, outputs } = runAll(s, ['dvc add data/images']);
+    const f = state.files['data/images'];
+    expect(f.tracked).toBe(true);
+    expect(f.pointerMd5).toMatch(/\.dir$/);
+    expect(state.files['data/images.dvc'].present).toBe(true);
+    expect(outputs[0]).toContain('(directory manifest)');
+  });
+
+  it('dvc remote modify --local saves secrets in .dvc/config.local', () => {
+    const s = sandboxState();
+    const { state, outputs } = runAll(s, [
+      'dvc remote add testrem s3://mybucket',
+      'dvc remote modify --local testrem secret_access_key MY_SECRET',
+    ]);
+    expect(state.files['.dvc/config.local']).toBeDefined();
+    expect(state.files['.dvc/config.local'].gitignored).toBe(true);
+    expect(outputs[1]).toContain('Option stored locally in .dvc/config.local');
+  });
+
+  it('git merge reports dvc.lock conflict and git checkout --ours updates path', () => {
+    const s = sandboxState();
+    const { outputs: mergeOut } = runAll(s, ['git merge origin/main']);
+    expect(mergeOut[0]).toContain('CONFLICT (content): Merge conflict in dvc.lock');
+
+    const { outputs: checkoutOut } = runAll(s, ['git checkout --ours dvc.lock']);
+    expect(checkoutOut[0]).toContain('Updated 1 path from the ours tree');
+  });
 });
 
 describe('level solutions solve goals', () => {

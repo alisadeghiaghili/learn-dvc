@@ -245,6 +245,64 @@ export const basicsLevels: LevelDef[] = [
       'git commit -m "Dataset updates"',
     ],
   },
+  {
+    id: 'basics-4',
+    series: 'basics',
+    seriesTitle: 'Basics',
+    name: 'Track a dataset directory',
+    difficulty: 2,
+    par: 3,
+    hint: 'dvc add data/images; git add data/images.dvc data/.gitignore; git commit -m "Track raw images directory"',
+    objective:
+      'Track a dataset directory (`data/images`) with DVC so all files inside it are tracked under a single directory manifest (.dir).',
+    learning: [
+      'DVC tracks folders as a single unit via a .dir manifest hash',
+      'The pointer file is <folder>.dvc (data/images.dvc)',
+      'Git ignores the entire folder; cache stores individual file objects plus the manifest',
+    ],
+    fieldNotes: [
+      'Image, audio, or chunked datasets belong in a tracked directory, not hundreds of individual .dvc files',
+      'PR reviews inspect one .dir hash change instead of massive git history churn',
+    ],
+    startDialog: [
+      {
+        title: 'Single file vs Directory in DVC',
+        markdown:
+          'In computer vision or audio ML, datasets consist of folders containing thousands of images or audio clips.\n\nRunning `dvc add` on every single file would create thousands of `.dvc` files in Git!\n\nInstead, track the entire directory:\n```\ndvc add data/images\n```\n\nDVC generates a **directory manifest** with a `.dir` hash and one pointer: `data/images.dvc`.',
+      },
+      {
+        title: 'Commit the directory pointer',
+        markdown:
+          '```\ngit add data/images.dvc data/.gitignore\ngit commit -m "Track raw images directory"\n```\n\nGit versions only the lightweight pointer. All images are safely versioned in DVC storage.',
+      },
+    ],
+    startState: (() => {
+      const s = rawRepo();
+      delete s.files['data/data.xml'];
+      s.files['data/images/img1.jpg'] = makeFile('data/images/img1.jpg', 'data');
+      s.files['data/images/img2.jpg'] = makeFile('data/images/img2.jpg', 'data');
+      s.files['data/images'] = makeFile('data/images', 'data', { isDir: true });
+      return s;
+    })(),
+    goal: {
+      kind: 'allOf',
+      checks: [
+        { kind: 'tracked', paths: ['data/images'] },
+        { kind: 'notDirty' },
+        {
+          kind: 'gitCommitMessageIncludes',
+          text: 'images',
+          requireFilesAny: ['data/images.dvc'],
+        },
+        { kind: 'cacheHas', md5s: ['tracked:data/images'] },
+      ],
+    },
+    solution: [
+      'dvc add data/images',
+      'git add data/images.dvc data/.gitignore',
+      'git commit -m "Track raw images directory"',
+    ],
+  },
 ];
 
 export const remoteLevels: LevelDef[] = [

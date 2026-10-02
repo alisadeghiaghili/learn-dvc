@@ -80,6 +80,33 @@ export const faLevels: Record<string, LevelCopy> = {
       },
     ],
   },
+  'basics-4': {
+    seriesTitle: 'مبانی',
+    name: 'ردگیری دایرکتوری دیتاست',
+    objective:
+      'یک دایرکتوری دیتاست (`data/images`) را با DVC ردگیری کنید تا تمام فایل‌های درون آن با یک شناسه مانیفست (.dir) ثبت شوند.',
+    learning: [
+      'DVC پوشه‌ها را با هش مانیفست .dir به‌صورت یک واحد یکپارچه ردگیری می‌کند',
+      'فایل اشاره‌گر به‌صورت <folder>.dvc ذخیره می‌شود (data/images.dvc)',
+      'کل پوشه در gitignore قرار می‌گیرد و گیت فقط فایل اشاره‌گر را نسخه می‌کند',
+    ],
+    fieldNotes: [
+      'دیتاست‌های تصویری و صوتی باید به‌صورت دایرکتوری ردگیری شوند، نه صدها فایل مجزای .dvc',
+      'ریویوی PR به‌جای شلوغی گیت، فقط تغییر یک هش .dir را بررسی می‌کند',
+    ],
+    startDialog: [
+      {
+        title: 'تک‌فایل در برابر دایرکتوری در DVC',
+        markdown:
+          'در یادگیری ماشین (به‌ویژه بینایی ماشین)، دیتاست‌ها شامل پوشه‌هایی با هزاران تصویر هستند.\n\nاگر برای هر فایل جداگانه `dvc add` بزنید، هزاران فایل `.dvc` ساخته می‌شود!\n\nبه‌جای آن کل پوشه را ردگیری کنید:\n```\ndvc add data/images\n```\n\nابزار DVC یک مانیفست با پسوند `.dir` و یک اشاره‌گر واحد می‌سازد.',
+      },
+      {
+        title: 'کامیت اشاره‌گر دایرکتوری',
+        markdown:
+          '```\ngit add data/images.dvc data/.gitignore\ngit commit -m "Track raw images directory"\n```\n\nگیت فقط فایل اشاره‌گر سبک را نسخه می‌کند و بایت‌های تصاویر در کش DVC نگهداری می‌شوند.',
+      },
+    ],
+  },
   'remote-1': {
     seriesTitle: 'Remoteها',
     name: 'پیکربندی remote',
@@ -771,10 +798,10 @@ export const faLevels: Record<string, LevelCopy> = {
   'collab-4': {
     seriesTitle: 'همکاری و CI',
     name: 'تعارض lock/pointer در PR داده',
-    objective: 'تعارض PR را حل کنید: پارامتر عوض شده، lock کهنه. repro، commit رسید، status تمیز.',
-    learning: ['yaml نیت، lock رسید', 'lock را دستی merge نکنید'],
-    fieldNotes: ['روال: status → repro → commit → status'],
-    startDialog: [{ title: 'دو نفر، یک قرارداد', markdown: 'repro، بعد رسید جدید را commit کنید.' }],
+    objective: 'تعارض ادغام گیت در dvc.lock را حل کنید. هرگز هش‌ها را دستی دستکاری نکنید؛ با `dvc repro` رسید معتبر جدید تولید و کامیت کنید.',
+    learning: ['yaml نیت، lock رسید', 'تعارض در dvc.lock هنگام merge طبیعی است', 'lock را دستی merge نکنید؛ با repro بازتولید کنید'],
+    fieldNotes: ['روال: git merge → dvc status → dvc repro → commit → status'],
+    startDialog: [{ title: 'دو نفر، یک قرارداد', markdown: 'هنگام `git merge origin/main` تعارض در `dvc.lock` رخ می‌دهد. با `dvc repro` رسید جدید بگیرید و کامیت کنید.' }],
   },
   'reg-4': {
     seriesTitle: 'رجیستری و بازاستفاده',
@@ -843,10 +870,10 @@ export const faLevels: Record<string, LevelCopy> = {
   'mastery-7': {
     seriesTitle: 'Remoteها',
     name: 'auth مسیر بدون نشتی secret',
-    objective: 'remote تیم را پیکربندی کنید: non-secret در config، secret از env/CI — credentials هرگز commit نشود.',
-    learning: ['URL و non-secret در .dvc/config', 'secret از env/CI/role', 'remote modify سیاست auth را کد می‌کند'],
-    fieldNotes: ['.dvc/config را در PR ببینید — کلید بلندمدت نه', 'OIDC/role بهتر از access_key_id در CI'],
-    startDialog: [{ title: 'credential فایل پروژه نیست', markdown: 'URL/پروفایل را به اشتراک بگذارید. `secret_access_key` هرگز.' }],
+    objective: 'remote تیم را پیکربندی کنید: non-secret در config و secret در کانفیگ محلی با --local — credentials هرگز commit نشود.',
+    learning: ['URL و non-secret در .dvc/config', 'سکرت‌ها با --local در .dvc/config.local (که gitignore است)', 'remote modify --local مانع نشت به گیت می‌شود'],
+    fieldNotes: ['.dvc/config را در PR ببینید — کلید بلندمدت نه', 'از --local برای سکرت‌های محلی سیستم استفاده کنید'],
+    startDialog: [{ title: 'credential فایل پروژه نیست', markdown: 'URL/پروفایل را به اشتراک بگذارید. سکرت‌ها را با `dvc remote modify --local` در config.local ثبت کنید.' }],
   },
   'mastery-8': {
     seriesTitle: 'همکاری و CI',

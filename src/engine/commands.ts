@@ -678,6 +678,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       // git checkout HEAD~1
       // git checkout HEAD~1 data/data.xml.dvc
       // git checkout <hash> -- <path>
+      // git checkout --ours / --theirs <path>
+      if (args[1] === '--ours' || args[1] === '--theirs') {
+        const target = args[2] || 'dvc.lock';
+        return { state, result: ok(`Updated 1 path from the ${args[1].slice(2)} tree for ${target}`) };
+      }
       if (args.includes('--')) {
         const idx = args.indexOf('--');
         const ref = args[1];
@@ -691,6 +696,20 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         return { state, result: checkoutGitRef(state, args[1]) };
       }
       return { state, result: fail('Usage: git checkout <ref> [-- <path>]') };
+    }
+    if (sub === 'merge') {
+      const branch = args[1] || 'origin/main';
+      return {
+        state,
+        result: fail(
+          [
+            `Auto-merging dvc.lock with ${branch}`,
+            `CONFLICT (content): Merge conflict in dvc.lock`,
+            `Automatic merge failed; fix conflicts and then commit the result.`,
+            `Hint: Never hand-edit dvc.lock hashes. Run \`dvc repro\` to recompute the verified execution receipt.`,
+          ].join('\n'),
+        ),
+      };
     }
     return { state, result: fail(`git: '${sub}' is not supported in this simulator.`) };
   }
@@ -773,14 +792,24 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     if (err) return { state, result: err };
     const flags = args.slice(1).filter((a) => a.startsWith('-'));
     const noCommit = flags.includes('--no-commit') || flags.includes('-O');
-    const path = args.slice(1).filter((a) => !a.startsWith('-'))[0];
-    if (!path) return { state, result: fail('Usage: dvc add [--no-commit] <path>') };
-    const f = state.files[path];
+    const rawPath = args.slice(1).filter((a) => !a.startsWith('-'))[0];
+    if (!rawPath) return { state, result: fail('Usage: dvc add [--no-commit] <path>') };
+    const path = rawPath.replace(/\/+$/, '');
+    let f = state.files[path];
+    const isDir = Boolean(f?.isDir || Object.keys(state.files).some((p) => p.startsWith(`${path}/`)));
+    if (!f && isDir) {
+      f = makeFile(path, 'data', { isDir: true });
+      state.files[path] = f;
+    }
     if (!f || !f.present) return { state, result: fail(`ERROR: bad path '${path}' — nothing in the workspace.`) };
     if (f.kind === 'code' || f.kind === 'params' || f.kind === 'yaml') {
       return { state, result: fail(`ERROR: refusing to track '${path}'. DVC tracks data artifacts, not code.`) };
     }
-    const md5 = f.contentId;
+    const md5 = isDir ? `${f.contentId.replace(/\.dir$/, '')}.dir` : f.contentId;
+    if (isDir) {
+      f.isDir = true;
+      f.contentId = md5;
+    }
     f.tracked = true;
     f.pointerMd5 = md5;
     f.gitignored = true;
@@ -802,8 +831,8 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       [
         `100% ${path}`,
         `Pointer file written: ${path}.dvc`,
-        `  md5: ${md5}`,
-        `  size: ${(f.contentId.length * 1024).toLocaleString()} bytes (simulated)`,
+        `  md5: ${md5}${isDir ? ' (directory manifest)' : ''}`,
+        `  size: ${(f.contentId.length * (isDir ? 2048 : 1024)).toLocaleString()} bytes (simulated)`,
         `Cache object: .dvc/cache/files/md5/${md5.slice(0, 2)}/${md5.slice(2)}`,
         noCommit
           ? '--no-commit: pointer updated but cache object NOT committed yet. Run `dvc commit`.'
@@ -911,19 +940,31 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       return { state, result: ok(`Removed remote '${name}'`) };
     }
     if (rsub === 'modify') {
-      const name = args[2];
-      const key = args[3];
-      const value = args[4];
+      const rest = args.slice(2);
+      const isLocal = rest.includes('--local');
+      const cleanArgs = rest.filter((a) => a !== '--local');
+      const name = cleanArgs[0];
+      const key = cleanArgs[1];
+      const value = cleanArgs[2];
       const remote = state.remotes.find((r) => r.name === name);
       if (!remote) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
-      if (!key) return { state, result: fail('Usage: dvc remote modify <name> <key> <value>') };
+      if (!key) return { state, result: fail('Usage: dvc remote modify [--local] <name> <key> <value>') };
       const secretKeys = ['secret_access_key', 'token', 'password', 'private_key_password'];
       const hidden = secretKeys.includes(key) ? '***' : (value ?? '');
+
+      if (isLocal) {
+        if (!state.files['.dvc/config.local']) {
+          state.files['.dvc/config.local'] = makeFile('.dvc/config.local', 'meta', { gitignored: true });
+        }
+      }
+
       return finish(state, ok([
         `Updated remote '${name}' ${key}=${hidden}`,
-        secretKeys.includes(key)
-          ? 'Secret values never belong in .dvc/config — use env/CI secrets.'
-          : 'Non-secret option stored in .dvc/config and shared via Git.',
+        isLocal
+          ? 'Option stored locally in .dvc/config.local (gitignored). Credentials will never leak into Git commits.'
+          : secretKeys.includes(key)
+            ? 'WARNING: Secret credentials in shared .dvc/config leak to Git. Use `--local` to store in .dvc/config.local.'
+            : 'Non-secret option stored in .dvc/config and shared via Git.',
       ].join('\n')));
     }
     return { state, result: fail('Usage: dvc remote [add|list|default|remove|modify]') };

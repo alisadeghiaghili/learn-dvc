@@ -1,4 +1,4 @@
-﻿/** German level teaching copy. Never includes hint/solution/commands. */
+/** German level teaching copy. Never includes hint/solution/commands. */
 
 import type { LevelCopy } from './types';
 
@@ -63,21 +63,48 @@ export const deLevels: Record<string, LevelCopy> = {
     seriesTitle: 'Grundlagen',
     name: 'Dirty Data und Status',
     objective:
-      'Daten Ã¤ndern, `dvc status` lesen und mit `dvc commit` den neuen Stand in Cache und Pointer Ã¼bernehmen.',
+      'Daten ändern, `dvc status` lesen und mit `dvc commit` den neuen Stand in Cache und Pointer übernehmen.',
     learning: [
       'dvc status vergleicht Workspace vs. Pointer vs. Cache',
-      'modified = Bytes â‰  md5 im .dvc',
+      'modified = Bytes != md5 im .dvc',
       'dvc commit akzeptiert die neue Datenversion',
     ],
     fieldNotes: [
       'Dirty Data ist der Normalfall nach Feature-Engineering',
-      'Nie blind committen â€” status lesen, dann commit oder checkout',
+      'Nie blind committen — status lesen, dann commit oder checkout',
     ],
     startDialog: [
       {
         title: 'Dirty ist kein Fehler',
         markdown:
-          'Wie `git status` fÃ¼r Daten: du hast eine uncommittete Ã„nderung.\n\nAkzeptieren: `dvc commit`\nVerwerfen: `dvc checkout`',
+          'Wie `git status` für Daten: du hast eine uncommittete Änderung.\n\nAkzeptieren: `dvc commit`\nVerwerfen: `dvc checkout`',
+      },
+    ],
+  },
+  'basics-4': {
+    seriesTitle: 'Grundlagen',
+    name: 'Dataset-Verzeichnis tracken',
+    objective:
+      'Tracke ein Dataset-Verzeichnis (`data/images`) mit DVC, sodass alle Dateien über ein Verzeichnis-Manifest (.dir) versioniert werden.',
+    learning: [
+      'DVC trackt Verzeichnisse als Einheit über einen .dir-Manifest-Hash',
+      'Die Pointer-Datei heißt <folder>.dvc (data/images.dvc)',
+      'Git ignoriert den gesamten Ordner und speichert nur die Pointer-Datei',
+    ],
+    fieldNotes: [
+      'Bild- und Audiodatensätze gehören in getrackte Ordner, nicht in hunderte einzelne .dvc-Dateien',
+      'PR-Reviews prüfen ein einzelnes .dir-Diff statt Git-History aufzublähen',
+    ],
+    startDialog: [
+      {
+        title: 'Einzeldatei vs. Verzeichnis in DVC',
+        markdown:
+          'In Computer Vision bestehen Datensätze aus tausenden Bildern.\n\n`dvc add` auf jede Datei würde tausende `.dvc`-Dateien in Git anlegen!\n\nStattdessen trackt man den ganzen Ordner:\n```\ndvc add data/images\n```\n\nDVC erstellt ein Manifest mit `.dir`-Hash und einen kompakten Pointer.',
+      },
+      {
+        title: 'Verzeichnis-Pointer committen',
+        markdown:
+          '```\ngit add data/images.dvc data/.gitignore\ngit commit -m "Track raw images directory"\n```\n\nGit versioniert nur den schlanken Pointer. Alle Bytes liegen sicher im DVC-Cache.',
       },
     ],
   },
