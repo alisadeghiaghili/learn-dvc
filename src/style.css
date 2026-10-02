@@ -267,18 +267,21 @@ html[dir='rtl'] .lang-switch {
   user-select: none;
 }
 
-.tb-stat.visitors {
-  border-color: color-mix(in srgb, var(--dvc) 35%, var(--line));
-  color: color-mix(in srgb, var(--text) 85%, var(--dvc));
+.tb-link.visitor-badge {
+  padding: 4px 8px;
+  gap: 6px;
+  border-color: color-mix(in srgb, var(--dvc) 40%, var(--line));
 }
 
-.tb-stat .visitor-icon {
+.tb-link.visitor-badge .visitor-icon {
   color: var(--dvc);
   flex-shrink: 0;
 }
 
-.tb-stat[hidden] {
-  display: none !important;
+.tb-link.visitor-badge .visitor-img {
+  height: 20px;
+  vertical-align: middle;
+  border-radius: 4px;
 }
 
 .tb-link {
