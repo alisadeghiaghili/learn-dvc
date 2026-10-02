@@ -256,32 +256,25 @@ html[dir='rtl'] .lang-switch {
   align-items: center;
   gap: 6px;
   min-height: 36px;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--dvc) 35%, var(--line));
   background: color-mix(in srgb, var(--panel-2) 65%, transparent);
-  color: var(--haze);
-  font-family: var(--ui);
-  font-size: 12px;
-  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--text) 90%, var(--dvc));
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   user-select: none;
 }
 
-.tb-link.visitor-badge {
-  padding: 4px 8px;
-  gap: 6px;
-  border-color: color-mix(in srgb, var(--dvc) 40%, var(--line));
-}
-
-.tb-link.visitor-badge .visitor-icon {
+.tb-stat .visitor-icon {
   color: var(--dvc);
   flex-shrink: 0;
 }
 
-.tb-link.visitor-badge .visitor-img {
-  height: 20px;
-  vertical-align: middle;
-  border-radius: 4px;
+.tb-stat[hidden] {
+  display: none !important;
 }
 
 .tb-link {

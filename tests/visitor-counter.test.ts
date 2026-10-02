@@ -1,37 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { parseVisitorSvg } from '../src/ui/visitor-counter';
+import { parseVisitorBadgeSvg } from '../src/ui/visitor-counter';
 
-describe('parseVisitorSvg', () => {
-  it('parses simple integer count from svg', () => {
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg">
-        <text x="20" y="14">Visitors</text>
-        <text x="50" y="14">42</text>
-      </svg>
-    `;
-    expect(parseVisitorSvg(svg)).toBe(42);
+describe('parseVisitorBadgeSvg', () => {
+  it('parses visitor count from visitorbadge title', () => {
+    const svg = `<svg role="img" aria-label="VISITORS: 10 / 25"><title>VISITORS: 10 / 25</title></svg>`;
+    expect(parseVisitorBadgeSvg(svg)).toBe(10);
   });
 
-  it('parses formatted counts with commas', () => {
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg">
-        <text>Visitors</text>
-        <text>1,450</text>
-      </svg>
-    `;
-    expect(parseVisitorSvg(svg)).toBe(1450);
+  it('parses formatted count with commas', () => {
+    const svg = `<svg><title>VISITORS: 1,450</title></svg>`;
+    expect(parseVisitorBadgeSvg(svg)).toBe(1450);
   });
 
-  it('parses abbreviation suffixes K and M', () => {
-    const svgK = `<svg><text>Visitors</text><text>2.5K</text></svg>`;
-    expect(parseVisitorSvg(svgK)).toBe(2500);
+  it('parses abbreviations like K and M', () => {
+    const svgK = `<svg><title>VISITORS: 2.5K</title></svg>`;
+    expect(parseVisitorBadgeSvg(svgK)).toBe(2500);
 
-    const svgM = `<svg><text>Visitors</text><text>1.2M</text></svg>`;
-    expect(parseVisitorSvg(svgM)).toBe(1200000);
+    const svgM = `<svg><title>VISITORS: 1.2M</title></svg>`;
+    expect(parseVisitorBadgeSvg(svgM)).toBe(1200000);
   });
 
-  it('returns null on invalid or missing numbers', () => {
-    const svg = `<svg><text>Visitors</text></svg>`;
-    expect(parseVisitorSvg(svg)).toBeNull();
+  it('returns null on invalid title', () => {
+    const svg = `<svg><title>NO COUNT HERE</title></svg>`;
+    expect(parseVisitorBadgeSvg(svg)).toBeNull();
   });
 });

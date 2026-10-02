@@ -1,85 +1,71 @@
 /**
  * Visitor counter client with local deduplication.
- * Fetches page visitor count and renders it cleanly in the toolbar.
+ * Fetches page visitor count and renders a clean numeric stat in the toolbar.
  */
 
-const STORAGE_KEY = 'learn-dvc:visitor-counted';
-const BADGE_URL = 'https://komarev.com/ghpvc/?username=alisadeghiaghili-learn-dvc&label=Visitors';
+const STORAGE_KEY = 'learn-dvc:visitor-count-cache';
+const BADGE_URL = 'https://api.visitorbadge.io/api/combined?path=learn-dvc';
 
-export interface VisitorStats {
+export interface CachedCount {
   count: number;
+  at: number;
 }
 
 /**
- * Extracts the numeric visitor count from the SVG payload.
+ * Extracts the numeric visitor count from the visitorbadge SVG payload.
  */
-export function parseVisitorSvg(svg: string): number | null {
-  // Matches text elements in the SVG: e.g. <text ...>123</text> or 1.2k
-  const matches = [...svg.matchAll(/<text[^>]*>([^<]+)<\/text>/gi)];
-  if (matches.length === 0) return null;
+export function parseVisitorBadgeSvg(svg: string): number | null {
+  const title = svg.match(/VISITORS:\s*([\d.,]+[KMB]?)/i);
+  const raw = (title ? title[1] : '').replace(/,/g, '');
+  if (!raw) return null;
 
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const raw = matches[i][1].trim().replace(/,/g, '');
-    if (!raw || raw.toLowerCase() === 'visitors') continue;
-
-    const suffix = raw.slice(-1).toUpperCase();
-    const scale = suffix === 'K' ? 1e3 : suffix === 'M' ? 1e6 : suffix === 'B' ? 1e9 : 1;
-    const numPart = scale > 1 ? raw.slice(0, -1) : raw;
-    const val = Number.parseFloat(numPart) * scale;
-    if (Number.isFinite(val) && val >= 0) {
-      return Math.round(val);
-    }
-  }
-
-  return null;
+  const suffix = raw.slice(-1).toUpperCase();
+  const scale = { K: 1e3, M: 1e6, B: 1e9 }[suffix as 'K' | 'M' | 'B'] || 1;
+  const numPart = scale > 1 ? raw.slice(0, -1) : raw;
+  const numeric = Number.parseFloat(numPart) * scale;
+  return Number.isFinite(numeric) && numeric >= 0 ? Math.round(numeric) : null;
 }
 
 /**
  * Retrieves the visitor count, incrementing on the first visit per browser,
- * while respecting privacy and preventing double-counting within a session.
+ * while returning cached count on subsequent visits to count unique visitors.
  */
 export async function getVisitorCount(): Promise<number | null> {
+  // Check local cache first
   try {
-    const isCounted = localStorage.getItem(STORAGE_KEY);
-    const targetUrl = `${BADGE_URL}&_t=${isCounted ? 'cached' : Date.now()}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-
-    let svg: string | null = null;
-
-    try {
-      const res = await fetch(proxyUrl, {
-        headers: { Accept: 'image/svg+xml, text/plain, */*' },
-      });
-      if (res.ok) {
-        svg = await res.text();
-      }
-    } catch {
-      svg = null;
-    }
-
-    if (!svg) {
-      try {
-        const directRes = await fetch(BADGE_URL, {
-          mode: 'cors',
-          headers: { Accept: 'image/svg+xml' },
-        });
-        if (directRes.ok) {
-          svg = await directRes.text();
-        }
-      } catch {
-        svg = null;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw) as CachedCount;
+      if (typeof cached.count === 'number' && Number.isFinite(cached.count)) {
+        return cached.count;
       }
     }
+  } catch {
+    // LocalStorage may fail in restricted private browsing
+  }
 
-    if (!svg) return null;
+  try {
+    const res = await fetch(badgeUrlWithLocale(), {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'image/svg+xml, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
 
-    const count = parseVisitorSvg(svg);
+    if (!res.ok) return null;
 
-    if (count !== null && !isCounted) {
+    const svg = await res.text();
+    const count = parseVisitorBadgeSvg(svg);
+
+    if (count !== null) {
       try {
-        localStorage.setItem(STORAGE_KEY, '1');
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ count, at: Date.now() }),
+        );
       } catch {
-        // LocalStorage may be unavailable in private browsing mode
+        // quota or private mode
       }
     }
 
@@ -87,4 +73,8 @@ export async function getVisitorCount(): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+function badgeUrlWithLocale(): string {
+  return BADGE_URL;
 }
