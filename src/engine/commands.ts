@@ -2,6 +2,7 @@ import type { CommandResult, GitCommit, PipelineStage, RepoState } from './types
 import { commitHash, expId, fakeMd5, shortMd5 } from './hash';
 import { teachAfterCommand } from './teach';
 import { findConcept, formatConcepts } from './glossary';
+import { tokenize } from './tokenizer';
 import {
   addCache,
   addRemoteObject,
@@ -357,7 +358,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state: lastState, result: ok(outs.join('\n')) };
   }
 
-  const tokens = raw.split(/\s+/);
+  const tokens = tokenize(raw);
   const cmd = tokens[0];
   const args = tokens.slice(1);
 

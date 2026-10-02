@@ -96,7 +96,7 @@ export const fa: Catalog = {
       lines: [
         'stageهای pipeline در dvc.yaml زندگی می‌کنند (deps, outs, cmd, params, metrics).',
         'وابستگی‌ها مشخص می‌کنند چه چیزی stage را با تغییر invalidate کند.',
-        'خروجی‌ها مشخص می‌کنند DVC بعد از اجرای موفق چه چیزی را ترک/cache کند.',
+        'خروجی‌ها مشخص می‌کنند DVC بعد از اجرای موفق چه چیزی را ردگیری/کش کند.',
         'کد در گیت می‌ماند؛ I/O داده از مسیر DVC — بازتولیدپذیری به‌مثابه قرارداد.',
       ],
     },
@@ -195,7 +195,7 @@ export const fa: Catalog = {
     'dvc-diff': {
       title: 'dvc diff',
       lines: [
-        'دریفت pointer/محتوا برای داده‌ی ترک‌شده را نشان می‌دهد (سطح هش، نه تکه‌های متن).',
+        'انحراف (drift) بین pointer و محتوا برای داده‌ی ردگیری‌شده را نشان می‌دهد (سطح هش، نه تکه‌های متن).',
         'قبل از پذیرش تغییر: کدام md5 جابه‌جا شد، چقدر روی remote است؟',
         'در تولید با git show فایل .dvc برای روایت جفت کنید.',
       ],
@@ -234,7 +234,7 @@ export const fa: Catalog = {
     'dvc-api': {
       title: 'dvc.api',
       lines: [
-        'API پایتون برای خواندن داده‌ی ترک‌شده / exp_show از ریپوی DVC.',
+        'API پایتون برای خواندن داده‌ی ردگیری‌شده / exp_show از مخزن DVC.',
         'اپ و نوت‌بوک بایت را قرض می‌گیرند بدون بازنویسی فضای کاری.',
         'قرارداد md5 همچنان معتبر است — commit را pin کنید.',
       ],
@@ -251,7 +251,7 @@ export const fa: Catalog = {
     },
     cache: {
       title: 'cache محتوانشان',
-      body: 'اشیا زیر .dvc/cache/files/md5/xx/… با کلید هش محتوا. بایت‌های یکسان یک بار ذخیره می‌شوند. cache محلی منبع materialize برای checkout فضای کاری است.',
+      body: 'اشیا زیر `.dvc/cache/files/md5/xx/…` با کلید هش محتوا ذخیره می‌شوند. بایت‌های یکسان یک بار ذخیره می‌شوند. کش محلی منبع بازیابی و استقرار برای checkout فضای کاری است.',
     },
     remote: {
       title: 'فضای ذخیره‌سازی remote',
@@ -299,7 +299,7 @@ export const fa: Catalog = {
     },
     'registry-cmds': {
       title: 'get / import',
-      body: 'dvc get فایل را از پروژه‌ی DVC دیگر کپی می‌کند. dvc import وابستگی را هم version می‌کند (می‌نویسد .dvc). import-url یک URL خارجی را به‌عنوان داده ترک می‌کند.',
+      body: 'dvc get فایل را از پروژه‌ی DVC دیگر کپی می‌کند. dvc import وابستگی را هم version می‌کند (می‌نویسد .dvc). import-url یک URL خارجی را به‌عنوان داده ردگیری می‌کند.',
     },
     dvclive: {
       title: 'DVCLive',
@@ -327,11 +327,11 @@ export const fa: Catalog = {
     },
     'external-outs': {
       title: 'داده‌ی خارجی / no-cache',
-      body: 'deps/outs می‌توانند بیرون پروژه باشند (s3://…). cache: false / -O وقتی DVC نباید بایت کپی کند. داده‌ی خارجی را با import-url ترک/تازه کنید.',
+      body: 'deps/outs می‌توانند بیرون پروژه باشند (s3://…). cache: false / -O وقتی DVC نباید بایت کپی کند. داده‌ی خارجی را با import-url ردگیری/به‌روزرسانی کنید.',
     },
     api: {
       title: 'dvc.api',
-      body: 'API پایتون برای خواندن داده‌ی ترک‌شده و exp_show() از ریپوی DVC بدون dvc checkout — کاربردی در اپ و نوت‌بوک.',
+      body: 'API پایتون برای خواندن داده‌ی ردگیری‌شده و exp_show() از مخزن DVC بدون dvc checkout — کاربردی در اپ و نوت‌بوک.',
     },
     'registry-promote': {
       title: 'رجیستری مدل',
@@ -359,7 +359,7 @@ export const fa: Catalog = {
     },
     'api-handson': {
       title: 'dvc.api در اپ‌های تولید',
-      body: 'commit گیت را pin کنید، مسیرهای ترک‌شده را با dvc.api بخوانید، هرگز «latest» را داغ نگیرید. داشبورد و jobهای batch باید fail-closed باشند اگر pointer نیست — نه اینکه بی‌صدا روی بایت کهنه آموزش ببینند.',
+      body: 'commit گیت را pin کنید، مسیرهای ردگیری‌شده را با dvc.api بخوانید، هرگز «latest» را داغ نگیرید. داشبورد و jobهای batch باید fail-closed باشند اگر pointer نیست — نه اینکه بی‌صدا روی بایت کهنه آموزش ببینند.',
     },
     'pr-pack': {
       title: 'بسته‌ی شاهد PR برای ML',
@@ -539,7 +539,7 @@ export const fa: Catalog = {
       'جریان مواد: workspace → cache → remote (push) · remote → cache → workspace (pull)',
     workspaceHint: 'فایل‌ها روی دیسک · pointer · کد',
     workspaceWhy:
-      'چرا مهم است: این چیزی است که ابزارهای شما واقعاً می‌خوانند. داده‌ی ترک‌شده اینجا به‌صورت فایل پیوندی می‌ماند — گیت هرگز بایت‌های سنگین را نمی‌بیند.',
+      'چرا مهم است: این چیزی است که ابزارهای شما واقعاً می‌خوانند. داده‌ی ردگیری‌شده اینجا به‌صورت فایل پیوندی می‌ماند — گیت هرگز بایت‌های سنگین را نمی‌بیند.',
     cacheHint: '.dvc/cache — اشیای محتوانشان',
     cacheWhy:
       'چرا مهم است: انبار محلی نسخه‌های داده (با md5). dvc add/commit بایت اینجا می‌گذارد؛ checkout/pull برمی‌گرداند.',
@@ -729,7 +729,7 @@ export const fa: Catalog = {
       {
         id: 'status-pills',
         selector: '.status-bar',
-        title: 'قرص‌های وضعیت (بالای بورد)',
+        title: 'نشانگرهای وضعیت (بالای بورد)',
         what: 'سلامت سریع: DVC راه‌اندازی شده؟ تعداد remote، اشیای cache، اشیای remote، آزمایش.',
         how: 'بعد از push اشیای remote باید بالا برود. بعد از add cache باید بالا برود.',
       },
@@ -740,7 +740,7 @@ export const fa: Catalog = {
         what: 'فایل‌های روی دیسک در پروژه‌ی شبیه‌سازی‌شده: داده‌ی خام، کد، پارامتر، فایل pointer `.dvc`، `dvc.yaml`.',
         how: [
           'چیپ‌ها وضعیت را توضیح می‌دهند:',
-          '• **.dvc pointer** — DVC این مسیر را ترک می‌کند (گیت فقط فایل `.dvc` را)',
+          '• **.dvc pointer** — DVC این مسیر را ردگیری می‌کند (گیت فقط فایل `.dvc` را)',
           '• **gitignored** — داده‌ی خام عمداً از گیت خارج است',
           '• **dirty** — بایت ≠ md5 pointer (`dvc status`)',
           '• **git staged** — آماده‌ی `git commit`',
@@ -751,7 +751,7 @@ export const fa: Catalog = {
         id: 'cache-zone',
         selector: '.zone.cache',
         title: 'ناحیه‌ی cache',
-        what: 'اشیای محلی `.dvc/cache` — کپی‌های محتوانشان داده‌ی ترک‌شده (md5).',
+        what: 'اشیای محلی `.dvc/cache` — کپی‌های مبتنی بر محتوای داده‌ی ردگیری‌شده (md5).',
         how: '`dvc add`/`commit` پر می‌کند. `dvc checkout`/`pull` می‌خواند. بایت یکسان = یک شیء.',
       },
       {

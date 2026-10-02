@@ -1,4 +1,4 @@
-﻿/** Persian level teaching copy. Never includes hint/solution/commands. */
+/** Persian level teaching copy. Never includes hint/solution/commands. */
 
 import type { LevelCopy } from './types';
 
@@ -38,17 +38,17 @@ export const faLevels: Record<string, LevelCopy> = {
   },
   'basics-2': {
     seriesTitle: 'مبانی',
-    name: 'ترک کردن یک دیتاست',
+    name: 'ردگیری یک دیتاست',
     objective:
-      '`data/data.xml` را طوری ترک کنید که محتوا در cache باشد، Git فقط pointer را ببیند و مسیر خام gitignore شود.',
+      '`data/data.xml` را طوری ردگیری کنید که محتوا در cache باشد، Git فقط pointer را ببیند و مسیر خام gitignore شود.',
     learning: [
       'dvc add = هش + شیء cache + pointer فایل .dvc + gitignore',
       'Git فقط pointer (md5) را commit می‌کند، نه فایل بزرگ را',
       'بورد: فایل Workspace به pointer تبدیل می‌شود و شیء cache ظاهر می‌شود',
     ],
     fieldNotes: [
-      'دیتاست/مدل/آرتیفکتی را ترک کنید که بازسازی‌اش ارزان نیست',
-      'ریویوی PR باید diff های pointer (md5) را بخواند، نه مگابایت CSV',
+      'دیتاست، مدل یا آرتیفکتی را ردگیری کنید که بازسازی‌اش ارزان نیست',
+      'ریویوی PR باید تغییرات pointer (md5) را بخواند، نه مگابایت‌ها CSV',
       'CI داده را با DVC می‌کشد؛ ایمیج‌ها سبک می‌مانند',
     ],
     startDialog: [
@@ -105,7 +105,7 @@ export const faLevels: Record<string, LevelCopy> = {
   'remote-2': {
     seriesTitle: 'Remoteها',
     name: 'push داده به remote',
-    objective: 'داده‌ی ترک‌شده را با `dvc push` آپلود کنید تا تیم به آن دسترسی داشته باشد.',
+    objective: 'داده‌ی ردگیری‌شده را با `dvc push` آپلود کنید تا تیم به آن دسترسی داشته باشد.',
     learning: [
       'dvc push فقط اشیای جامانده‌ی cache را می‌فرستد',
       'هم‌تیمی‌ها به همان commit گیت + pull نیاز دارند',
@@ -124,7 +124,7 @@ export const faLevels: Record<string, LevelCopy> = {
   'remote-3': {
     seriesTitle: 'Remoteها',
     name: 'ماشین تازه: pull داده',
-    objective: 'روی یک ماشین تازه داده را با `dvc pull` مادی کنید، بدون آن‌که بایت‌ها در تاریخچه‌ی گیت باشند.',
+    objective: 'روی یک ماشین تازه داده را با `dvc pull` دریافت و در فضای کاری مستقر کنید، بدون آن‌که بایت‌ها در تاریخچه‌ی گیت باشند.',
     learning: [
       'git clone فقط pointer می‌آورد',
       'dvc pull داده را می‌آورد',
@@ -149,7 +149,7 @@ export const faLevels: Record<string, LevelCopy> = {
     learning: [
       'stageها در dvc.yaml زندگی می‌کنند',
       'deps با تغییر، stage را invalidate می‌کنند',
-      'outs بعد از اجرای موفق ترک می‌شوند',
+      'outs بعد از اجرای موفق ردگیری می‌شوند',
     ],
     fieldNotes: [
       'هر مرحله‌ی گران آموزش لایق یک stage است',
@@ -386,12 +386,12 @@ export const faLevels: Record<string, LevelCopy> = {
     seriesTitle: 'رجیستری',
     name: 'import داده',
     objective: 'یک دیتاست را از registry/URL import و version کنید.',
-    learning: ['import-url منبع خارجی را ترک می‌کند'],
+    learning: ['import-url منبع خارجی را ردگیری می‌کند'],
     fieldNotes: ['داده‌ی خارجی همان انضباط pointer را می‌خواهد'],
     startDialog: [
       {
         title: 'منابع خارجی',
-        markdown: '`dvc import-url` — URL خارجی به‌عنوان داده‌ی ترک‌شده.',
+        markdown: '`dvc import-url` — URL خارجی به‌عنوان داده‌ی ردگیری‌شده.',
       },
     ],
   },
@@ -503,7 +503,7 @@ export const faLevels: Record<string, LevelCopy> = {
     seriesTitle: 'انضباط cache',
     name: 'جدول واقعیت workspace / cache / remote',
     objective:
-      'فایل ترک‌شده را حذف کنید، `dvc status` بخوانید، با `dvc pull` برگردانید و status تمیز بگیرید.',
+      'فایل ردگیری‌شده را حذف کنید، `dvc status` بخوانید، با `dvc pull` برگردانید و status تمیز بگیرید.',
     learning: [
       'فایل جامانده ≠ داده گم‌شده اگر cache/remote هش را داشته باشند',
       'dvc pull = fetch + checkout',
@@ -537,7 +537,7 @@ export const faLevels: Record<string, LevelCopy> = {
   'remote-5': {
     seriesTitle: 'Remoteها',
     name: 'fetch در برابر pull روی ماشین تازه',
-    objective: 'cache خالی، remote پر: `fetch` فقط cache را پر می‌کند، `pull` فضای کاری را مادی می‌کند.',
+    objective: 'cache خالی، remote پر: `fetch` فقط cache را پر می‌کند، `pull` فضای کاری را آماده و مستقر می‌کند.',
     learning: [
       'fetch: remote → cache',
       'pull: fetch + checkout',
@@ -558,7 +558,7 @@ export const faLevels: Record<string, LevelCopy> = {
     learning: [
       '--wdir پوشه‌ی کاری stage را جابه‌جا می‌کند',
       '--always-changed repro را اجباری می‌کند',
-      'خروجی cache:false هویت را ترک می‌کند بدون بایت cache',
+      'خروجی cache:false هویت را ردگیری می‌کند بدون ذخیره بایت‌ها در cache',
     ],
     fieldNotes: ['always-changed برای API/scrape', 'no-cache برای خروجی‌های عظیم warehouse'],
     startDialog: [
@@ -703,7 +703,7 @@ export const faLevels: Record<string, LevelCopy> = {
     name: 'انضباط PR مبتنی بر pointer',
     objective: 'مسیر کامل PR داده: dirty → status → add/commit → git commit فقط pointer.',
     learning: ['ریویوی PR یعنی md5 pointer + lock، نه گیگابایت', 'بدون dvc commit، pointer دروغ می‌گوید'],
-    fieldNotes: ['CI باید fail کند اگر کسی مسیر داده‌ی ترک‌شده را staged کند'],
+    fieldNotes: ['CI باید fail کند اگر کسی مسیر داده‌ی ردگیری‌شده را staged کند'],
     startDialog: [
       {
         title: 'تنها PR امن داده',
@@ -746,7 +746,7 @@ export const faLevels: Record<string, LevelCopy> = {
     seriesTitle: 'همکاری و CI',
     name: 'خواندن داده بدون checkout (dvc.api)',
     objective: 'سطح API داده را در شبیه‌ساز بیازمایید و قرارداد pointer را بررسی کنید.',
-    learning: ['dvc.api داده‌ی ترک‌شده را در اپ/نوت‌بوک می‌خواند', 'API جای checkout فایل روی دیسک را نمی‌گیرد'],
+    learning: ['dvc.api داده‌ی ردگیری‌شده را در اپ/نوت‌بوک می‌خواند', 'API جای checkout فایل روی دیسک را نمی‌گیرد'],
     fieldNotes: ['داشبورد با dvc.api + commit pinned، نه دانلود دستی'],
     startDialog: [
       {
@@ -836,9 +836,9 @@ export const faLevels: Record<string, LevelCopy> = {
     seriesTitle: 'متا و قرارداد',
     name: 'داده‌ی خارجی + قرارداد no-cache',
     objective: 'stage با خروجی external/no-cache، لیست، repro، و DAG به‌عنوان قرارداد.',
-    learning: ['external/no-cache هویت را ترک می‌کند بدون بایت انبار', 'DAG قرارداد داده پیش از merge است'],
+    learning: ['external/no-cache هویت را ردگیری می‌کند بدون بایت کش', 'DAG قرارداد داده پیش از merge است'],
     fieldNotes: ['جدول‌های warehouse خروجی external هستند، نه شیء cache'],
-    startDialog: [{ title: 'وقتی بایت جای دیگری است', markdown: '`-O` / cache:false **نام** را ترک می‌کند، نه انبار را.' }],
+    startDialog: [{ title: 'وقتی بایت جای دیگری است', markdown: '`-O` / cache:false **نام** را ردگیری می‌کند، نه کش را.' }],
   },
   'mastery-7': {
     seriesTitle: 'Remoteها',
