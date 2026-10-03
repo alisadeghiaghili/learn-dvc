@@ -570,7 +570,8 @@ export const fa: Catalog = {
     shareXFirst: 'تمرین عملی در مرورگر.',
     shareHandson: 'تمرین عملی در مرورگر.',
     titleLearnDvc: 'LearnDVC — آموزش Data Version Control',
-    welcomeTitle: 'LearnDVC',
+    welcomeTitle: 'Welcome to Learn DVC',
+    welcomeTitleHtml: 'Welcome to Learn <span>DVC</span>',
     welcomeIntro: 'آموزش تعاملی **Data Version Control** — سندباکس + مراحل هدایت‌شده.',
     welcomeBoard:
       'بورد **Workspace → Cache → Remote** را نشان می‌دهد. این جریان موادی است که DVC مدیریت می‌کند.',

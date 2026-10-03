@@ -572,7 +572,8 @@ export const de: Catalog = {
     shareXFirst: 'Praxis-Sandbox.',
     shareHandson: 'Praxis-Sandbox.',
     titleLearnDvc: 'LearnDVC — Data Version Control Tutorial',
-    welcomeTitle: 'LearnDVC',
+    welcomeTitle: 'Welcome to Learn DVC',
+    welcomeTitleHtml: 'Welcome to Learn <span>DVC</span>',
     welcomeIntro:
       'Interaktives **Data Version Control**-Tutorial — Sandbox + geführte Levels.',
     welcomeBoard:

@@ -18,6 +18,7 @@ if (!params.has('NODEMO')) {
   const u = ui();
   showModal({
     title: u.welcomeTitle,
+    titleHtml: u.welcomeTitleHtml,
     bodyHtml: renderMarkdown(
       [
         u.welcomeIntro,

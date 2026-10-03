@@ -195,6 +195,7 @@ export interface UiCopy {
   shareHandson: string;
   titleLearnDvc: string;
   welcomeTitle: string;
+  welcomeTitleHtml?: string;
   welcomeIntro: string;
   welcomeBoard: string;
   welcomeTracks: string;

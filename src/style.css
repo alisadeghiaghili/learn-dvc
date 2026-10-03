@@ -1772,6 +1772,10 @@ samp {
   margin: 0 0 8px;
 }
 
+.modal h2 span {
+  color: var(--dvc);
+}
+
 .modal .markdown {
   color: var(--text);
   font-size: 14px;

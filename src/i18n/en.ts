@@ -561,7 +561,8 @@ export const en: Catalog = {
     shareXFirst: 'Hands-on sandbox.',
     shareHandson: 'Hands-on sandbox.',
     titleLearnDvc: 'LearnDVC — Data Version Control tutorial',
-    welcomeTitle: 'LearnDVC',
+    welcomeTitle: 'Welcome to Learn DVC',
+    welcomeTitleHtml: 'Welcome to Learn <span>DVC</span>',
     welcomeIntro: 'Interactive **Data Version Control** tutorial — sandbox + guided levels.',
     welcomeBoard: 'The board shows **Workspace → Cache → Remote**. That is the material flow DVC manages.',
     welcomeTracks:

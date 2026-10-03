@@ -154,6 +154,7 @@ export interface ModalAction {
 
 export function showModal(opts: {
   title: string;
+  titleHtml?: string;
   bodyHtml: string;
   actions?: ModalAction[];
   onClose?: () => void;
@@ -162,9 +163,10 @@ export function showModal(opts: {
   const overlay = document.createElement('div');
   overlay.className = `overlay${opts.variant === 'celebrate' ? ' overlay-celebrate' : ''}`;
   const titleClass = opts.variant === 'celebrate' ? ' class="visually-hidden"' : '';
+  const titleContent = opts.titleHtml ?? escapeHtml(opts.title);
   overlay.innerHTML = `
     <div class="modal${opts.variant === 'celebrate' ? ' modal-celebrate' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(opts.title)}">
-      <h2${titleClass}>${escapeHtml(opts.title)}</h2>
+      <h2${titleClass}>${titleContent}</h2>
       <div class="markdown">${opts.bodyHtml}</div>
       <div class="modal-actions"></div>
     </div>
