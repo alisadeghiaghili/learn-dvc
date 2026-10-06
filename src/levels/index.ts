@@ -1222,5 +1222,10 @@ export function curriculumOutcomes(): string[] {
     'Harden collab: .dvcignore, dvc update, CML PR comments',
     'Choose Git-LFS vs DVC deliberately',
     'Read data in apps with dvc.api',
+    'Evaluate DVC vs Lakehouse (Delta Lake/Iceberg) and Feature Stores (Feast)',
+    'Manage cloud credentials securely via .dvc/config.local and IAM roles',
+    'Provision on-demand cloud GPU training with CML cloud runners (--single-shot)',
+    'Stream models and datasets in Python production services with dvc.api',
+    'Collaborate on experiments with dvc exp push/pull and promote to branch',
   ];
 }

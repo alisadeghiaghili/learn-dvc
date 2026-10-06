@@ -239,6 +239,38 @@ export const de: Catalog = {
         'md5-Vertrag gilt weiter — Commit pinnen.',
       ],
     },
+    'dvc-config': {
+      title: 'dvc config & Secrets',
+      lines: [
+        '.dvc/config wird in Git committet (gemeinsame Remotes). Niemals Passwörter oder Tokens hier ablegen.',
+        '.dvc/config.local ist standardmäßig gitignored. Nutze `dvc config --local` für Cloud-Keys und Secrets.',
+        'In Cloud und CI IAM-Rollendelegierung (AssumeRole / OIDC) statischen API-Keys vorziehen.',
+      ],
+    },
+    'cml-runner': {
+      title: 'cml runner (On-Demand Cloud-GPUs)',
+      lines: [
+        '`cml runner launch` startet ephemere Cloud-Instanzen (AWS EC2, GCP, Azure, K8s) nach Bedarf.',
+        'Mit `--single-shot` beendet sich die Instanz sofort nach dem Trainingslauf (null Leerlaufkosten).',
+        'CI-Pipelines können schwere Deep-Learning-Modelle auf Spot-GPUs ohne feste Serverinfrastruktur trainieren.',
+      ],
+    },
+    'dvc-exp-share': {
+      title: 'dvc exp push / pull / branch',
+      lines: [
+        'Experimente liegen in versteckten Git-Refs (refs/exps), um Branch-Wildwuchs im Team zu vermeiden.',
+        '`dvc exp push` und `dvc exp pull` synchronisieren experimentelle Läufe und Metriken im Team.',
+        '`dvc exp branch <id> <branch>` überführt ein erfolgreiches Experiment direkt in einen regulären Git-Branch für PR-Reviews.',
+      ],
+    },
+    'python-dvc-api': {
+      title: 'Python dvc.api in Produktion',
+      lines: [
+        'Inferenz-Microservices streamen Modelle mit `dvc.api.open()` oder `dvc.api.get_url()` direkt aus S3/GCS.',
+        'Eine feste Git-Revision pinnen (rev="v1.0"), um exakte Reproduzierbarkeit in Produktion zu sichern.',
+        'Macht `git clone` oder `dvc pull` in schlanken Docker-Containern überflüssig.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -364,6 +396,38 @@ export const de: Catalog = {
     'pr-pack': {
       title: 'ML-PR-Evidenzpaket',
       body: 'Ernsthafter ML-Change liefert: dvc params diff (Absicht), dvc metrics diff (Wirkung), dvc plots diff (Kurven). Drei Slots im PR-Body. Leerer Slot = nicht reviewfertig.',
+    },
+    'arch-lakehouse': {
+      title: 'DVC vs. Lakehouse (Delta Lake / Iceberg)',
+      body: 'DVC versioniert unstrukturierte Dateien, Roh-Blobs und Modellgewichte über inhaltsadressierte Git-Pointer. Data Lakehouses (Delta Lake, Apache Iceberg) verwalten strukturierte tabellarische Daten mit zeilenbasierten ACID-Transaktionen und Time-Travel. MLOps nutzt Lakehouses für Feature-Tabellen und DVC für Modelle, Artefakte und reproduzierbare Pipelines.',
+    },
+    'arch-feature-store': {
+      title: 'DVC vs. Feature Store (Feast)',
+      body: 'Feature Stores (Feast, Hopsworks) liefern echtzeitfähige Vektoren mit niedriger Latenz für Online-Inferenz und Point-in-Time-Joins für Offline-Training. DVC versioniert unveränderliche Datenschnappschüsse, Trainingsbelege und Modell-Artefakte. Feature Stores speisen DVC-Pipelines, während DVC die resultierenden Modelle und deren Lineage festhält.',
+    },
+    'arch-model-registry': {
+      title: 'DVC vs. Model Registry (MLflow / SageMaker)',
+      body: 'Model Registries (MLflow, SageMaker) bieten zentrale APIs für Modellstufen (Staging -> Production) und Deployment-Metadaten. DVC liefert git-native, kryptografisch verifizierte Herkunft aus Code + Daten + Modell. Teams nutzen DVC, um sicherzustellen, dass jedes in MLflow registrierte Modell exakt bitgenau reproduzierbar ist.',
+    },
+    'cloud-iam-secrets': {
+      title: 'Cloud-IAM & .dvc/config.local',
+      body: 'DVC-Konfiguration hat drei Ebenen: System, Projekt (.dvc/config in Git) und lokal (.dvc/config.local, gitignored). Zugangsdaten und Tokens MÜSSEN mit `dvc config --local` oder Umgebungsvariablen verwaltet werden. In der Cloud sind IAM-Rollen (AssumeRole, OIDC) statischen Schlüsseln vorzuziehen.',
+    },
+    'cml-cloud-runners': {
+      title: 'CML Cloud Runners & GPU-Provisionierung',
+      body: '`cml runner launch` startet ephemere Cloud-Instanzen (AWS EC2, GCP, Azure, K8s) direkt aus GitHub Actions. Mit `--single-shot` trainiert die VM das Modell, pusht zu DVC, postet CML-Reports und terminiert sich automatisch — null Kosten für ungenutzte Cloud-GPUs.',
+    },
+    'dvc-api-python': {
+      title: 'Programmatische dvc.api in Python',
+      body: '`dvc.api.read()`, `dvc.api.get_url()` und `dvc.api.open()` erlauben es Python-Apps, Daten und Modelle direkt aus dem Cloud-Storage über Git-Revisionen (rev="v1.0") zu streamen, ohne das Repo zu klonen oder `dvc pull` auszuführen. Essenziell für schlanke Docker-Inferenz-Container.',
+    },
+    'exp-lifecycle': {
+      title: 'Experiment-Lebenszyklus (push / pull / branch)',
+      body: 'DVC speichert Experimente in internen Git-Referenzen (refs/exps), um Branches sauber zu halten. `dvc exp push` und `dvc exp pull` synchronisieren Läufe im Team. Mit `dvc exp branch` wird ein validiertes Experiment in einen regulären Git-Branch für PR-Reviews überführt.',
+    },
+    'pipeline-matrix': {
+      title: 'Matrix & Foreach Pipelines',
+      body: '`foreach` und `matrix` in dvc.yaml definieren parametrisierte Läufe über mehrere Datensätze oder Modellarchitekturen ohne Code-Duplikate. DVC generiert unabhängige DAG-Stufen und verwaltet deren Cache selektiv.',
     },
   },
   ui: {
@@ -685,6 +749,42 @@ export const de: Catalog = {
       {
         q: 'Was gehört in einen ernsthaften ML-PR-Body?',
         a: ['Ohne Belege', 'params diff + metrics diff + plots diff', 'Nur der Code-Diff'],
+        correct: 1,
+      },
+      {
+        q: 'DVC vs. Data Lakehouses (Delta Lake/Iceberg) in der Architektur?',
+        a: [
+          'Beide Tools sind identisch',
+          'Lakehouses versionieren tabellarische Daten mit zeilenbasiertem ACID; DVC versioniert Dateien, Modelle und Pipelines via Git-Pointer',
+          'DVC funktioniert nur mit MySQL',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'Wie lädt ein Python-Inferenz-Dienst Modellgewichte ohne vollständigen Repo-Checkout?',
+        a: [
+          'git clone in Docker ausführen',
+          'dvc.api.open() oder dvc.api.get_url() mit einer gepinnten Git-Revision nutzen',
+          'Den Dateipfad vom Entwickler-Laptop fest verdrahten',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'Was ist der Vorteil von `cml runner launch --single-shot`?',
+        a: [
+          'Erzeugt einen dauerhaften, teuren Server',
+          'Startet eine ephemere Cloud-GPU und beendet sie sofort nach dem Training (null Leerlaufkosten)',
+          'Umgeht GitHub Actions komplett',
+        ],
+        correct: 1,
+      },
+      {
+        q: 'Wo müssen Cloud-Schlüssel konfiguriert werden, um Leaks in Git zu verhindern?',
+        a: [
+          'In .dvc/config (in Git committet)',
+          'In .dvc/config.local (gitignored) oder als CI-Umgebungsvariablen',
+          'In der README-Datei',
+        ],
         correct: 1,
       },
     ],

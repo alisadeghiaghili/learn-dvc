@@ -44,14 +44,18 @@ export function teachAfterCommand(raw: string, _state: RepoState): string | null
   if (/^dvc\s+live\b/.test(cmd)) return teachFromKey('dvc-live');
   if (/^dvc\s+queue\b/.test(cmd) || /exp\s+run\s+--queue/.test(cmd)) return teachFromKey('exp-queue');
   if (/^dvc\s+update\b/.test(cmd)) return teachFromKey('dvc-update');
+  if (/^dvc\s+config\b/.test(cmd)) return teachFromKey('dvc-config');
+  if (/^cml\s+runner\b|^dvc\s+cml\s+runner\b/.test(cmd)) return teachFromKey('cml-runner');
   if (/^dvc\s+cml\b|^cml\b/.test(cmd)) return teachFromKey('cml');
   if (/^dvc\s+freeze\b/.test(cmd)) return teachFromKey('dvc-freeze');
   if (/^dvc\s+unfreeze\b/.test(cmd)) return teachFromKey('dvc-unfreeze');
   if (/^dvc\s+diff\b/.test(cmd)) return teachFromKey('dvc-diff');
+  if (/^dvc\s+exp\s+(push|pull|branch)\b/.test(cmd)) return teachFromKey('dvc-exp-share');
   if (/^dvc\s+exp\s+show\b/.test(cmd)) return teachFromKey('dvc-exp-show');
   if (/^dvc\s+gc\b/.test(cmd)) return teachFromKey('dvc-gc');
   if (/^dvc\s+plots\b/.test(cmd)) return teachFromKey('dvc-plots');
   if (/^dvc\s+params\s+diff|^dvc\s+metrics\s+diff/.test(cmd)) return teachFromKey('dvc-diffs');
+  if (/^python\b/.test(cmd)) return teachFromKey('python-dvc-api');
   if (/^dvc\s+api\b/.test(cmd)) return teachFromKey('dvc-api');
 
   void ui;

@@ -40,6 +40,14 @@ export const CONCEPT_IDS = [
   'gc',
   'api-handson',
   'pr-pack',
+  'arch-lakehouse',
+  'arch-feature-store',
+  'arch-model-registry',
+  'cloud-iam-secrets',
+  'cml-cloud-runners',
+  'dvc-api-python',
+  'exp-lifecycle',
+  'pipeline-matrix',
 ] as const;
 
 export function localizedConcepts(): Concept[] {

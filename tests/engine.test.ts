@@ -163,4 +163,63 @@ describe('level solutions solve goals', () => {
       expect(result.solved, `Level ${level.id} failed: ${result.statuses.map((s) => s.detail).join('; ')}`).toBe(true);
     });
   }
+
+  it('dvc config stores secrets with --local and warns otherwise', () => {
+    let state = sandboxState();
+    const step1 = executeCommand(state, 'dvc config --local remote.myremote.secret_access_key MY_KEY');
+    state = step1.state;
+    expect(step1.result.ok).toBe(true);
+    expect(state.files['.dvc/config.local']).toBeDefined();
+
+    const step2 = executeCommand(state, 'dvc config remote.myremote.secret_access_key MY_KEY');
+    expect(step2.result.output).toContain('WARNING');
+  });
+
+  it('dvc api subcommands stream and inspect without workspace checkout', () => {
+    const state = sandboxState();
+    const readStep = executeCommand(state, 'dvc api read data/data.xml');
+    expect(readStep.result.ok).toBe(true);
+    expect(readStep.result.output).toContain('dvc.api.read');
+
+    const urlStep = executeCommand(state, 'dvc api get-url data/data.xml');
+    expect(urlStep.result.ok).toBe(true);
+    expect(urlStep.result.output).toContain('s3://');
+
+    const openStep = executeCommand(state, 'dvc api open data/data.xml');
+    expect(openStep.result.ok).toBe(true);
+    expect(openStep.result.output).toContain('Context manager');
+  });
+
+  it('cml runner launch provisions single-shot GPU runners', () => {
+    const state = sandboxState();
+    const step = executeCommand(state, 'cml runner launch --cloud=aws --cloud-type=g4dn.xlarge --single-shot');
+    expect(step.result.ok).toBe(true);
+    expect(step.result.output).toContain('Single-shot');
+    expect(step.result.output).toContain('g4dn.xlarge');
+  });
+
+  it('dvc exp push, pull, and branch manage team experiments', () => {
+    let state = sandboxState();
+    state = executeCommand(state, 'dvc stage add -n train -d data/data.xml -o model.pkl python train.py').state;
+    state = executeCommand(state, 'dvc exp run -S lr=0.01').state;
+    
+    const pushStep = executeCommand(state, 'dvc exp push');
+    expect(pushStep.result.ok).toBe(true);
+    expect(pushStep.result.output).toContain('Pushed');
+
+    const pullStep = executeCommand(state, 'dvc exp pull');
+    expect(pullStep.result.ok).toBe(true);
+    expect(pullStep.result.output).toContain('Pulled');
+
+    const branchStep = executeCommand(state, 'dvc exp branch exp-1 exp-winner');
+    expect(branchStep.result.ok).toBe(true);
+    expect(branchStep.result.output).toContain('Created Git branch');
+  });
+
+  it('python simulator simulates dvc.api programmatic usage', () => {
+    const state = sandboxState();
+    const step = executeCommand(state, 'python -c "import dvc.api; dvc.api.read(\'data/data.xml\')"');
+    expect(step.result.ok).toBe(true);
+    expect(step.result.output).toContain('dvc.api');
+  });
 });

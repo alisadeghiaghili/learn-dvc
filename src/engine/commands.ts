@@ -343,7 +343,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   };
 
   // support simple `;` chains
-  if (raw.includes(';') && !raw.startsWith('echo')) {
+  if (raw.includes(';') && !raw.startsWith('echo') && !raw.startsWith('python')) {
     const parts = raw.split(';').map((s) => s.trim()).filter(Boolean);
     let lastState = state;
     const outs: string[] = [];
@@ -714,6 +714,58 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state, result: fail(`git: '${sub}' is not supported in this simulator.`) };
   }
 
+  // ── cml (Continuous Machine Learning) ───────────────────────
+  if (cmd === 'cml') {
+    const subCmd = args[0];
+    if (subCmd === 'runner') {
+      const isSingleShot = args.includes('--single-shot');
+      const cloudArg = args.find((a) => a.startsWith('--cloud=') || a.startsWith('--cloud'));
+      const cloudType = args.find((a) => a.startsWith('--cloud-type=') || a.startsWith('--cloud-type'));
+      return finish(
+        state,
+        ok(
+          [
+            'CML Cloud Runner Provisioning:',
+            `  Provider:   ${cloudArg ? cloudArg.replace(/^--cloud=?/, '') : 'AWS EC2'}`,
+            `  Instance:   ${cloudType ? cloudType.replace(/^--cloud-type=?/, '') : 'g4dn.xlarge (1x NVIDIA T4 GPU)'}`,
+            `  Lifecycle:  ${isSingleShot ? 'Single-shot (auto-terminates upon job completion — 0$ idle cost)' : 'Persistent'}`,
+            '  Status:     Provisioned -> Connected to GitHub Actions -> Running job -> Cleaned up',
+          ].join('\n'),
+        ),
+      );
+    }
+    const body = args.join(' ') || 'metrics update';
+    return finish(
+      state,
+      ok(
+        [
+          `CML report comment posted (simulated): ${body}`,
+          'Typical CI: checkout → dvc pull → dvc repro → cml comment with metrics/plots',
+          'See cml.dev for GitHub/GitLab actions templates.',
+        ].join('\n'),
+      ),
+    );
+  }
+
+  // ── python / dvc.api simulation ─────────────────────────────
+  if (cmd === 'python') {
+    const rawLine = args.join(' ');
+    return finish(
+      state,
+      ok(
+        [
+          `Python 3.11 execution (simulated)${rawLine ? `: python ${rawLine}` : ''}:`,
+          '>>> import dvc.api',
+          '>>> url = dvc.api.get_url("data/data.xml", rev="HEAD")',
+          '>>> print(url)',
+          's3://ml-team/dvcstore/files/md5/a1/b2c3d4e5f6',
+          '>>> data = dvc.api.read("data/data.xml")',
+          'Successfully loaded 1,024 bytes directly into Python process without local git clone/pull.',
+        ].join('\n'),
+      ),
+    );
+  }
+
   // ── dvc ─────────────────────────────────────────────────────
   if (cmd !== 'dvc') {
     // sandbox helpers listed in help
@@ -745,6 +797,45 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         'DVC alone is not enough — Git must version this metadata.',
       ].join('\n'),
     ));
+  }
+
+  if (sub === 'config') {
+    const isLocal = args.includes('--local');
+    const clean = args.slice(1).filter((a) => !a.startsWith('-'));
+    if (!clean.length) {
+      const lines = ['core.analytics = false'];
+      for (const r of state.remotes) {
+        lines.push(`remote.${r.name}.url = ${r.url}`);
+      }
+      if (state.files['.dvc/config.local']) {
+        lines.push('[local] remote.myremote.secret_access_key = ***');
+      }
+      return { state, result: ok(lines.join('\n')) };
+    }
+    const key = clean[0];
+    const val = clean[1] ?? 'true';
+    const secretKeys = ['secret', 'key', 'password', 'token', 'credential'];
+    const isSecret = secretKeys.some((s) => key.toLowerCase().includes(s));
+    if (isLocal) {
+      if (!state.files['.dvc/config.local']) {
+        state.files['.dvc/config.local'] = makeFile('.dvc/config.local', 'meta', { gitignored: true });
+      }
+      return finish(
+        state,
+        ok(
+          `Set ${key}=${isSecret ? '***' : val} in .dvc/config.local (gitignored).\nSafe: sensitive credentials will never be committed to Git.`,
+        ),
+      );
+    }
+    if (isSecret) {
+      return finish(
+        state,
+        ok(
+          `WARNING: '${key}' contains sensitive credentials!\nStoring in shared .dvc/config will leak secrets to Git.\nRecommended: use \`dvc config --local ${key} ...\` to store in .dvc/config.local.`,
+        ),
+      );
+    }
+    return finish(state, ok(`Set ${key}=${val} in .dvc/config (shared via Git).`));
   }
 
   if (sub === 'freeze' || sub === 'unfreeze') {
@@ -1398,23 +1489,89 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   }
 
   if (sub === 'api') {
+    const asub = args[1];
+    if (asub === 'read') {
+      const path = args[2] || 'data/data.xml';
+      return finish(
+        state,
+        ok(
+          [
+            `[dvc.api.read] Streaming content of '${path}' from remote (rev=HEAD):`,
+            `<xml><sample id="1" feature="0.82"/><sample id="2" feature="0.91"/></xml>`,
+            `Direct byte stream loaded in Python memory without touching local workspace.`,
+          ].join('\n'),
+        ),
+      );
+    }
+    if (asub === 'get-url' || asub === 'get_url') {
+      const path = args[2] || 'data/data.xml';
+      return finish(
+        state,
+        ok(
+          [
+            `[dvc.api.get_url] Direct storage URL for '${path}':`,
+            `s3://mybucket/dvcstore/files/md5/a1/b2c3d4e5f6`,
+            `External frameworks (PyTorch DataLoader, TF Dataset) stream directly from cloud object store.`,
+          ].join('\n'),
+        ),
+      );
+    }
+    if (asub === 'open') {
+      const path = args[2] || 'data/data.xml';
+      return finish(
+        state,
+        ok(
+          [
+            `[dvc.api.open] Context manager opened '${path}':`,
+            `with dvc.api.open('${path}', mode='r', repo='...') as fd:`,
+            `    data = fd.read()`,
+            `Streamed 1,024 bytes. Local workspace untouched.`,
+          ].join('\n'),
+        ),
+      );
+    }
+    if (asub === 'params' || asub === 'params_show') {
+      return finish(
+        state,
+        ok(
+          `[dvc.api.params_show] Current repository params at HEAD:\n${JSON.stringify(state.params, null, 2)}`,
+        ),
+      );
+    }
     return finish(
       state,
       ok(
         [
-          'dvc.api (Python) — read data without leaving your project:',
-          '  import dvc.api',
-          '  with dvc.api.open("data/data.xml") as f: ...',
-          '  dvc.api.read("data/data.xml", remote="myremote")',
-          '  dvc.api.exp_show()  # table of experiments',
-          'Simulator tip: use `cat <path>` to inspect registry-style files here.',
+          'dvc.api (Python SDK) — programmatic data and model access:',
+          '  dvc.api.read(path, repo=..., rev=..., remote=...)     # Load content directly into Python memory',
+          '  dvc.api.get_url(path, repo=..., rev=...)             # Direct cloud URL (S3/GCS/Azure)',
+          '  dvc.api.open(path, repo=..., rev=...)                # Standard file-like context manager',
+          '  dvc.api.params_show(repo=..., rev=...)               # Read params at any Git tag/branch',
+          '',
+          'Simulator commands: `dvc api read [path]`, `dvc api get-url [path]`, `dvc api open [path]`, `dvc api params`',
         ].join('\n'),
       ),
     );
   }
 
   if (sub === 'cml') {
-    // Continuous Machine Learning — PR comment bot (scenario).
+    if (args[1] === 'runner') {
+      const isSingleShot = args.includes('--single-shot');
+      const cloudArg = args.find((a) => a.startsWith('--cloud=') || a.startsWith('--cloud'));
+      const cloudType = args.find((a) => a.startsWith('--cloud-type=') || a.startsWith('--cloud-type'));
+      return finish(
+        state,
+        ok(
+          [
+            'CML Cloud Runner Provisioning:',
+            `  Provider:   ${cloudArg ? cloudArg.replace(/^--cloud=?/, '') : 'AWS EC2'}`,
+            `  Instance:   ${cloudType ? cloudType.replace(/^--cloud-type=?/, '') : 'g4dn.xlarge (1x NVIDIA T4 GPU)'}`,
+            `  Lifecycle:  ${isSingleShot ? 'Single-shot (auto-terminates upon job completion — 0$ idle cost)' : 'Persistent'}`,
+            '  Status:     Provisioned -> Connected to GitHub Actions -> Running job -> Cleaned up',
+          ].join('\n'),
+        ),
+      );
+    }
     const body = args.slice(1).join(' ') || 'metrics update';
     return finish(
       state,
@@ -1589,7 +1746,35 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       for (const s of state.pipeline) s.upToDate = false;
       return { state, result: ok(`Applied experiment ${run.id}\nparams: ${JSON.stringify(state.params)}`) };
     }
-    return { state, result: fail('Usage: dvc exp [run|show|apply]') };
+    if (esub === 'push') {
+      const remote = args[2] || defaultRemote(state)?.name || 'origin';
+      return finish(
+        state,
+        ok(
+          `Pushed ${state.experiments.length || 1} experiment(s) to remote '${remote}' (refs/exps synced).\nTeam members can now review runs with \`dvc exp pull\`.`,
+        ),
+      );
+    }
+    if (esub === 'pull') {
+      const remote = args[2] || defaultRemote(state)?.name || 'origin';
+      return finish(
+        state,
+        ok(
+          `Pulled experiment refs from remote '${remote}' (refs/exps synced).\nView shared team experiments with \`dvc exp show\`.`,
+        ),
+      );
+    }
+    if (esub === 'branch') {
+      const id = args[2] || (state.experiments[state.experiments.length - 1]?.id ?? 'exp-latest');
+      const branchName = args[3] || 'experiment-promoted';
+      return finish(
+        state,
+        ok(
+          `Created Git branch '${branchName}' from experiment '${id}'.\nGit branch is ready for push and Pull Request review.`,
+        ),
+      );
+    }
+    return { state, result: fail('Usage: dvc exp [run|show|apply|diff|push|pull|branch]') };
   }
 
   return { state, result: fail(`ERROR: unknown command 'dvc ${sub}'. Type \`help\`.`) };
