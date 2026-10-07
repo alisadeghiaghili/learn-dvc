@@ -368,11 +368,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       result: ok(
         [
           'DVC commands: init, add, status, commit, checkout, remote, push, pull, fetch,',
-          '  stage (with --foreach/--wdir/--always-changed), repro, dag, freeze, unfreeze,',
-          '  metrics, params, plots --template, exp (run --queue|diff), queue, live, get, import,',
-          '  update, api, cml, remove, gc, diff, version',
+          '  config (--local), stage (with --foreach/--wdir/--always-changed), repro, dag, freeze, unfreeze,',
+          '  metrics, params, plots --template, exp (run --queue|diff|push|pull|branch), queue, live, get, import,',
+          '  update, api (read|get-url|open|params), cml (runner launch --single-shot), remove, gc, diff, version',
           'Git (simulated): init, add, commit, log, status, checkout',
-          'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls',
+          'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls, python (dvc.api)',
           'Meta: levels, help/ui/tour, curriculum, concepts|glossary, quiz, steps, hint, show goal, reset, undo, sandbox, clear',
         ].join('\n'),
       ),
