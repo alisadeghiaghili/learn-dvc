@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { parseVisitorBadgeSvg } from '../src/ui/visitor-counter';
 
 describe('parseVisitorBadgeSvg', () => {
-  it('parses visitor count from visitorbadge title', () => {
+  it('parses total visitor count from combined visitorbadge title (daily / total)', () => {
     const svg = `<svg role="img" aria-label="VISITORS: 10 / 25"><title>VISITORS: 10 / 25</title></svg>`;
-    expect(parseVisitorBadgeSvg(svg)).toBe(10);
+    expect(parseVisitorBadgeSvg(svg)).toBe(25);
   });
 
   it('parses formatted count with commas', () => {
