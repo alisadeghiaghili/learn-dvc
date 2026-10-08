@@ -14,7 +14,7 @@ import type { Locale } from '../i18n/types';
 import { launchConfetti, playFanfare } from './confetti';
 import { loadProgress, resumeLine, saveProgress, summarizeCurriculum } from './progress';
 import { formatUiHelpText, startUiTour, uiHelpModalHtml } from './ui-help';
-import { getVisitorCount } from './visitor-counter';
+import { BASELINE_FALLBACK, getCachedVisitorCount, getVisitorCount } from './visitor-counter';
 
 function escapeHtml(s: string): string {
   return s
@@ -228,8 +228,10 @@ export class App {
   }
 
   private async initVisitorCounter(): Promise<void> {
+    this.cachedVisitorCount = getCachedVisitorCount() ?? BASELINE_FALLBACK;
+    this.renderVisitorBadge();
     const count = await getVisitorCount();
-    if (count !== null) {
+    if (count !== null && count !== this.cachedVisitorCount) {
       this.cachedVisitorCount = count;
       this.renderVisitorBadge();
     }
