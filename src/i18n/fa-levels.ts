@@ -883,7 +883,7 @@ export const faLevels: Record<string, LevelCopy> = {
     fieldNotes: ['گیت آن‌بوردینگ/استخدام مهندس داده'],
     startDialog: [{ title: 'آزمایشگاه باز', markdown: 'این level **دستورالعمل نمی‌دهد**. هدف یک وضعیت است.' }],
   },
-'xfer-1': {
+  'xfer-1': {
     seriesTitle: 'انتقال',
     name: 'پزشکی قانونی pointer: اثبات درک',
     objective: 'فرمان جدید نیست. pointer را بخوانید، گیت و DVC را توضیح دهید، صحت را با status/diff اثبات کنید.',
