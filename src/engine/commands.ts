@@ -1773,7 +1773,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       if ('error' in tf) return { state, result: fail(tf.error) };
       return finish(state, ok(cloudStatusLines(state, rr.name, tf.files)));
     }
-    return finish(state, ok(statusLines(state)));
+    const text = statusLines(state);
+    // the footer explains "modified"; it only makes sense when something is
+    return text.startsWith('Data and pipelines are up to date.') ? { state, result: ok(text) } : finish(state, ok(text));
   }
 
   if (sub === 'add') {
