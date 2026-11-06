@@ -1446,7 +1446,7 @@ export const deLevels: Record<string, LevelCopy> = {
     ],
     fieldNotes: [
       'Benenne ein Experiment nach der Änderung (lr-005), nicht nach dir selbst: Auf diesen Namen bezieht sich die Diskussion im Pull Request',
-      'Räum auf, bevor du teilst: dvc exp push schickt jedes Experiment, also entferne zuerst die Sackgassen',
+      'Räum auf, bevor du teilst: `dvc exp push origin -A` schickt jedes Experiment (ohne `-A` und ohne Namen nur die auf dem aktuellen Commit basierenden), also entferne zuerst die Sackgassen',
       'dvc exp gc gibt es in DVC 3 nicht mehr; dvc exp remove ersetzt es',
     ],
     startDialog: [
@@ -1558,7 +1558,7 @@ export const deLevels: Record<string, LevelCopy> = {
     ],
     fieldNotes: [
       'Deploye nach Stage, nicht nach Dateipfad: Der Dienst fragt nach „model in prod“, und eine Beförderung wird zu einem Git-Tag',
-      'Pushe die Tags mit git push --tags, sonst sieht sonst niemand die Registry',
+      'Pushe die Tags mit git push --tags, sonst sieht niemand die Registry',
       'dvc artifact und dvc register sind keine Befehle; die Registry-Verben gehören zu gto',
     ],
     startDialog: [

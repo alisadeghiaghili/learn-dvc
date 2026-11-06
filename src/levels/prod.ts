@@ -313,7 +313,7 @@ export const prodLevels: LevelDef[] = [
     ],
     fieldNotes: [
       'Name an experiment after the change (lr-005), not after yourself: that name is what the pull request discussion refers to',
-      'Prune before you share: dvc exp push sends every experiment, so remove the dead ends first',
+      'Prune before you share: `dvc exp push origin -A` sends every experiment (without `-A` or names it sends only those based on the current commit), so remove the dead ends first',
       'dvc exp gc no longer exists in DVC 3; dvc exp remove replaces it',
     ],
     startDialog: [
