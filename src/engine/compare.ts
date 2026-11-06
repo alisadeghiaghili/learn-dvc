@@ -246,6 +246,47 @@ function checkOne(state: RepoState, check: GoalCheck): GoalStatus {
         detail: dirty.length ? `dirty: ${dirty.join(', ')}` : 'ok',
       };
     }
+    case 'hooksInstalled': {
+      const met = !!state.hooks?.installed;
+      return {
+        met,
+        label: 'Git hooks installed',
+        detail: met ? 'ok' : 'run `dvc install`',
+        command: met ? undefined : 'dvc install',
+      };
+    }
+    case 'gitTag': {
+      const met = (state.gitTags ?? []).some((t) => t.name === check.name);
+      return {
+        met,
+        label: `Git tag ${check.name}`,
+        detail: met ? 'ok' : 'tag not created yet',
+      };
+    }
+    case 'experimentNamed': {
+      const has = state.experiments.some((e) => e.name === check.name);
+      return {
+        met: has === check.exists,
+        label: check.exists ? `Experiment '${check.name}' kept` : `Experiment '${check.name}' removed`,
+        detail: has === check.exists ? 'ok' : has ? 'still listed in `dvc exp list`' : 'not saved yet',
+      };
+    }
+    case 'configEquals': {
+      const v = (state.dvcConfig ?? {})[check.key] ?? (state.dvcConfigLocal ?? {})[check.key];
+      return {
+        met: v === check.value,
+        label: `${check.key} = ${check.value}`,
+        detail: v === undefined ? 'not set' : `current=${v}`,
+      };
+    }
+    case 'stagesUpToDate': {
+      const bad = check.names.filter((n) => !state.pipeline.find((s) => s.name === n)?.upToDate);
+      return {
+        met: bad.length === 0,
+        label: `Stages reproduced: ${check.names.join(', ')}`,
+        detail: bad.length ? `stale: ${bad.join(', ')}` : 'ok',
+      };
+    }
     case 'allOf': {
       const results = check.checks.map((c) => checkOne(state, c));
       return {

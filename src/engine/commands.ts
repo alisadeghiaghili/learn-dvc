@@ -50,6 +50,18 @@ function findGitCommit(state: RepoState, hash: string): GitCommit | undefined {
   return state.gitCommits.find((c) => c.hash.startsWith(hash));
 }
 
+function resolveGitRef(state: RepoState, ref: string | undefined): GitCommit | undefined {
+  if (!ref || ref === 'HEAD') return state.gitCommits[state.gitCommits.length - 1];
+  const rel = /^HEAD~(\d+)$/.exec(ref);
+  if (rel) return state.gitCommits[state.gitCommits.length - 1 - Number(rel[1])];
+  return findGitCommit(state, ref);
+}
+
+/** Strip the teaching footer from a nested command's output so it can be embedded in another one. */
+function plainOutput(res: CommandResult): string {
+  return (res.output || res.error || '').split('\n\n── Why:')[0]!;
+}
+
 function snapshotGit(state: RepoState, message: string): GitCommit {
   const pointers: Record<string, string> = {};
   for (const f of Object.values(state.files)) {
@@ -521,16 +533,16 @@ function statusLines(state: RepoState): string {
       lines.push(`modified:          ${path}`);
     }
   }
-  const missingRemote = state.remotes.length === 0 && state.cache.length > 0;
-  if (missingRemote) lines.push('warn: no remote configured — `dvc push` will fail');
+  // advisory only: it must not hide the "up to date" verdict
+  const warn = state.remotes.length === 0 && state.cache.length > 0 ? ['warn: no remote configured — `dvc push` will fail'] : [];
   const notInCache = Object.values(state.files)
     .filter((f) => f.tracked && f.pointerMd5 && !state.cache.includes(f.pointerMd5) && f.present)
     .map((f) => f.path);
   for (const p of notInCache) {
     lines.push(`update file:       ${p} (pointer not in cache — try \`dvc commit\`)`);
   }
-  if (!lines.length) return 'Data and pipelines are up to date.';
-  return lines.join('\n');
+  if (!lines.length) return ['Data and pipelines are up to date.', ...warn].join('\n');
+  return [...lines, ...warn].join('\n');
 }
 
 /** `dvc status --cloud`: compare the local cache with one remote. */
@@ -1126,8 +1138,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           ),
         };
       }
+      const hookNote = state.hooks?.installed
+        ? ['pre-commit hook: dvc status', ...statusLines(state).split('\n').map((l) => `  ${l}`)]
+        : [];
       const c = snapshotGit(state, message);
-      return finish(state, ok(`[${c.hash}] ${message}`));
+      return finish(state, ok([...hookNote, `[${c.hash}] ${message}`].join('\n')));
     }
     if (sub === 'checkout') {
       // forms:
@@ -1149,9 +1164,75 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         return { state, result: gitCheckoutPartial(state, args[1], args.slice(2)) };
       }
       if (args.length === 2) {
-        return { state, result: checkoutGitRef(state, args[1]) };
+        const res = checkoutGitRef(state, args[1]);
+        // post-checkout hook (flag 1 = ref checkout): runs `dvc checkout` so the workspace follows the pointers
+        if (res.ok && state.hooks?.installed && state.initialized && !res.output.startsWith('Already on')) {
+          const hook = executeCommandInner(state, 'dvc checkout');
+          const head = res.output.split('\n')[0]!;
+          return {
+            state: hook.state,
+            result: ok([head, 'post-checkout hook: dvc checkout', ...plainOutput(hook.result).split('\n').map((l) => `  ${l}`)].join('\n')),
+          };
+        }
+        return { state, result: res };
       }
       return { state, result: fail('Usage: git checkout <ref> [-- <path>]') };
+    }
+    if (sub === 'push') {
+      const rest = args.slice(1);
+      const positional = rest.filter((a) => !a.startsWith('-'));
+      const remote = positional[0] ?? 'origin';
+      const remotes = state.gitRemotes ?? [];
+      if (!remotes.length) {
+        return {
+          state,
+          result: fail('fatal: No configured push destination.\nEither specify the URL from the command-line or configure a remote repository using: git remote add <name> <url>'),
+        };
+      }
+      if (!remotes.includes(remote)) {
+        return { state, result: fail(`fatal: '${remote}' does not appear to be a git repository\nfatal: Could not read from remote repository.`) };
+      }
+      const lines: string[] = [];
+      let next = state;
+      // pre-push hook: runs `dvc push` first; a failing hook aborts the push
+      if (state.hooks?.installed && state.initialized) {
+        lines.push('pre-push hook: dvc push');
+        const hook = executeCommandInner(state, 'dvc push');
+        const text = plainOutput(hook.result).split('\n').map((l) => `  ${l}`);
+        if (!hook.result.ok) {
+          return {
+            state,
+            result: fail([...lines, ...text, `error: failed to push some refs to '${remote}' (the pre-push hook exited with an error)`].join('\n')),
+          };
+        }
+        lines.push(...text);
+        next = hook.state;
+      }
+      const head = next.gitCommits[next.gitCommits.length - 1];
+      const tagNames = rest.includes('--tags')
+        ? (next.gitTags ?? []).map((t) => t.name)
+        : positional.slice(1).filter((n) => (next.gitTags ?? []).some((t) => t.name === n));
+      lines.push(`To ${remote}`, `   ${head?.hash ?? '0000000'}  main -> main`, ...tagNames.map((n) => ` * [new tag]  ${n} -> ${n}`));
+      return { state: next, result: ok(lines.join('\n')) };
+    }
+    if (sub === 'tag') {
+      const rest = args.slice(1);
+      const names = rest.filter((a) => !a.startsWith('-'));
+      const tags = (state.gitTags ??= []);
+      if (rest.includes('-d') || rest.includes('--delete')) {
+        const missing = names.filter((n) => !tags.some((t) => t.name === n));
+        if (!names.length || missing.length) return { state, result: fail(`error: tag '${missing[0] ?? ''}' not found.`) };
+        state.gitTags = tags.filter((t) => !names.includes(t.name));
+        return { state, result: ok(names.map((n) => `Deleted tag '${n}'`).join('\n')) };
+      }
+      if (!names.length) return { state, result: ok(tags.map((t) => t.name).sort().join('\n')) };
+      const name = names[0]!;
+      const ref = names[1];
+      if (tags.some((t) => t.name === name)) return { state, result: fail(`fatal: tag '${name}' already exists`) };
+      const commit = resolveGitRef(state, ref);
+      if (!commit) return { state, result: fail(`fatal: Failed to resolve '${ref}' as a valid ref.`) };
+      tags.push({ name, commit: commit.hash });
+      return { state, result: ok('') };
     }
     if (sub === 'merge') {
       const branch = args[1] || 'origin/main';
@@ -1336,6 +1417,72 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     );
   }
 
+
+  if (sub === 'install') {
+    if (!isGitRepo(state)) {
+      return {
+        state,
+        result: fail(
+          [
+            'ERROR: failed to install the DVC Git hooks - this directory is not inside of a Git repository.',
+            'The hooks live in .git/hooks, so Git must exist first: run `git init` (and `dvc init`).',
+          ].join('\n'),
+        ),
+      };
+    }
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    if (args.includes('--use-pre-commit-tool')) {
+      const text = [
+        'repos:',
+        '- repo: https://github.com/treeverse/dvc',
+        '  rev: 3.0.0',
+        '  hooks:',
+        '  - id: dvc-pre-commit',
+        '    stages: [pre-commit]',
+        '  - id: dvc-pre-push',
+        '    stages: [pre-push]',
+        '  - id: dvc-post-checkout',
+        '    stages: [post-checkout]',
+        '    always_run: true',
+      ].join('\n');
+      state.files['.pre-commit-config.yaml'] = makeFile('.pre-commit-config.yaml', 'yaml', {
+        contentId: fakeMd5('pre-commit-config:dvc'),
+        text,
+      });
+      state.hooks = { installed: state.hooks?.installed ?? false, preCommitConfig: true };
+      return finish(
+        state,
+        ok(
+          [
+            'Wrote the DVC hooks into .pre-commit-config.yaml (dvc-pre-commit, dvc-pre-push, dvc-post-checkout).',
+            'Nothing is active in .git/hooks yet: the pre-commit tool owns the hooks. Activate them with',
+            '    pre-commit install --hook-type pre-commit --hook-type pre-push --hook-type post-checkout',
+            'and commit .pre-commit-config.yaml so the whole team gets the same hooks.',
+          ].join('\n'),
+        ),
+      );
+    }
+    if (state.hooks?.installed) {
+      return {
+        state,
+        result: fail("ERROR: Hook 'post-checkout' already exists. Please refer to https://man.dvc.org/install for more info."),
+      };
+    }
+    state.hooks = { installed: true, preCommitConfig: state.hooks?.preCommitConfig };
+    return finish(
+      state,
+      ok(
+        [
+          'Installed Git hooks in .git/hooks:',
+          '  pre-commit     runs `dvc status` before each commit',
+          '  post-checkout  runs `dvc checkout` after `git checkout <ref>` so the data follows the branch',
+          '  pre-push       runs `dvc push` before `git push` so the code never lands without its data',
+          'Hooks are local to this clone (.git is not versioned): every teammate runs `dvc install` once.',
+        ].join('\n'),
+      ),
+    );
+  }
 
   if (sub === 'config') {
     const isLocal = args.includes('--local');

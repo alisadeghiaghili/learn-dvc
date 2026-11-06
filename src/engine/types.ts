@@ -66,6 +66,17 @@ export interface ExperimentRun {
   outputs?: Record<string, string>;
   /** Run signature of every stage after the experiment ran. */
   stageSigs?: Record<string, string>;
+  /** Message given to `dvc exp save -m`. */
+  message?: string;
+}
+
+/** A Git tag. GTO registry tags (name@vX.Y.Z, name#stage#N) are ordinary tags. */
+export interface GitTag {
+  name: string;
+  /** Hash of the commit the tag points at. */
+  commit: string;
+  /** For `name#stage#N` tags: the registered version the stage was assigned to. */
+  version?: string;
 }
 
 export interface GitCommit {
@@ -133,6 +144,16 @@ export interface RepoState {
   /** Extra pipeline metadata from stage flags. */
   /** Hand-written dvc.yaml shown by `cat dvc.yaml` (foreach / matrix stages, which `dvc stage add` cannot create). */
   dvcYaml?: string;
+  /** Git hooks installed by `dvc install` (pre-commit, post-checkout, pre-push). */
+  hooks?: { installed: boolean; preCommitConfig?: boolean };
+  /** Options set with `dvc config` / `dvc cache dir`, shared via `.dvc/config` (keys like `cache.type`). */
+  dvcConfig?: Record<string, string>;
+  /** Options set with `--local`: `.dvc/config.local`, never committed. */
+  dvcConfigLocal?: Record<string, string>;
+  /** Git tags (`git tag`, `gto register`, `gto assign`). */
+  gitTags?: GitTag[];
+  /** Experiment names pushed to each Git remote with `dvc exp push`. */
+  expRemotes?: Record<string, string[]>;
   stageMeta: Record<string, { alwaysChanged?: boolean; noCache?: string[]; external?: string[]; wdir?: string; desc?: string; foreach?: string[] }>;
 }
 
@@ -172,6 +193,11 @@ export type GoalCheck =
   | { kind: 'ignoredPath'; path: string }
   | { kind: 'importUpdated'; path: string }
   | { kind: 'notDirty' }
+  | { kind: 'hooksInstalled' }
+  | { kind: 'gitTag'; name: string }
+  | { kind: 'experimentNamed'; name: string; exists: boolean }
+  | { kind: 'configEquals'; key: string; value: string }
+  | { kind: 'stagesUpToDate'; names: string[] }
   | { kind: 'allOf'; checks: GoalCheck[] };
 
 export interface SolutionStepStatus {
