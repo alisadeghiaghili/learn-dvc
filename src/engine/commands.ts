@@ -32,7 +32,7 @@ export interface CommandContext {
   raw: string;
 }
 
-const COUNTING = /^dvc |^git (add|commit|checkout|init)|^edit |^rm /;
+const COUNTING = /^dvc |^gto |^git (add|commit|checkout|init|push|tag)|^edit |^rm /;
 
 export function commandCountsForGolf(raw: string): boolean {
   return COUNTING.test(raw.trim());
