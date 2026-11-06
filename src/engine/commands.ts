@@ -706,6 +706,181 @@ function recordExperiment(state: RepoState, name?: string): ExperimentRun {
   return run;
 }
 
+/** Names of the artifacts declared in the `artifacts:` section of dvc.yaml, with their path. */
+function declaredArtifacts(state: RepoState): Record<string, string> {
+  const out: Record<string, string> = {};
+  const lines = (state.dvcYaml ?? '').split('\n');
+  const start = lines.findIndex((l) => /^artifacts:\s*$/.test(l));
+  if (start < 0) return out;
+  let current: string | undefined;
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/.test(line)) break;
+    const head = /^ {2}([\w./:-]+):\s*$/.exec(line);
+    if (head) {
+      current = head[1];
+      out[current!] = '';
+      continue;
+    }
+    const pm = /^ {4}path:\s*(\S+)/.exec(line);
+    if (pm && current) out[current] = pm[1]!;
+  }
+  return out;
+}
+
+const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
+const semverKey = (v: string): number[] => (SEMVER_RE.exec(v) ?? []).slice(1).map(Number);
+function compareSemver(a: string, b: string): number {
+  const x = semverKey(a);
+  const y = semverKey(b);
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function registeredVersions(state: RepoState, name: string): { version: string; commit: string; tag: string }[] {
+  const prefix = `${name}@`;
+  return (state.gitTags ?? [])
+    .filter((t) => t.name.startsWith(prefix))
+    .map((t) => ({ version: t.name.slice(prefix.length), commit: t.commit, tag: t.name }))
+    .sort((a, b) => compareSemver(a.version, b.version));
+}
+
+/** Latest `name#stage#N` assignment: the version currently in that stage. */
+function stageAssignment(
+  state: RepoState,
+  name: string,
+  stage: string,
+): { n: number; version: string; commit: string } | undefined {
+  const re = new RegExp(`^${escapeRe(name)}#${escapeRe(stage)}#(\\d+)$`);
+  let best: { n: number; version: string; commit: string } | undefined;
+  for (const t of state.gitTags ?? []) {
+    const m = re.exec(t.name);
+    if (!m || !t.version) continue;
+    const n = Number(m[1]);
+    if (!best || n > best.n) best = { n, version: t.version, commit: t.commit };
+  }
+  return best;
+}
+
+/** `gto` is a separate CLI (Git tags as a model registry); here it reads and writes the simulated tags. */
+function gtoCommand(state: RepoState, args: string[]): { state: RepoState; result: CommandResult } {
+  const g = args[0];
+  if (!g || g === '--help' || g === '-h') {
+    return {
+      state,
+      result: ok(
+        [
+          'usage: gto <register|assign|show> ...',
+          '  gto register NAME [REF] --version vX.Y.Z',
+          '  gto assign NAME --version vX.Y.Z --stage STAGE',
+          '  gto show [NAME]',
+        ].join('\n'),
+      ),
+    };
+  }
+  const p = parseArgv(args.slice(1), ['--version', '--stage', '-m', '--message', '--ref']);
+  if (!isGitRepo(state)) return { state, result: fail('ERROR: gto works on Git tags: this directory is not a Git repository.') };
+  const tags = (state.gitTags ??= []);
+
+  if (g === 'register') {
+    const name = p.pos[0];
+    if (!name || /[@#\s]/.test(name)) {
+      return { state, result: fail('Usage: gto register NAME [REF] [--version vX.Y.Z]   (NAME may not contain @, # or spaces)') };
+    }
+    const commit = resolveGitRef(state, p.pos[1]);
+    if (!commit) return { state, result: fail(`fatal: Failed to resolve '${p.pos[1]}' as a valid ref.`) };
+    const existing = registeredVersions(state, name);
+    const atCommit = existing.find((v) => v.commit === commit.hash);
+    if (atCommit) {
+      return {
+        state,
+        result: fail(
+          [
+            `ERROR: ${name} already has version ${atCommit.version} registered at commit ${commit.hash}.`,
+            'GTO allows one version per commit (VersionExistsForCommit): commit your change first, then register the next version.',
+          ].join('\n'),
+        ),
+      };
+    }
+    let version = p.val('--version');
+    if (version) {
+      if (!SEMVER_RE.test(version)) {
+        return { state, result: fail(`ERROR: Version '${version}' is not valid. Example of valid version: 'v1.0.0'`) };
+      }
+      if (!version.startsWith('v')) version = `v${version}`;
+      if (existing.some((v) => v.version === version)) {
+        return { state, result: fail(`ERROR: Version '${version}' of ${name} is already registered (VersionAlreadyRegistered).`) };
+      }
+    } else {
+      const last = existing[existing.length - 1];
+      if (last) {
+        const [maj, min, pat] = semverKey(last.version);
+        version = `v${maj}.${min}.${(pat ?? 0) + 1}`;
+      } else {
+        version = 'v0.0.1';
+      }
+    }
+    const tag = `${name}@${version}`;
+    tags.push({ name: tag, commit: commit.hash });
+    return {
+      state,
+      result: ok(`Created git tag '${tag}' that registers a version\nTo push the changes upstream, run:\n    git push origin ${tag}`),
+    };
+  }
+
+  if (g === 'assign') {
+    const name = p.pos[0];
+    const stage = p.val('--stage');
+    let version = p.val('--version');
+    if (!name || !stage || !version) {
+      return { state, result: fail('Usage: gto assign NAME --version vX.Y.Z --stage STAGE') };
+    }
+    if (!SEMVER_RE.test(version)) {
+      return { state, result: fail(`ERROR: Version '${version}' is not valid. Example of valid version: 'v1.0.0'`) };
+    }
+    if (!version.startsWith('v')) version = `v${version}`;
+    const found = registeredVersions(state, name).find((v) => v.version === version);
+    if (!found) {
+      return {
+        state,
+        result: fail(`ERROR: Version '${version}' is not registered. Register it first: gto register ${name} --version ${version}`),
+      };
+    }
+    const current = stageAssignment(state, name, stage);
+    if (current?.version === version && !p.has('--force')) {
+      return {
+        state,
+        result: fail(`ERROR: Version '${version}' is already in stage '${stage}'. Use the '--force' flag to create a new Git tag nevertheless.`),
+      };
+    }
+    const tag = `${name}#${stage}#${(current?.n ?? 0) + 1}`;
+    tags.push({ name: tag, commit: found.commit, version });
+    return {
+      state,
+      result: ok(`Created git tag '${tag}' that assigns stage to version '${version}'\nTo push the changes upstream, run:\n    git push origin ${tag}`),
+    };
+  }
+
+  if (g === 'show') {
+    const only = p.pos[0];
+    const names = [...new Set(tags.map((t) => t.name.split(/[@#]/)[0]!))].filter((n) => !only || n === only).sort();
+    if (!names.length) {
+      return { state, result: ok(only ? `No versions of '${only}' registered.` : 'Nothing registered yet. Try `gto register <name> --version v1.0.0`.') };
+    }
+    const stages = [...new Set(tags.filter((t) => t.version).map((t) => t.name.split('#')[1]!))].sort();
+    const rows = [['artifact', 'latest', ...stages.map((s) => `#${s}`)]];
+    for (const n of names) {
+      const latest = registeredVersions(state, n).slice(-1)[0]?.version ?? '-';
+      rows.push([n, latest, ...stages.map((s) => stageAssignment(state, n, s)?.version ?? '-')]);
+    }
+    const widths = rows[0]!.map((_, i) => Math.max(...rows.map((r) => r[i]!.length)));
+    return { state, result: ok(rows.map((r) => r.map((c, i) => c.padEnd(widths[i]!)).join('  ').trimEnd()).join('\n')) };
+  }
+
+  return { state, result: fail(`gto: unknown command '${g}'. This simulator supports: register, assign, show.`) };
+}
+
 // ── .dvc/config, shared cache ────────────────────────────────────────────────
 
 const CACHE_LINK_TYPES = ['reflink', 'hardlink', 'symlink', 'copy'];
@@ -1457,6 +1632,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return runPython(state, args, finish);
   }
 
+  // ── gto: a separate CLI that turns Git tags into a model registry ──
+  if (cmd === 'gto') return gtoCommand(state, args);
+
   // ── dvc ─────────────────────────────────────────────────────
   if (cmd !== 'dvc') {
     // sandbox helpers listed in help
@@ -1503,6 +1681,40 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         [
           "ERROR: unknown command 'dvc cml'. CML is a separate CLI, not a DVC subcommand.",
           'Install it next to DVC in CI and call it directly: `cml comment create report.md`.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'artifact') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc artifact'. The command group is plural: `dvc artifacts get <url> <name>`.",
+          'Artifacts are declared in the artifacts: section of dvc.yaml; versions and stages are Git tags made with the separate `gto` CLI.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'register' || sub === 'assign') {
+    return {
+      state,
+      result: fail(
+        [
+          `ERROR: unknown command 'dvc ${sub}'. Registering and assigning stages is done by the separate GTO CLI, not by DVC:`,
+          `    gto ${sub} model --version v1.0.0${sub === 'assign' ? ' --stage prod' : ''}`,
+          'Then fetch the artifact with `dvc artifacts get <url> model --rev v1.0.0`.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'gto') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc gto'. GTO is a separate CLI (like CML), not a DVC subcommand.",
+          'Call it directly: `gto register model --version v1.0.0`, `gto assign model --version v1.0.0 --stage prod`.',
         ].join('\n'),
       ),
     };
@@ -2457,6 +2669,81 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     if (plsub === 'show') return finish(state, ok(render('plots show')));
     if (plsub === 'diff') return finish(state, ok(render('plots diff (workspace series)')));
     return { state, result: fail('Usage: dvc plots show|diff [--template simple|linear|confusion]') };
+  }
+
+  if (sub === 'artifacts') {
+    if (args[1] !== 'get') {
+      return {
+        state,
+        result: fail(
+          `ERROR: unknown command 'dvc artifacts ${args[1] ?? ''}'. Only \`dvc artifacts get <url> <name>\` exists; register and assign with the separate \`gto\` CLI.`,
+        ),
+      };
+    }
+    const ap = parseArgv(args.slice(2), ['--rev', '--stage', '-o', '--out', '-j', '--jobs', '--config', '--remote', '--remote-config']);
+    const [url, name] = ap.pos;
+    if (!url || !name) return { state, result: fail('Usage: dvc artifacts get <url> <name> [--rev <version>] [--stage <stage>] [-o <path>]') };
+    const rev = ap.val('--rev');
+    const stage = ap.val('--stage');
+    if (rev && stage) return { state, result: fail('ERROR: Artifact version and stage are mutually exclusive.') };
+    // --rev names a registered version (GTO tag name@vX.Y.Z); --stage resolves name#stage#N to its version
+    let version: string | undefined;
+    if (rev) {
+      version = registeredVersions(state, name).find((v) => v.version === rev || v.version === `v${rev}`)?.version;
+      if (!version) {
+        const known = registeredVersions(state, name).map((v) => v.version);
+        return {
+          state,
+          result: fail(
+            `ERROR: Unable to find artifact '${name}' with version '${rev}'. ${known.length ? `Registered versions: ${known.join(', ')}.` : 'No version is registered yet.'}`,
+          ),
+        };
+      }
+    } else if (stage) {
+      const at = stageAssignment(state, name, stage);
+      if (!at) {
+        return {
+          state,
+          result: fail(`ERROR: Unable to find artifact '${name}' in stage '${stage}'. Assign one first: gto assign ${name} --version <vX.Y.Z> --stage ${stage}`),
+        };
+      }
+      version = at.version;
+    } else {
+      version = registeredVersions(state, name).slice(-1)[0]?.version;
+      if (!version) {
+        return {
+          state,
+          result: fail(
+            [
+              `ERROR: Unable to find artifact '${name}': no version of it is registered in this repository.`,
+              `Register one with the separate GTO CLI first: gto register ${name} --version v1.0.0`,
+            ].join('\n'),
+          ),
+        };
+      }
+    }
+    const declared = declaredArtifacts(state);
+    if (!(name in declared)) {
+      return {
+        state,
+        result: fail(`ERROR: Unable to find artifact '${name}' in the artifacts: section of dvc.yaml at ${name}@${version}. Declared: ${Object.keys(declared).join(', ') || '(none)'}.`),
+      };
+    }
+    const src = declared[name]!;
+    const out = ap.val('-o', '--out') ?? src.split('/').pop()!;
+    state.files[out] = makeFile(out, 'data', {
+      contentId: state.files[src]?.contentId ?? fakeMd5(`artifact:${name}:${version}`),
+      present: true,
+    });
+    return finish(
+      state,
+      ok(
+        [
+          `Downloaded artifact '${name}' version ${version}${stage ? ` (stage ${stage})` : ''} from ${url}`,
+          `  ${src} -> ${out}`,
+        ].join('\n'),
+      ),
+    );
   }
 
   if (sub === 'get' || sub === 'import' || sub === 'import-url') {
