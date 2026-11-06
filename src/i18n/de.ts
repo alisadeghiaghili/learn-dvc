@@ -265,6 +265,38 @@ export const de: Catalog = {
         'Macht `git clone` oder `dvc pull` in schlanken Docker-Containern überflüssig.',
       ],
     },
+    'dvc-install': {
+      title: 'dvc install (Git-Hooks)',
+      lines: [
+        'Drei Hooks landen in .git/hooks: pre-commit (dvc status), post-checkout (dvc checkout), pre-push (dvc push).',
+        'Danach bewegt git checkout <ref> Code und Daten gemeinsam, und git push wird gestoppt, wenn die Daten nicht gepusht werden können.',
+        'Hooks sind lokal für einen Clone; ein zweites dvc install schlägt fehl, weil die Dateien schon existieren. dvc install --use-pre-commit-tool schreibt stattdessen .pre-commit-config.yaml.',
+      ],
+    },
+    'dvc-exp-save': {
+      title: 'dvc exp save / remove',
+      lines: [
+        'exp save speichert Params und Metriken des Workspace als Experiment, ohne eine Stage auszuführen; ohne -n entsteht ein Name aus Adjektiv und Nomen, -f überschreibt einen Namen.',
+        'exp remove <name> löscht ein Experiment, -A alle, --queue die eingereihten, und -g <git-remote> entfernt es von einem Git-Remote.',
+        'dvc exp gc wurde in DVC 3 entfernt; dvc exp remove ersetzt es.',
+      ],
+    },
+    'dvc-cache-dir': {
+      title: 'dvc cache dir / gemeinsamer Cache',
+      lines: [
+        'dvc cache dir <pfad> setzt cache.dir in .dvc/config (--local legt es in .dvc/config.local ab). Objekte im alten Cache werden nicht verschoben.',
+        'cache.shared group macht den Cache gruppenbeschreibbar; cache.type nimmt reflink, hardlink, symlink oder copy. Andere Werte werden abgelehnt.',
+        'dvc checkout --relink legt die Workspace-Links nach einer Änderung von cache.type neu an; committe .dvc/config, um das Setup zu teilen.',
+      ],
+    },
+    'dvc-artifacts': {
+      title: 'dvc artifacts get / gto',
+      lines: [
+        'dvc.yaml deklariert Artefakte (path, type); GTO, eine eigenständige CLI, registriert Versionen als Git-Tags: gto register model --version v1.0.0 erzeugt model@v1.0.0.',
+        'gto assign ... --stage prod erzeugt model#prod#1; erneutes Zuweisen zählt hoch. Ein Commit kann nur eine Version tragen.',
+        'dvc artifacts get <url> <name> --rev <version> oder --stage <stage> lädt diese Version nach -o; solange nichts registriert ist, schlägt es fehl. Pushe die Tags mit git push --tags.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -422,6 +454,26 @@ export const de: Catalog = {
     'pipeline-matrix': {
       title: 'Matrix & Foreach Pipelines',
       body: '`foreach` und `matrix` in dvc.yaml definieren parametrisierte Läufe über mehrere Datensätze oder Modellarchitekturen ohne Code-Duplikate. DVC generiert unabhängige DAG-Stufen und verwaltet deren Cache selektiv.',
+    },
+    'git-hooks': {
+      title: 'Git-Hooks (dvc install)',
+      body: 'dvc install legt die Hooks pre-commit (dvc status), post-checkout (dvc checkout) und pre-push (dvc push) in .git/hooks an, damit Git Code und Daten im Gleichschritt hält. Hooks gelten nur für einen Clone und werden nicht versioniert; --use-pre-commit-tool legt sie für das ganze Team in .pre-commit-config.yaml ab.',
+    },
+    'shared-cache': {
+      title: 'Gemeinsamer Cache',
+      body: 'Setze dvc cache dir <pfad>, cache.shared group und cache.type (reflink, hardlink, symlink, copy) in .dvc/config, damit ein Team einen inhaltsadressierten Cache statt einem pro Clone nutzt. Führe nach einer Änderung des Link-Typs dvc checkout --relink aus; rechnerspezifische Pfade gehören mit --local in .dvc/config.local.',
+    },
+    'repro-pull': {
+      title: 'repro --pull und --allow-missing',
+      body: 'Auf einem frischen Clone ist dvc.lock aktuell, aber die Outputs fehlen. Ein einfaches dvc repro führt die Stages erneut aus; dvc repro --pull lädt die Outputs stattdessen vom Remote (und führt eine Stage nur aus, wenn das Remote sie nicht hat); --allow-missing überspringt Stages, deren einziger Unterschied fehlende Daten sind.',
+    },
+    'artifacts-registry': {
+      title: 'Artefakte & GTO-Registry',
+      body: 'artifacts: in dvc.yaml deklariert Modelle und Datensätze; die eigenständige GTO-CLI macht aus Git-Tags eine Registry (name@v1.0.0 für Versionen, name#prod#1 für Stage-Zuweisungen); dvc artifacts get lädt eine Version oder die aktuell in einer Stage herunter.',
+    },
+    'exp-save-remove': {
+      title: 'Experimente speichern & aufräumen',
+      body: 'dvc exp save hält Params und Metriken des Workspace als benanntes Experiment fest, ohne etwas auszuführen (-n benennt, -f überschreibt). dvc exp remove <name> räumt eines auf, -A alle, --queue die Warteschlange, -g <git-remote> ein Git-Remote. dvc exp gc gibt es in DVC 3 nicht mehr.',
     },
   },
   ui: {
@@ -780,6 +832,31 @@ export const de: Catalog = {
           'In der README-Datei',
         ],
         correct: 1,
+      },
+      {
+        q: 'Was bewirkt der DVC-post-checkout-Hook nach git checkout <älterer-commit>?',
+        a: ['Nichts, Git ignoriert DVC', 'Er führt dvc checkout aus, damit die Workspace-Daten zu den wiederhergestellten Pointern passen', 'Er löscht den Cache'],
+        correct: 1,
+      },
+      {
+        q: 'Du hast von Hand trainiert und willst das Ergebnis als Experiment behalten, ohne etwas neu auszuführen. Welcher Befehl?',
+        a: ['dvc exp run -S lr=0.05', 'dvc exp gc', 'dvc exp save -n <name>'],
+        correct: 2,
+      },
+      {
+        q: 'Frischer Clone, dvc.lock ist aktuell, aber die Modelldatei fehlt. Was vermeidet das erneute Training?',
+        a: ['dvc repro --pull', 'dvc repro (stellt immer wieder her)', 'dvc gc -w'],
+        correct: 0,
+      },
+      {
+        q: 'Wie registriert ein Team eine Modellversion in der GTO-Registry?',
+        a: ['dvc register model', 'gto register model --version v1.0.0 (ein Git-Tag model@v1.0.0)', 'Die Datei in model_final.pkl umbenennen'],
+        correct: 1,
+      },
+      {
+        q: 'Wohin gehören die Einstellungen cache.shared und cache.type für einen gemeinsamen Cache?',
+        a: ['In die .dvc/config, committet, damit jeder Clone sie teilt (.dvc/config.local für rechnerspezifische Werte)', 'In dvc.lock', 'In das Shell-Profil jeder Person'],
+        correct: 0,
       },
     ],
     helpSections: [

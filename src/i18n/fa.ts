@@ -265,6 +265,38 @@ export const fa: Catalog = {
         'نیازی به اجرای `git clone` یا `dvc pull` در کانتینرهای سبک داکر برای سرویس‌دهی نیست.',
       ],
     },
+    'dvc-install': {
+      title: 'dvc install (هوک‌های Git)',
+      lines: [
+        'سه هوک در .git/hooks نوشته می‌شود: pre-commit (دستور dvc status)، post-checkout (دستور dvc checkout) و pre-push (دستور dvc push).',
+        'از آن پس git checkout <ref> کد و داده را با هم جابه‌جا می‌کند و اگر داده push نشود، git push متوقف می‌شود.',
+        'هوک‌ها فقط برای همان clone هستند؛ اجرای دوم dvc install شکست می‌خورد چون فایل‌ها از قبل وجود دارند. dvc install --use-pre-commit-tool به‌جای آن .pre-commit-config.yaml را می‌نویسد.',
+      ],
+    },
+    'dvc-exp-save': {
+      title: 'dvc exp save / remove',
+      lines: [
+        'exp save پارامترها و متریک‌های workspace را بدون اجرای هیچ stage به‌عنوان آزمایش ذخیره می‌کند؛ بدون -n یک نام «صفت-اسم» ساخته می‌شود و -f نام موجود را رونویسی می‌کند.',
+        'exp remove <name> یک آزمایش را پاک می‌کند، -A همه را، --queue آزمایش‌های صف‌شده را و -g <git-remote> آن را از یک Git remote حذف می‌کند.',
+        'dvc exp gc در DVC 3 حذف شد؛ dvc exp remove جای آن را گرفته است.',
+      ],
+    },
+    'dvc-cache-dir': {
+      title: 'dvc cache dir / cache مشترک',
+      lines: [
+        'dvc cache dir <path> مقدار cache.dir را در .dvc/config می‌گذارد (--local آن را در .dvc/config.local نگه می‌دارد). شیءهای cache قدیمی جابه‌جا نمی‌شوند.',
+        'cache.shared group، cache را برای گروه قابل‌نوشتن می‌کند؛ cache.type یکی از reflink، hardlink، symlink یا copy را می‌پذیرد. مقدارهای دیگر رد می‌شوند.',
+        'dvc checkout --relink پس از تغییر cache.type لینک‌های workspace را دوباره می‌سازد؛ برای اشتراک تنظیمات، .dvc/config را commit کنید.',
+      ],
+    },
+    'dvc-artifacts': {
+      title: 'dvc artifacts get / gto',
+      lines: [
+        'dvc.yaml آرتیفکت‌ها را تعریف می‌کند (path و type)؛ GTO که CLI جداست نسخه‌ها را به‌صورت تگ Git ثبت می‌کند: gto register model --version v1.0.0 تگ model@v1.0.0 را می‌سازد.',
+        'gto assign ... --stage prod تگ model#prod#1 را می‌سازد؛ اختصاص دوباره شماره را بالا می‌برد. هر commit فقط یک نسخه می‌تواند داشته باشد.',
+        'dvc artifacts get <url> <name> با --rev <version> یا --stage <stage> همان نسخه را در -o دانلود می‌کند؛ تا وقتی نسخه‌ای ثبت نشده شکست می‌خورد. تگ‌ها را با git push --tags بفرستید.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -422,6 +454,26 @@ export const fa: Catalog = {
     'pipeline-matrix': {
       title: 'پایپ‌لاین‌های ماتریسی و foreach در dvc.yaml',
       body: 'بخش `foreach` و `matrix` در dvc.yaml امکان تعریف مراحل پارامتری روی چندین دیتاست، معماری مدل یا پیش‌پردازش‌های مختلف را بدون تکرار کد فراهم می‌کند. DVC زیرشاخه‌های مجزا در گراف وابستگی (DAG) ایجاد کرده و کش هر مرحله را مستقل مدیریت می‌کند.',
+    },
+    'git-hooks': {
+      title: 'هوک‌های Git (dvc install)',
+      body: 'dvc install هوک‌های pre-commit (دستور dvc status)، post-checkout (دستور dvc checkout) و pre-push (دستور dvc push) را در .git/hooks می‌گذارد تا Git کد و داده را هم‌گام نگه دارد. هوک‌ها فقط برای همان clone هستند و نسخه‌بندی نمی‌شوند؛ --use-pre-commit-tool آن‌ها را برای کل تیم در .pre-commit-config.yaml می‌گذارد.',
+    },
+    'shared-cache': {
+      title: 'cache مشترک',
+      body: 'با dvc cache dir <path>، cache.shared group و cache.type (یکی از reflink، hardlink، symlink یا copy) در .dvc/config، تیم به‌جای یک cache برای هر clone از یک cache مبتنی بر محتوا استفاده می‌کند. پس از تغییر نوع لینک، dvc checkout --relink را اجرا کنید؛ مسیرهای مخصوص هر دستگاه با --local در .dvc/config.local می‌روند.',
+    },
+    'repro-pull': {
+      title: 'repro --pull و --allow-missing',
+      body: 'روی clone تازه، dvc.lock به‌روز است اما خروجی‌ها نیستند. dvc repro ساده stageها را دوباره اجرا می‌کند؛ dvc repro --pull به‌جای آن خروجی‌ها را از remote دانلود می‌کند (و فقط اگر remote آن‌ها را نداشته باشد stage را اجرا می‌کند)؛ --allow-missing stageهایی را که تنها تفاوتشان نبودن داده است رد می‌کند.',
+    },
+    'artifacts-registry': {
+      title: 'آرتیفکت‌ها و رجیستری GTO',
+      body: 'artifacts: در dvc.yaml مدل‌ها و مجموعه‌دادگان را تعریف می‌کند؛ CLI جداگانه‌ی GTO از تگ‌های Git یک رجیستری می‌سازد (name@v1.0.0 برای نسخه‌ها و name#prod#1 برای اختصاص stage)؛ dvc artifacts get یک نسخه یا نسخه‌ی فعلیِ یک stage را دانلود می‌کند.',
+    },
+    'exp-save-remove': {
+      title: 'ذخیره و هرس آزمایش‌ها',
+      body: 'dvc exp save پارامترها و متریک‌های workspace را بدون اجرای چیزی به‌صورت یک آزمایش نام‌دار ثبت می‌کند (-n نام می‌دهد، -f رونویسی می‌کند). dvc exp remove <name> یکی را هرس می‌کند، -A همه را، --queue صف را و -g <git-remote> یک Git remote را. dvc exp gc در DVC 3 دیگر وجود ندارد.',
     },
   },
   ui: {
@@ -773,6 +825,31 @@ export const fa: Catalog = {
           'درون فایل README',
         ],
         correct: 1,
+      },
+      {
+        q: 'هوک post-checkout در DVC پس از git checkout <commit-قدیمی> چه می‌کند؟',
+        a: ['هیچ؛ Git به DVC کاری ندارد', 'dvc checkout را اجرا می‌کند تا داده‌های workspace با pointerهای بازگردانده‌شده یکی شوند', 'cache را پاک می‌کند'],
+        correct: 1,
+      },
+      {
+        q: 'دستی آموزش داده‌اید و می‌خواهید نتیجه را بدون اجرای دوباره‌ی چیزی به‌عنوان آزمایش نگه دارید. کدام دستور؟',
+        a: ['dvc exp run -S lr=0.05', 'dvc exp gc', 'dvc exp save -n <name>'],
+        correct: 2,
+      },
+      {
+        q: 'clone تازه است، dvc.lock به‌روز است ولی فایل مدل نیست. چه چیزی از آموزش دوباره جلوگیری می‌کند؟',
+        a: ['dvc repro --pull', 'dvc repro (همیشه بازیابی می‌کند)', 'dvc gc -w'],
+        correct: 0,
+      },
+      {
+        q: 'یک تیم چگونه نسخه‌ی مدل را در رجیستری GTO ثبت می‌کند؟',
+        a: ['dvc register model', 'gto register model --version v1.0.0 (یک تگ Git به نام model@v1.0.0)', 'تغییر نام فایل به model_final.pkl'],
+        correct: 1,
+      },
+      {
+        q: 'تنظیمات cache.shared و cache.type برای یک cache مشترک کجا باید باشند؟',
+        a: ['در .dvc/config که commit می‌شود تا هر clone آن را داشته باشد (برای مقدارهای مخصوص هر دستگاه .dvc/config.local)', 'در dvc.lock', 'در پروفایل shell هر نفر'],
+        correct: 0,
       },
     ],
     helpSections: [

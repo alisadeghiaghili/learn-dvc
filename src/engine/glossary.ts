@@ -48,6 +48,11 @@ export const CONCEPT_IDS = [
   'dvc-api-python',
   'exp-lifecycle',
   'pipeline-matrix',
+  'git-hooks',
+  'shared-cache',
+  'repro-pull',
+  'artifacts-registry',
+  'exp-save-remove',
 ] as const;
 
 export function localizedConcepts(): Concept[] {
