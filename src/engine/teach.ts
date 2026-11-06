@@ -34,6 +34,10 @@ export function teachAfterCommand(raw: string, state: RepoState): string | null 
   if (/^dvc\s+checkout\b/.test(cmd)) return teachFromKey('dvc-checkout');
   if (/^dvc\s+stage\s+add\b/.test(cmd)) return teachFromKey('dvc-stage-add');
   if (/^dvc\s+repro\b/.test(cmd)) return teachFromKey('dvc-repro');
+  if (/^dvc\s+install\b/.test(cmd)) return teachFromKey('dvc-install');
+  if (/^dvc\s+exp\s+(save|remove)\b/.test(cmd)) return teachFromKey('dvc-exp-save');
+  if (/^dvc\s+cache\s+dir\b/.test(cmd)) return teachFromKey('dvc-cache-dir');
+  if (/^dvc\s+artifacts\b/.test(cmd) || /^gto\b/.test(cmd)) return teachFromKey('dvc-artifacts');
   if (/^dvc\s+exp\s+run\b/.test(cmd)) return teachFromKey('dvc-exp-run');
   if (/^dvc\s+exp\s+apply\b/.test(cmd)) return teachFromKey('dvc-exp-apply');
   if (/^edit\b/.test(cmd)) return teachFromKey('edit');

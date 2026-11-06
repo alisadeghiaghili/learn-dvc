@@ -5,6 +5,7 @@ import { compareLevels, metaLevels, registryLevels } from './gaps';
 import { campLevels } from './camp';
 import { advancedLevels } from './advanced';
 import { transferLevels } from './transfer';
+import { prodLevels } from './prod';
 
 /** A directory that is already a Git repository (`git init` done), DVC not initialized yet. */
 function gitOnlyRepo(): RepoState {
@@ -1171,6 +1172,7 @@ export const allLevels: LevelDef[] = [
   ...advancedLevels,
   ...transferLevels,
   ...registryLevels,
+  ...prodLevels,
   ...fieldLevels,
 ];
 
@@ -1188,7 +1190,7 @@ export function getNextLevel(id: string): LevelDef | undefined {
 }
 
 export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] {
-  const order = ['basics', 'remote', 'pipe', 'exp', 'meta', 'cmp', 'camp', 'reg', 'field'];
+  const order = ['basics', 'remote', 'pipe', 'exp', 'meta', 'cmp', 'camp', 'reg', 'prod', 'field'];
   const titles: Record<string, string> = {
     basics: 'Basics',
     remote: 'Remotes',
@@ -1198,6 +1200,7 @@ export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] 
     cmp: 'Compare',
     camp: 'Camp / DVCLive',
     reg: 'Registry & CI',
+    prod: 'Production habits',
     field: 'Field practice',
   };
   return order.map((id) => ({
@@ -1242,5 +1245,11 @@ export function curriculumOutcomes(): string[] {
     'Provision on-demand cloud GPU training with CML cloud runners (--single-shot)',
     'Stream models and datasets in Python production services with dvc.api',
     'Collaborate on experiments with dvc exp push/pull (a Git remote) and promote to a branch',
+    'Install the DVC Git hooks (dvc install) so git checkout and git push keep data and code in step',
+    'Record workspace results with dvc exp save and prune the list with dvc exp remove',
+    'Expand one stage template into a grid with vars and matrix in dvc.yaml and reproduce it with dvc repro <group>',
+    'Restore a fresh clone with dvc repro --pull instead of retraining',
+    'Share one cache between teammates with dvc cache dir, cache.shared and cache.type',
+    'Publish and promote models with dvc.yaml artifacts, gto register / assign and dvc artifacts get',
   ];
 }

@@ -32,7 +32,7 @@ export interface CommandContext {
   raw: string;
 }
 
-const COUNTING = /^dvc |^git (add|commit|checkout|init)|^edit |^rm /;
+const COUNTING = /^dvc |^gto |^git (add|commit|checkout|init|push|tag)|^edit |^rm /;
 
 export function commandCountsForGolf(raw: string): boolean {
   return COUNTING.test(raw.trim());
@@ -48,6 +48,18 @@ function fail(error: string): CommandResult {
 
 function findGitCommit(state: RepoState, hash: string): GitCommit | undefined {
   return state.gitCommits.find((c) => c.hash.startsWith(hash));
+}
+
+function resolveGitRef(state: RepoState, ref: string | undefined): GitCommit | undefined {
+  if (!ref || ref === 'HEAD') return state.gitCommits[state.gitCommits.length - 1];
+  const rel = /^HEAD~(\d+)$/.exec(ref);
+  if (rel) return state.gitCommits[state.gitCommits.length - 1 - Number(rel[1])];
+  return findGitCommit(state, ref);
+}
+
+/** Strip the teaching footer from a nested command's output so it can be embedded in another one. */
+function plainOutput(res: CommandResult): string {
+  return (res.output || res.error || '').split('\n\n── Why:')[0]!;
 }
 
 function snapshotGit(state: RepoState, message: string): GitCommit {
@@ -221,6 +233,14 @@ function runDvcLive(state: RepoState, cmd: string): string[] {
   ];
 }
 
+/** Pipeline outputs that a stage declares but that are not in the workspace (fresh clone, deleted file). */
+function missingOuts(state: RepoState, stage: PipelineStage): string[] {
+  return stage.outs.filter((o) => {
+    const f = state.files[o];
+    return !!f && !f.present;
+  });
+}
+
 function reproStage(state: RepoState, stage: PipelineStage): string[] {
   const logs: string[] = [];
   if (stage.frozen) {
@@ -243,7 +263,14 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
   }
 
   const sig = stageRunSig(stage, state);
-  if (stage.lastRunSig === sig || state.runCache.includes(sig)) {
+  // the run cache only helps when the outputs it points at can be checked out from the local cache
+  const lost = missingOuts(state, stage);
+  const restorable = lost.every((o) => state.cache.includes(state.files[o]!.contentId));
+  if ((stage.lastRunSig === sig || state.runCache.includes(sig)) && restorable) {
+    if (lost.length) {
+      for (const o of lost) state.files[o]!.present = true;
+      logs.push(`Stage '${stage.name}' is cached - skipping run, checking out outputs`);
+    }
     logs.push(`Stage '${stage.name}' restored from run cache (same inputs/params) — skip work.`);
     stage.upToDate = true;
     stage.stale = undefined;
@@ -486,7 +513,18 @@ function targetFiles(state: RepoState, targets: string[]): { files: WorkspaceFil
 function pipelineStatusLines(state: RepoState): string[] {
   const out: string[] = [];
   for (const s of state.pipeline) {
-    if (s.frozen || s.upToDate) continue;
+    if (s.frozen) continue;
+    if (s.upToDate) {
+      // locked and current, but the outputs are not in the workspace (fresh clone / deleted file)
+      const lost = missingOuts(state, s);
+      if (lost.length) {
+        out.push(`${s.name}:`, '\tchanged outs:');
+        for (const o of lost) {
+          out.push(`\t\t${state.cache.includes(state.files[o]!.contentId) ? 'deleted:           ' : 'not in cache:       '}${o}`);
+        }
+      }
+      continue;
+    }
     out.push(`${s.name}:`);
     const st = s.stale;
     if (st && (st.deps.length || st.params.length)) {
@@ -521,16 +559,16 @@ function statusLines(state: RepoState): string {
       lines.push(`modified:          ${path}`);
     }
   }
-  const missingRemote = state.remotes.length === 0 && state.cache.length > 0;
-  if (missingRemote) lines.push('warn: no remote configured — `dvc push` will fail');
+  // advisory only: it must not hide the "up to date" verdict
+  const warn = state.remotes.length === 0 && state.cache.length > 0 ? ['warn: no remote configured — `dvc push` will fail'] : [];
   const notInCache = Object.values(state.files)
     .filter((f) => f.tracked && f.pointerMd5 && !state.cache.includes(f.pointerMd5) && f.present)
     .map((f) => f.path);
   for (const p of notInCache) {
     lines.push(`update file:       ${p} (pointer not in cache — try \`dvc commit\`)`);
   }
-  if (!lines.length) return 'Data and pipelines are up to date.';
-  return lines.join('\n');
+  if (!lines.length) return ['Data and pipelines are up to date.', ...warn].join('\n');
+  return [...lines, ...warn].join('\n');
 }
 
 /** `dvc status --cloud`: compare the local cache with one remote. */
@@ -668,6 +706,300 @@ function recordExperiment(state: RepoState, name?: string): ExperimentRun {
   return run;
 }
 
+/** Names of the artifacts declared in the `artifacts:` section of dvc.yaml, with their path. */
+function declaredArtifacts(state: RepoState): Record<string, string> {
+  const out: Record<string, string> = {};
+  const lines = (state.dvcYaml ?? '').split('\n');
+  const start = lines.findIndex((l) => /^artifacts:\s*$/.test(l));
+  if (start < 0) return out;
+  let current: string | undefined;
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/.test(line)) break;
+    const head = /^ {2}([\w./:-]+):\s*$/.exec(line);
+    if (head) {
+      current = head[1];
+      out[current!] = '';
+      continue;
+    }
+    const pm = /^ {4}path:\s*(\S+)/.exec(line);
+    if (pm && current) out[current] = pm[1]!;
+  }
+  return out;
+}
+
+const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
+const semverKey = (v: string): number[] => (SEMVER_RE.exec(v) ?? []).slice(1).map(Number);
+function compareSemver(a: string, b: string): number {
+  const x = semverKey(a);
+  const y = semverKey(b);
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function registeredVersions(state: RepoState, name: string): { version: string; commit: string; tag: string }[] {
+  const prefix = `${name}@`;
+  return (state.gitTags ?? [])
+    .filter((t) => t.name.startsWith(prefix))
+    .map((t) => ({ version: t.name.slice(prefix.length), commit: t.commit, tag: t.name }))
+    .sort((a, b) => compareSemver(a.version, b.version));
+}
+
+/** Latest `name#stage#N` assignment: the version currently in that stage. */
+function stageAssignment(
+  state: RepoState,
+  name: string,
+  stage: string,
+): { n: number; version: string; commit: string } | undefined {
+  const re = new RegExp(`^${escapeRe(name)}#${escapeRe(stage)}#(\\d+)$`);
+  let best: { n: number; version: string; commit: string } | undefined;
+  for (const t of state.gitTags ?? []) {
+    const m = re.exec(t.name);
+    if (!m || !t.version) continue;
+    const n = Number(m[1]);
+    if (!best || n > best.n) best = { n, version: t.version, commit: t.commit };
+  }
+  return best;
+}
+
+/** `gto` is a separate CLI (Git tags as a model registry); here it reads and writes the simulated tags. */
+function gtoCommand(state: RepoState, args: string[]): { state: RepoState; result: CommandResult } {
+  const g = args[0];
+  if (!g || g === '--help' || g === '-h') {
+    return {
+      state,
+      result: ok(
+        [
+          'usage: gto <register|assign|show> ...',
+          '  gto register NAME [REF] --version vX.Y.Z',
+          '  gto assign NAME --version vX.Y.Z --stage STAGE',
+          '  gto show [NAME]',
+        ].join('\n'),
+      ),
+    };
+  }
+  const p = parseArgv(args.slice(1), ['--version', '--stage', '-m', '--message', '--ref']);
+  if (!isGitRepo(state)) return { state, result: fail('ERROR: gto works on Git tags: this directory is not a Git repository.') };
+  const tags = (state.gitTags ??= []);
+
+  if (g === 'register') {
+    const name = p.pos[0];
+    if (!name || /[@#\s]/.test(name)) {
+      return { state, result: fail('Usage: gto register NAME [REF] [--version vX.Y.Z]   (NAME may not contain @, # or spaces)') };
+    }
+    const commit = resolveGitRef(state, p.pos[1]);
+    if (!commit) return { state, result: fail(`fatal: Failed to resolve '${p.pos[1]}' as a valid ref.`) };
+    const existing = registeredVersions(state, name);
+    const atCommit = existing.find((v) => v.commit === commit.hash);
+    if (atCommit) {
+      return {
+        state,
+        result: fail(
+          [
+            `ERROR: ${name} already has version ${atCommit.version} registered at commit ${commit.hash}.`,
+            'GTO allows one version per commit (VersionExistsForCommit): commit your change first, then register the next version.',
+          ].join('\n'),
+        ),
+      };
+    }
+    let version = p.val('--version');
+    if (version) {
+      if (!SEMVER_RE.test(version)) {
+        return { state, result: fail(`ERROR: Version '${version}' is not valid. Example of valid version: 'v1.0.0'`) };
+      }
+      if (!version.startsWith('v')) version = `v${version}`;
+      if (existing.some((v) => v.version === version)) {
+        return { state, result: fail(`ERROR: Version '${version}' of ${name} is already registered (VersionAlreadyRegistered).`) };
+      }
+    } else {
+      const last = existing[existing.length - 1];
+      if (last) {
+        const [maj, min, pat] = semverKey(last.version);
+        version = `v${maj}.${min}.${(pat ?? 0) + 1}`;
+      } else {
+        version = 'v0.0.1';
+      }
+    }
+    const tag = `${name}@${version}`;
+    tags.push({ name: tag, commit: commit.hash });
+    return {
+      state,
+      result: ok(`Created git tag '${tag}' that registers a version\nTo push the changes upstream, run:\n    git push origin ${tag}`),
+    };
+  }
+
+  if (g === 'assign') {
+    const name = p.pos[0];
+    const stage = p.val('--stage');
+    let version = p.val('--version');
+    if (!name || !stage || !version) {
+      return { state, result: fail('Usage: gto assign NAME --version vX.Y.Z --stage STAGE') };
+    }
+    if (!SEMVER_RE.test(version)) {
+      return { state, result: fail(`ERROR: Version '${version}' is not valid. Example of valid version: 'v1.0.0'`) };
+    }
+    if (!version.startsWith('v')) version = `v${version}`;
+    const found = registeredVersions(state, name).find((v) => v.version === version);
+    if (!found) {
+      return {
+        state,
+        result: fail(`ERROR: Version '${version}' is not registered. Register it first: gto register ${name} --version ${version}`),
+      };
+    }
+    const current = stageAssignment(state, name, stage);
+    if (current?.version === version && !p.has('--force')) {
+      return {
+        state,
+        result: fail(`ERROR: Version '${version}' is already in stage '${stage}'. Use the '--force' flag to create a new Git tag nevertheless.`),
+      };
+    }
+    const tag = `${name}#${stage}#${(current?.n ?? 0) + 1}`;
+    tags.push({ name: tag, commit: found.commit, version });
+    return {
+      state,
+      result: ok(`Created git tag '${tag}' that assigns stage to version '${version}'\nTo push the changes upstream, run:\n    git push origin ${tag}`),
+    };
+  }
+
+  if (g === 'show') {
+    const only = p.pos[0];
+    const names = [...new Set(tags.map((t) => t.name.split(/[@#]/)[0]!))].filter((n) => !only || n === only).sort();
+    if (!names.length) {
+      return { state, result: ok(only ? `No versions of '${only}' registered.` : 'Nothing registered yet. Try `gto register <name> --version v1.0.0`.') };
+    }
+    const stages = [...new Set(tags.filter((t) => t.version).map((t) => t.name.split('#')[1]!))].sort();
+    const rows = [['artifact', 'latest', ...stages.map((s) => `#${s}`)]];
+    for (const n of names) {
+      const latest = registeredVersions(state, n).slice(-1)[0]?.version ?? '-';
+      rows.push([n, latest, ...stages.map((s) => stageAssignment(state, n, s)?.version ?? '-')]);
+    }
+    const widths = rows[0]!.map((_, i) => Math.max(...rows.map((r) => r[i]!.length)));
+    return { state, result: ok(rows.map((r) => r.map((c, i) => c.padEnd(widths[i]!)).join('  ').trimEnd()).join('\n')) };
+  }
+
+  return { state, result: fail(`gto: unknown command '${g}'. This simulator supports: register, assign, show.`) };
+}
+
+// ── .dvc/config, shared cache ────────────────────────────────────────────────
+
+const CACHE_LINK_TYPES = ['reflink', 'hardlink', 'symlink', 'copy'];
+
+/** Mirrors dvc/config_schema.py: cache.type is a list of link types, cache.shared accepts only `group`. */
+function validateConfigValue(key: string, value: string): string | null {
+  const k = key.toLowerCase();
+  if (k === 'cache.type') {
+    const bad = value.split(',').map((t) => t.trim()).filter((t) => !CACHE_LINK_TYPES.includes(t));
+    if (bad.length) {
+      return [
+        `ERROR: configuration error - config file error: Unsupported cache type(s): ${bad.join(', ')}`,
+        `cache.type takes a comma-separated list of: ${CACHE_LINK_TYPES.join(', ')} (DVC tries them in order).`,
+      ].join('\n');
+    }
+  }
+  if (k === 'cache.shared' && value.toLowerCase() !== 'group') {
+    return [
+      `ERROR: configuration error - config file error: expected one of group for cache.shared, got '${value}'`,
+      'The only supported value is `group`: it makes the cache group-writable for a shared team cache.',
+    ].join('\n');
+  }
+  return null;
+}
+
+function readConfigValue(state: RepoState, key: string): string | undefined {
+  return state.dvcConfigLocal?.[key] ?? state.dvcConfig?.[key];
+}
+
+/** Record a changed `.dvc/config` so Git sees a modification (the committed content becomes the baseline). */
+function touchConfigFile(state: RepoState, local: boolean): void {
+  const path = local ? '.dvc/config.local' : '.dvc/config';
+  let f = state.files[path];
+  if (!f) {
+    f = makeFile(path, 'meta', { gitignored: local });
+    state.files[path] = f;
+  }
+  if (local) return;
+  for (let i = state.gitCommits.length - 1; i >= 0; i--) {
+    const c = state.gitCommits[i]!;
+    if (c.files?.includes(path)) {
+      c.blobs ??= {};
+      if (c.blobs[path] === undefined) c.blobs[path] = f.contentId;
+      break;
+    }
+  }
+  f.contentId = fakeMd5(`config:${JSON.stringify(state.dvcConfig ?? {})}:${JSON.stringify(state.remotes)}`);
+}
+
+function writeConfigValue(state: RepoState, key: string, value: string, local: boolean): void {
+  if (local) (state.dvcConfigLocal ??= {})[key] = value;
+  else (state.dvcConfig ??= {})[key] = value;
+  touchConfigFile(state, local);
+}
+
+function unsetConfigValue(state: RepoState, key: string, local: boolean): boolean {
+  const store = local ? state.dvcConfigLocal : state.dvcConfig;
+  if (!store || !(key in store)) return false;
+  delete store[key];
+  touchConfigFile(state, local);
+  return true;
+}
+
+/** INI text of `.dvc/config` (or `.dvc/config.local`) in the layout DVC writes. */
+function renderConfigIni(state: RepoState, local: boolean): string {
+  const sections = new Map<string, [string, string][]>();
+  const add = (section: string, opt: string, value: string) => {
+    if (!sections.has(section)) sections.set(section, []);
+    sections.get(section)!.push([opt, value]);
+  };
+  const conf = (local ? state.dvcConfigLocal : state.dvcConfig) ?? {};
+  if (!local) {
+    const def = state.remotes.find((r) => r.isDefault);
+    if (def) add('core', 'remote', def.name);
+  }
+  for (const [key, value] of Object.entries(conf).sort(([a], [b]) => a.localeCompare(b))) {
+    const parts = key.split('.');
+    if (parts[0] === 'remote' && parts.length >= 3) add(`'remote "${parts[1]}"'`, parts.slice(2).join('.'), value);
+    else add(parts[0]!, parts.slice(1).join('.'), value);
+  }
+  if (!local) {
+    for (const r of state.remotes) {
+      const name = `'remote "${r.name}"'`;
+      const existing = sections.get(name) ?? [];
+      if (!existing.some(([o]) => o === 'url')) existing.unshift(['url', r.url]);
+      sections.set(name, existing);
+    }
+  }
+  const rank = (x: string) => (x === 'core' ? 0 : x.startsWith("'remote") ? 1 : 2);
+  const lines: string[] = [];
+  for (const sec of [...sections.keys()].sort((a, b) => rank(a) - rank(b))) {
+    lines.push(`[${sec}]`);
+    for (const [o, v] of sections.get(sec)!) lines.push(`    ${o} = ${v}`);
+  }
+  return lines.join('\n');
+}
+
+const EXP_ADJECTIVES = [
+  'agile', 'bland', 'brisk', 'calm', 'dusty', 'eager', 'fancy', 'hardy', 'jolly', 'keen', 'lucid',
+  'mossy', 'noble', 'plush', 'quiet', 'rapid', 'sunny', 'tidy', 'vivid', 'witty',
+];
+const EXP_NOUNS = [
+  'acorn', 'bison', 'cedar', 'delta', 'ember', 'finch', 'grove', 'heron', 'islet', 'jasper', 'kiwi',
+  'lotus', 'maple', 'newt', 'otter', 'pecan', 'quail', 'raven', 'tulip', 'walnut',
+];
+
+/** `adjective-noun` experiment name, unique among the saved experiments (like DVC's generated names). */
+function generateExpName(state: RepoState): string {
+  const taken = new Set(state.experiments.map((e) => e.name));
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const h = fakeMd5(`expname:${JSON.stringify(state.params)}:${state.experiments.length}:${attempt}`);
+    const adj = EXP_ADJECTIVES[parseInt(h.slice(0, 6), 16) % EXP_ADJECTIVES.length]!;
+    const noun = EXP_NOUNS[parseInt(h.slice(6, 12), 16) % EXP_NOUNS.length]!;
+    const name = `${adj}-${noun}`;
+    if (!taken.has(name)) return name;
+  }
+  return `run-${state.experiments.length + 1}-saved`;
+}
+
 export function executeCommand(prev: RepoState, rawInput: string): { state: RepoState; result: CommandResult } {
   const raw = rawInput.trim();
   const out = executeCommandInner(prev, rawInput);
@@ -730,12 +1062,13 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       state,
       result: ok(
         [
-          'DVC commands: init, add, status, commit, checkout, remote, push, pull, fetch,',
-          '  config (--local), stage add (--wdir/--always-changed), repro, dag, freeze, unfreeze,',
-          '  metrics, params, plots --template, exp (run --queue|diff|apply|push|pull|branch), queue, get, import,',
-          '  update (imports only), remove, gc (-w|-A|-c), diff, version',
-          'Git (simulated): init, add, commit [--amend], log, status, checkout, remote',
-          'Separate tools: cml (comment create, runner launch); Python: python src/train.py, python -c "import dvc.api; ..."',
+          'DVC commands: init, add, status, commit, checkout [--relink], remote, push, pull, fetch,',
+          '  config [key [value]] (--local), cache dir [path], install [--use-pre-commit-tool],',
+          '  stage add (--wdir/--always-changed), repro [--pull|--allow-missing], dag, freeze, unfreeze,',
+          '  metrics, params, plots --template, exp (run --queue|save|remove|diff|apply|push|pull|branch), queue, get, import,',
+          '  update (imports only), artifacts get, remove, gc (-w|-A|-c), diff, version',
+          'Git (simulated): init, add, commit [--amend], log, status, checkout, push, tag, remote',
+          'Separate tools: cml (comment create, runner launch); gto (register, assign, show); Python: python src/train.py, python -c "import dvc.api; ..."',
           'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls, dvc metrics show --md > report.md',
           'Meta: levels, help/ui/tour, curriculum, concepts|glossary, quiz, steps, hint, show goal, reset, undo, sandbox, clear',
         ].join('\n'),
@@ -797,6 +1130,10 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           ].join('\n'),
         ),
       };
+    }
+    if (path === '.dvc/config' && state.initialized) return { state, result: ok(renderConfigIni(state, false)) };
+    if (path === '.dvc/config.local' && state.files['.dvc/config.local']) {
+      return { state, result: ok(renderConfigIni(state, true)) };
     }
     if (path === 'dvc.yaml' && state.dvcYaml) return { state, result: ok(state.dvcYaml) };
     if (path === 'dvc.yaml' && state.pipeline.length) {
@@ -1046,7 +1383,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           for (const meta of ['.dvc/config', '.dvc/.gitignore']) {
             if (!state.files[meta]) state.files[meta] = makeFile(meta, 'meta');
             const committed = state.gitCommits.some((c) => c.files?.includes(meta));
-            if (!committed) stage(meta);
+            if (!committed || isChanged(state.files[meta]!)) stage(meta);
           }
           continue;
         }
@@ -1126,8 +1463,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           ),
         };
       }
+      const hookNote = state.hooks?.installed
+        ? ['pre-commit hook: dvc status', ...statusLines(state).split('\n').map((l) => `  ${l}`)]
+        : [];
       const c = snapshotGit(state, message);
-      return finish(state, ok(`[${c.hash}] ${message}`));
+      return finish(state, ok([...hookNote, `[${c.hash}] ${message}`].join('\n')));
     }
     if (sub === 'checkout') {
       // forms:
@@ -1149,9 +1489,75 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         return { state, result: gitCheckoutPartial(state, args[1], args.slice(2)) };
       }
       if (args.length === 2) {
-        return { state, result: checkoutGitRef(state, args[1]) };
+        const res = checkoutGitRef(state, args[1]);
+        // post-checkout hook (flag 1 = ref checkout): runs `dvc checkout` so the workspace follows the pointers
+        if (res.ok && state.hooks?.installed && state.initialized && !res.output.startsWith('Already on')) {
+          const hook = executeCommandInner(state, 'dvc checkout');
+          const head = res.output.split('\n')[0]!;
+          return {
+            state: hook.state,
+            result: ok([head, 'post-checkout hook: dvc checkout', ...plainOutput(hook.result).split('\n').map((l) => `  ${l}`)].join('\n')),
+          };
+        }
+        return { state, result: res };
       }
       return { state, result: fail('Usage: git checkout <ref> [-- <path>]') };
+    }
+    if (sub === 'push') {
+      const rest = args.slice(1);
+      const positional = rest.filter((a) => !a.startsWith('-'));
+      const remote = positional[0] ?? 'origin';
+      const remotes = state.gitRemotes ?? [];
+      if (!remotes.length) {
+        return {
+          state,
+          result: fail('fatal: No configured push destination.\nEither specify the URL from the command-line or configure a remote repository using: git remote add <name> <url>'),
+        };
+      }
+      if (!remotes.includes(remote)) {
+        return { state, result: fail(`fatal: '${remote}' does not appear to be a git repository\nfatal: Could not read from remote repository.`) };
+      }
+      const lines: string[] = [];
+      let next = state;
+      // pre-push hook: runs `dvc push` first; a failing hook aborts the push
+      if (state.hooks?.installed && state.initialized) {
+        lines.push('pre-push hook: dvc push');
+        const hook = executeCommandInner(state, 'dvc push');
+        const text = plainOutput(hook.result).split('\n').map((l) => `  ${l}`);
+        if (!hook.result.ok) {
+          return {
+            state,
+            result: fail([...lines, ...text, `error: failed to push some refs to '${remote}' (the pre-push hook exited with an error)`].join('\n')),
+          };
+        }
+        lines.push(...text);
+        next = hook.state;
+      }
+      const head = next.gitCommits[next.gitCommits.length - 1];
+      const tagNames = rest.includes('--tags')
+        ? (next.gitTags ?? []).map((t) => t.name)
+        : positional.slice(1).filter((n) => (next.gitTags ?? []).some((t) => t.name === n));
+      lines.push(`To ${remote}`, `   ${head?.hash ?? '0000000'}  main -> main`, ...tagNames.map((n) => ` * [new tag]  ${n} -> ${n}`));
+      return { state: next, result: ok(lines.join('\n')) };
+    }
+    if (sub === 'tag') {
+      const rest = args.slice(1);
+      const names = rest.filter((a) => !a.startsWith('-'));
+      const tags = (state.gitTags ??= []);
+      if (rest.includes('-d') || rest.includes('--delete')) {
+        const missing = names.filter((n) => !tags.some((t) => t.name === n));
+        if (!names.length || missing.length) return { state, result: fail(`error: tag '${missing[0] ?? ''}' not found.`) };
+        state.gitTags = tags.filter((t) => !names.includes(t.name));
+        return { state, result: ok(names.map((n) => `Deleted tag '${n}'`).join('\n')) };
+      }
+      if (!names.length) return { state, result: ok(tags.map((t) => t.name).sort().join('\n')) };
+      const name = names[0]!;
+      const ref = names[1];
+      if (tags.some((t) => t.name === name)) return { state, result: fail(`fatal: tag '${name}' already exists`) };
+      const commit = resolveGitRef(state, ref);
+      if (!commit) return { state, result: fail(`fatal: Failed to resolve '${ref}' as a valid ref.`) };
+      tags.push({ name, commit: commit.hash });
+      return { state, result: ok('') };
     }
     if (sub === 'merge') {
       const branch = args[1] || 'origin/main';
@@ -1227,6 +1633,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return runPython(state, args, finish);
   }
 
+  // ── gto: a separate CLI that turns Git tags into a model registry ──
+  if (cmd === 'gto') return gtoCommand(state, args);
+
   // ── dvc ─────────────────────────────────────────────────────
   if (cmd !== 'dvc') {
     // sandbox helpers listed in help
@@ -1273,6 +1682,40 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         [
           "ERROR: unknown command 'dvc cml'. CML is a separate CLI, not a DVC subcommand.",
           'Install it next to DVC in CI and call it directly: `cml comment create report.md`.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'artifact') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc artifact'. The command group is plural: `dvc artifacts get <url> <name>`.",
+          'Artifacts are declared in the artifacts: section of dvc.yaml; versions and stages are Git tags made with the separate `gto` CLI.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'register' || sub === 'assign') {
+    return {
+      state,
+      result: fail(
+        [
+          `ERROR: unknown command 'dvc ${sub}'. Registering and assigning stages is done by the separate GTO CLI, not by DVC:`,
+          `    gto ${sub} model --version v1.0.0${sub === 'assign' ? ' --stage prod' : ''}`,
+          'Then fetch the artifact with `dvc artifacts get <url> model --rev v1.0.0`.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'gto') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc gto'. GTO is a separate CLI (like CML), not a DVC subcommand.",
+          'Call it directly: `gto register model --version v1.0.0`, `gto assign model --version v1.0.0 --stage prod`.',
         ].join('\n'),
       ),
     };
@@ -1337,27 +1780,114 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   }
 
 
+  if (sub === 'install') {
+    if (!isGitRepo(state)) {
+      return {
+        state,
+        result: fail(
+          [
+            'ERROR: failed to install the DVC Git hooks - this directory is not inside of a Git repository.',
+            'The hooks live in .git/hooks, so Git must exist first: run `git init` (and `dvc init`).',
+          ].join('\n'),
+        ),
+      };
+    }
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    if (args.includes('--use-pre-commit-tool')) {
+      const text = [
+        'repos:',
+        '- repo: https://github.com/treeverse/dvc',
+        '  rev: 3.0.0',
+        '  hooks:',
+        '  - id: dvc-pre-commit',
+        '    stages: [pre-commit]',
+        '  - id: dvc-pre-push',
+        '    stages: [pre-push]',
+        '  - id: dvc-post-checkout',
+        '    stages: [post-checkout]',
+        '    always_run: true',
+      ].join('\n');
+      state.files['.pre-commit-config.yaml'] = makeFile('.pre-commit-config.yaml', 'yaml', {
+        contentId: fakeMd5('pre-commit-config:dvc'),
+        text,
+      });
+      state.hooks = { installed: state.hooks?.installed ?? false, preCommitConfig: true };
+      return finish(
+        state,
+        ok(
+          [
+            'Wrote the DVC hooks into .pre-commit-config.yaml (dvc-pre-commit, dvc-pre-push, dvc-post-checkout).',
+            'Nothing is active in .git/hooks yet: the pre-commit tool owns the hooks. Activate them with',
+            '    pre-commit install --hook-type pre-commit --hook-type pre-push --hook-type post-checkout',
+            'and commit .pre-commit-config.yaml so the whole team gets the same hooks.',
+          ].join('\n'),
+        ),
+      );
+    }
+    if (state.hooks?.installed) {
+      return {
+        state,
+        result: fail("ERROR: Hook 'post-checkout' already exists. Please refer to https://man.dvc.org/install for more info."),
+      };
+    }
+    state.hooks = { installed: true, preCommitConfig: state.hooks?.preCommitConfig };
+    return finish(
+      state,
+      ok(
+        [
+          'Installed Git hooks in .git/hooks:',
+          '  pre-commit     runs `dvc status` before each commit',
+          '  post-checkout  runs `dvc checkout` after `git checkout <ref>` so the data follows the branch',
+          '  pre-push       runs `dvc push` before `git push` so the code never lands without its data',
+          'Hooks are local to this clone (.git is not versioned): every teammate runs `dvc install` once.',
+        ].join('\n'),
+      ),
+    );
+  }
+
   if (sub === 'config') {
-    const isLocal = args.includes('--local');
-    const clean = args.slice(1).filter((a) => !a.startsWith('-'));
-    if (!clean.length) {
+    const cp = parseArgv(args.slice(1));
+    const isLocal = cp.has('--local');
+    const clean = cp.pos;
+    if (cp.has('-l', '--list') || !clean.length) {
       const lines = ['core.analytics = false'];
       for (const r of state.remotes) {
         lines.push(`remote.${r.name}.url = ${r.url}`);
       }
+      for (const [k, v] of Object.entries(state.dvcConfig ?? {})) lines.push(`${k} = ${v}`);
       if (state.files['.dvc/config.local']) {
         lines.push('[local] remote.myremote.secret_access_key = ***');
       }
+      for (const [k, v] of Object.entries(state.dvcConfigLocal ?? {})) lines.push(`[local] ${k} = ${v}`);
       return { state, result: ok(lines.join('\n')) };
     }
-    const key = clean[0];
-    const val = clean[1] ?? 'true';
+    const key = clean[0]!;
     const secretKeys = ['secret', 'key', 'password', 'token', 'credential'];
-    const isSecret = secretKeys.some((s) => key.toLowerCase().includes(s));
-    if (isLocal) {
-      if (!state.files['.dvc/config.local']) {
-        state.files['.dvc/config.local'] = makeFile('.dvc/config.local', 'meta', { gitignored: true });
+    const isSecret = secretKeys.some((x) => key.toLowerCase().includes(x));
+    if (cp.has('-u', '--unset')) {
+      const removed = unsetConfigValue(state, key, isLocal);
+      return removed
+        ? finish(state, ok(`Unset ${key} in ${isLocal ? '.dvc/config.local' : '.dvc/config'}.`))
+        : { state, result: fail(`ERROR: configuration error - config file error: option '${key}' does not exist in ${isLocal ? '.dvc/config.local' : '.dvc/config'}`) };
+    }
+    if (clean.length === 1) {
+      // read-back: `dvc config cache.type` prints the value, nothing is written
+      const value = readConfigValue(state, key);
+      if (value === undefined) {
+        const [section, ...rest] = key.split('.');
+        return {
+          state,
+          result: fail(`ERROR: configuration error - config file error: option '${rest.join('.')}' doesn't exist in section '${section}'`),
+        };
       }
+      return { state, result: ok(isSecret && state.dvcConfigLocal?.[key] !== undefined ? '***' : value) };
+    }
+    const val = clean[1]!;
+    const invalid = validateConfigValue(key, val);
+    if (invalid) return { state, result: fail(invalid) };
+    writeConfigValue(state, key, val, isLocal);
+    if (isLocal) {
       return finish(
         state,
         ok(
@@ -1374,6 +1904,39 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       );
     }
     return finish(state, ok(`Set ${key}=${val} in .dvc/config (shared via Git).`));
+  }
+
+  if (sub === 'cache') {
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    if (args[1] !== 'dir') {
+      return {
+        state,
+        result: fail(`ERROR: unknown command 'dvc cache ${args[1] ?? ''}'. This simulator has \`dvc cache dir [path]\` (also set the link type with \`dvc config cache.type\`).`),
+      };
+    }
+    const dp = parseArgv(args.slice(2));
+    const local = dp.has('--local');
+    const file = local ? '.dvc/config.local' : '.dvc/config';
+    if (dp.has('-u', '--unset')) {
+      unsetConfigValue(state, 'cache.dir', local);
+      return finish(state, ok(`Unset cache.dir in ${file}: the cache is back at .dvc/cache.`));
+    }
+    const dir = dp.pos[0];
+    if (!dir) return { state, result: ok(readConfigValue(state, 'cache.dir') ?? '.dvc/cache') };
+    writeConfigValue(state, 'cache.dir', dir, local);
+    return finish(
+      state,
+      ok(
+        [
+          `Cache directory is now '${dir}' (cache.dir in ${file}).`,
+          'Objects already in the old cache are not moved: copy them over, or let teammates re-fill the new directory with `dvc pull`.',
+          local
+            ? 'Stored in .dvc/config.local: only this machine uses the path, Git never sees it.'
+            : 'Stored in .dvc/config: commit it so every clone uses the same cache location.',
+        ].join('\n'),
+      ),
+    );
   }
 
   if (sub === 'freeze' || sub === 'unfreeze') {
@@ -1423,7 +1986,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       if ('error' in tf) return { state, result: fail(tf.error) };
       return finish(state, ok(cloudStatusLines(state, rr.name, tf.files)));
     }
-    return finish(state, ok(statusLines(state)));
+    const text = statusLines(state);
+    // the footer explains "modified"; it only makes sense when something is
+    return text.startsWith('Data and pipelines are up to date.') ? { state, result: ok(text) } : finish(state, ok(text));
   }
 
   if (sub === 'add') {
@@ -1513,11 +2078,26 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'checkout') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const path = args[1];
+    const co = parseArgv(args.slice(1));
+    const path = co.pos[0];
     const targets = path
       ? [path]
       : Object.values(state.files).filter((f) => f.tracked).map((f) => f.path);
     const lines: string[] = [];
+    if (co.has('--relink')) {
+      const linkType = readConfigValue(state, 'cache.type') ?? 'reflink,copy';
+      const relinkable = targets.filter((p) => {
+        const f = state.files[p];
+        return !!f?.tracked && !!f.pointerMd5 && f.present && state.cache.includes(f.pointerMd5);
+      });
+      lines.push(
+        `Relinking ${relinkable.length} tracked file(s) from the cache using cache.type=${linkType} (first link type the filesystem supports wins).`,
+        ...relinkable.map((p) => `  relinked ${p}`),
+      );
+      if (readConfigValue(state, 'cache.shared') === 'group') {
+        lines.push('cache.shared=group: new cache files are group-writable, so teammates in the same group can add to it.');
+      }
+    }
     for (const p of targets) {
       const f = state.files[p];
       if (!f || !f.tracked || !f.pointerMd5) {
@@ -1849,28 +2429,69 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     const err = requireInit(state);
     if (err) return { state, result: err };
     if (!state.pipeline.length) return { state, result: fail('ERROR: no stages to reproduce. Define one with `dvc stage add`.') };
-    const target = args[1];
+    const rp = parseArgv(args.slice(1));
+    const pull = rp.has('--pull');
+    const allowMissing = rp.has('--allow-missing');
+    const target = rp.pos[0];
     const logs: string[] = [];
+
+    // which stages are in scope, in pipeline order
+    let scope: PipelineStage[];
     if (target) {
-      const stage = state.pipeline.find((s) => s.name === target);
-      if (!stage) return { state, result: fail(`ERROR: stage '${target}' not found.`) };
-      for (const name of runPipelineFrom(state, target)) {
-        const s = state.pipeline.find((x) => x.name === name);
-        if (!s) continue;
-        if (s.upToDate) {
-          logs.push(`Stage '${s.name}' didn't change, skipping.`);
-          continue;
-        }
-        logs.push(...reproStage(state, s));
+      // a matrix/foreach group name (`train`) stands for every generated stage `train@...`
+      const roots = state.pipeline.some((s) => s.name === target)
+        ? [target]
+        : state.pipeline.filter((s) => s.name.startsWith(`${target}@`)).map((s) => s.name);
+      if (!roots.length) return { state, result: fail(`ERROR: stage '${target}' not found.`) };
+      const wanted = new Set(roots.flatMap((r) => runPipelineFrom(state, r)));
+      scope = state.pipeline.filter((s) => wanted.has(s.name));
+      // keep dependency order for a single chain
+      if (roots.length === 1) {
+        scope = runPipelineFrom(state, roots[0]!).flatMap((n) => state.pipeline.find((x) => x.name === n) ?? []);
       }
     } else {
-      for (const s of state.pipeline) {
-        if (s.upToDate) {
-          logs.push(`Stage '${s.name}' didn't change, skipping.`);
+      scope = [...state.pipeline];
+    }
+
+    // stages whose lock is current but whose outputs are not in the workspace (fresh clone)
+    const gone = (s: PipelineStage) => (s.upToDate && !s.frozen ? missingOuts(state, s) : []);
+    let remoteName: string | undefined;
+    if (pull && !allowMissing && scope.some((s) => gone(s).length)) {
+      const rr = resolveRemote(state, undefined, 'pull missing outputs for repro --pull');
+      if ('error' in rr) return { state, result: fail(rr.error) };
+      remoteName = rr.name;
+    }
+
+    for (const s of scope) {
+      const lost = gone(s);
+      if (s.upToDate && !lost.length) {
+        logs.push(`Stage '${s.name}' didn't change, skipping.`);
+        continue;
+      }
+      if (lost.length && allowMissing) {
+        logs.push(`Stage '${s.name}' didn't change, skipping (outputs missing locally, --allow-missing).`);
+        continue;
+      }
+      if (lost.length && pull && remoteName) {
+        const store = remoteStore(state, remoteName);
+        const need = lost.filter((o) => !state.cache.includes(state.files[o]!.contentId));
+        if (need.every((o) => store.includes(state.files[o]!.contentId))) {
+          logs.push(`Pulling data for stage '${s.name}'`);
+          for (const o of need) {
+            const id = state.files[o]!.contentId;
+            addCache(state, id);
+            logs.push(`  pulled ${o} (${shortMd5(id)}…) ← ${remoteName}`);
+          }
+          for (const o of lost) {
+            state.files[o]!.present = true;
+            if (!state.generated.includes(o)) state.generated.push(o);
+          }
+          logs.push(`Stage '${s.name}' didn't change, skipping (outputs pulled from remote '${remoteName}', not re-run).`);
           continue;
         }
-        logs.push(...reproStage(state, s));
+        logs.push(`Unable to pull data for stage '${s.name}': remote '${remoteName}' does not hold its outputs. Running it instead.`);
       }
+      logs.push(...reproStage(state, s));
     }
     writeLock(state);
     return finish(state, ok(logs.join('\n')));
@@ -2049,6 +2670,81 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     if (plsub === 'show') return finish(state, ok(render('plots show')));
     if (plsub === 'diff') return finish(state, ok(render('plots diff (workspace series)')));
     return { state, result: fail('Usage: dvc plots show|diff [--template simple|linear|confusion]') };
+  }
+
+  if (sub === 'artifacts') {
+    if (args[1] !== 'get') {
+      return {
+        state,
+        result: fail(
+          `ERROR: unknown command 'dvc artifacts ${args[1] ?? ''}'. Only \`dvc artifacts get <url> <name>\` exists; register and assign with the separate \`gto\` CLI.`,
+        ),
+      };
+    }
+    const ap = parseArgv(args.slice(2), ['--rev', '--stage', '-o', '--out', '-j', '--jobs', '--config', '--remote', '--remote-config']);
+    const [url, name] = ap.pos;
+    if (!url || !name) return { state, result: fail('Usage: dvc artifacts get <url> <name> [--rev <version>] [--stage <stage>] [-o <path>]') };
+    const rev = ap.val('--rev');
+    const stage = ap.val('--stage');
+    if (rev && stage) return { state, result: fail('ERROR: Artifact version and stage are mutually exclusive.') };
+    // --rev names a registered version (GTO tag name@vX.Y.Z); --stage resolves name#stage#N to its version
+    let version: string | undefined;
+    if (rev) {
+      version = registeredVersions(state, name).find((v) => v.version === rev || v.version === `v${rev}`)?.version;
+      if (!version) {
+        const known = registeredVersions(state, name).map((v) => v.version);
+        return {
+          state,
+          result: fail(
+            `ERROR: Unable to find artifact '${name}' with version '${rev}'. ${known.length ? `Registered versions: ${known.join(', ')}.` : 'No version is registered yet.'}`,
+          ),
+        };
+      }
+    } else if (stage) {
+      const at = stageAssignment(state, name, stage);
+      if (!at) {
+        return {
+          state,
+          result: fail(`ERROR: Unable to find artifact '${name}' in stage '${stage}'. Assign one first: gto assign ${name} --version <vX.Y.Z> --stage ${stage}`),
+        };
+      }
+      version = at.version;
+    } else {
+      version = registeredVersions(state, name).slice(-1)[0]?.version;
+      if (!version) {
+        return {
+          state,
+          result: fail(
+            [
+              `ERROR: Unable to find artifact '${name}': no version of it is registered in this repository.`,
+              `Register one with the separate GTO CLI first: gto register ${name} --version v1.0.0`,
+            ].join('\n'),
+          ),
+        };
+      }
+    }
+    const declared = declaredArtifacts(state);
+    if (!(name in declared)) {
+      return {
+        state,
+        result: fail(`ERROR: Unable to find artifact '${name}' in the artifacts: section of dvc.yaml at ${name}@${version}. Declared: ${Object.keys(declared).join(', ') || '(none)'}.`),
+      };
+    }
+    const src = declared[name]!;
+    const out = ap.val('-o', '--out') ?? src.split('/').pop()!;
+    state.files[out] = makeFile(out, 'data', {
+      contentId: state.files[src]?.contentId ?? fakeMd5(`artifact:${name}:${version}`),
+      present: true,
+    });
+    return finish(
+      state,
+      ok(
+        [
+          `Downloaded artifact '${name}' version ${version}${stage ? ` (stage ${stage})` : ''} from ${url}`,
+          `  ${src} -> ${out}`,
+        ].join('\n'),
+      ),
+    );
   }
 
   if (sub === 'get' || sub === 'import' || sub === 'import-url') {
@@ -2231,6 +2927,143 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         ),
       };
     }
+    if (esub === 'save') {
+      const p = parseArgv(args.slice(2), ['-n', '--name', '-I', '--include-untracked', '-m', '--message']);
+      let name = p.val('-n', '--name');
+      const message = p.val('-m', '--message');
+      if (name !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+        return {
+          state,
+          result: fail(`ERROR: invalid experiment name '${name}'. Use letters, digits, '.', '_' and '-' (it becomes a Git ref name).`),
+        };
+      }
+      const included: string[] = [];
+      args.slice(2).forEach((a, i, all) => {
+        if ((a === '-I' || a === '--include-untracked') && all[i + 1]) included.push(all[i + 1]!);
+      });
+      for (const path of included) {
+        if (!state.files[path]?.present) {
+          return { state, result: fail(`ERROR: cannot include '${path}': no such file in the workspace.`) };
+        }
+      }
+      if (name !== undefined) {
+        const at = state.experiments.findIndex((e) => e.name === name);
+        if (at >= 0) {
+          if (!p.has('-f', '--force')) {
+            return {
+              state,
+              result: fail(
+                `ERROR: Experiment conflicts with existing experiment '${name}'.\nTo overwrite the existing experiment run:\n\n\tdvc exp save -f -n ${name}`,
+              ),
+            };
+          }
+          state.experiments.splice(at, 1);
+        }
+      } else {
+        name = generateExpName(state);
+      }
+      // nothing runs: the workspace params and metrics are stored as they are
+      const run = recordExperiment(state, name);
+      if (message) run.message = message;
+      return finish(
+        state,
+        ok(
+          [
+            `Experiment has been saved with name '${name}'.`,
+            `  params:  ${JSON.stringify(run.params)}`,
+            `  metrics: ${JSON.stringify(run.metrics)}`,
+            ...(included.length ? [`  included untracked: ${included.join(', ')}`] : []),
+            ...(message ? [`  message: ${message}`] : []),
+            'No stage was re-run: `dvc exp save` stores what the workspace holds right now.',
+            `Compare with \`dvc exp show\`, keep it with \`dvc exp apply ${name}\`, share it with \`dvc exp push origin\`.`,
+          ].join('\n'),
+        ),
+      );
+    }
+    if (esub === 'remove') {
+      const p = parseArgv(args.slice(2), ['-g', '--git-remote', '--rev', '-n', '--num']);
+      const names = p.pos;
+      const all = p.has('-A', '--all', '--all-commits');
+      const queue = p.has('--queue');
+      const rev = p.val('--rev');
+      const gitRemote = p.val('-g', '--git-remote');
+      if (!names.length && !all && !queue && !rev) {
+        return {
+          state,
+          result: fail('ERROR: Either provide an `experiment` argument, or use the `--rev` or `--all-commits` (`--all`) flag.'),
+        };
+      }
+      const match = (e: ExperimentRun, n: string) => e.name === n || e.id === n || e.id.startsWith(n);
+      const lines: string[] = [];
+      if (queue) {
+        lines.push(`Removed ${state.expQueue.length} queued experiment(s).`);
+        state.expQueue = [];
+        if (!names.length && !all && !rev) return finish(state, ok(lines.join('\n')));
+      }
+      if (gitRemote) {
+        if (!(state.gitRemotes ?? []).includes(gitRemote)) {
+          const isDvc = state.remotes.some((r) => r.name === gitRemote);
+          return {
+            state,
+            result: fail(
+              isDvc
+                ? `ERROR: '${gitRemote}' is a DVC remote (data storage), not a Git remote.\n\`-g/--git-remote\` deletes experiment refs from a Git remote such as \`origin\` (see \`git remote -v\`).`
+                : `ERROR: unknown Git remote '${gitRemote}'. Known Git remotes: ${(state.gitRemotes ?? []).join(', ') || '(none)'}.`,
+            ),
+          };
+        }
+        const remoteSet = ((state.expRemotes ??= {})[gitRemote] ??= []);
+        const pushed = (n: string) => remoteSet.includes(n);
+        const selected = all ? [...remoteSet] : names;
+        const unknown = selected.filter((n) => !pushed(n));
+        if (unknown.length) {
+          return {
+            state,
+            result: fail(
+              `ERROR: Experiment(s) ${unknown.map((n) => `'${n}'`).join(', ')} not found in Git remote '${gitRemote}'. Push first with \`dvc exp push ${gitRemote}\`; \`-g\` can only delete what is already there.`,
+            ),
+          };
+        }
+        state.expRemotes![gitRemote] = remoteSet.filter((n) => !selected.includes(n));
+        lines.push(`Removed experiments from Git remote '${gitRemote}': ${selected.join(', ') || '(none)'}`);
+        return finish(state, ok(lines.join('\n')));
+      }
+      let doomed: ExperimentRun[];
+      if (names.length) {
+        const unknown = names.filter((n) => !state.experiments.some((e) => match(e, n)));
+        if (unknown.length) {
+          return {
+            state,
+            result: fail(`ERROR: Experiment(s) ${unknown.map((n) => `'${n}'`).join(', ')} not found. List them with \`dvc exp list\`; nothing was removed.`),
+          };
+        }
+        doomed = state.experiments.filter((e) => names.some((n) => match(e, n)));
+      } else if (all) {
+        doomed = [...state.experiments];
+      } else if (rev) {
+        const base = resolveGitRef(state, rev);
+        if (!base) return { state, result: fail(`ERROR: unknown revision '${rev}'.`) };
+        doomed = state.experiments.filter((e) => base.hash.startsWith(e.commitRef) || e.commitRef.startsWith(base.hash));
+      } else {
+        doomed = [];
+      }
+      state.experiments = state.experiments.filter((e) => !doomed.includes(e));
+      lines.push(doomed.length ? `Removed experiments: ${doomed.map((e) => e.name ?? e.id).join(', ')}` : 'No experiments to remove.');
+      return finish(state, ok(lines.join('\n')));
+    }
+    if (esub === 'gc') {
+      return {
+        state,
+        result: fail(
+          [
+            'ERROR: `dvc exp gc` was removed in DVC 3 (it is no longer a `dvc exp` subcommand).',
+            'Use `dvc exp remove <name>` for one experiment, `dvc exp remove -A` for all of them,',
+            '`dvc exp remove --queue` for queued runs and `dvc exp remove -g <git-remote> <name>` for a Git remote.',
+            'Unused cache objects are collected with `dvc gc` (-w, -A, -c), not with experiments commands.',
+          ].join('\n'),
+        ),
+      };
+    }
     if (esub === 'push' || esub === 'pull') {
       const target = args.slice(2).find((a) => !a.startsWith('-')) ?? 'origin';
       const gitRemotes = state.gitRemotes ?? [];
@@ -2248,6 +3081,12 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
               : `ERROR: unknown Git remote '${target}'. Known Git remotes: ${gitRemotes.join(', ') || '(none)'}. Add one with \`git remote add <name> <url>\`.`,
           ),
         };
+      }
+      if (esub === 'push') {
+        const wanted = args.slice(2).filter((a) => !a.startsWith('-')).slice(1);
+        const names = wanted.length ? wanted : state.experiments.map((e) => e.name ?? e.id);
+        const remoteSet = ((state.expRemotes ??= {})[target] ??= []);
+        for (const n of names) if (!remoteSet.includes(n)) remoteSet.push(n);
       }
       return finish(
         state,

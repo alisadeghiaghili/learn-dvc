@@ -265,6 +265,38 @@ export const en: Catalog = {
         'Eliminates the need to run `git clone` or `dvc pull` in lightweight Docker containers.',
       ],
     },
+    'dvc-install': {
+      title: 'dvc install (Git hooks)',
+      lines: [
+        'Three hooks go into .git/hooks: pre-commit (dvc status), post-checkout (dvc checkout), pre-push (dvc push).',
+        'After that git checkout <ref> moves code and data together, and git push is stopped when the data cannot be pushed.',
+        'Hooks are local to a clone; a second dvc install fails because the files already exist. dvc install --use-pre-commit-tool writes .pre-commit-config.yaml instead.',
+      ],
+    },
+    'dvc-exp-save': {
+      title: 'dvc exp save / remove',
+      lines: [
+        'exp save stores the workspace params and metrics as an experiment without running any stage; without -n it picks an adjective-noun name, -f overwrites a name.',
+        'exp remove <name> deletes one experiment, -A all of them, --queue the queued ones, and -g <git-remote> removes it from a Git remote.',
+        'dvc exp gc was removed in DVC 3; dvc exp remove replaces it.',
+      ],
+    },
+    'dvc-cache-dir': {
+      title: 'dvc cache dir / shared cache',
+      lines: [
+        'dvc cache dir <path> sets cache.dir in .dvc/config (--local keeps it in .dvc/config.local). Objects in the old cache are not moved.',
+        'cache.shared group makes the cache group-writable; cache.type takes reflink, hardlink, symlink or copy. Other values are rejected.',
+        'dvc checkout --relink recreates the workspace links after a cache.type change; commit .dvc/config to share the setup.',
+      ],
+    },
+    'dvc-artifacts': {
+      title: 'dvc artifacts get / gto',
+      lines: [
+        'dvc.yaml declares artifacts (path, type); GTO, a separate CLI, registers versions as Git tags: gto register model --version v1.0.0 creates model@v1.0.0.',
+        'gto assign ... --stage prod creates model#prod#1; assigning again counts up. One commit can carry only one version.',
+        'dvc artifacts get <url> <name> --rev <version> or --stage <stage> downloads that version into -o; it fails while nothing is registered. Push the tags with git push --tags.',
+      ],
+    },
   },
   glossary: {
     split: {
@@ -422,6 +454,26 @@ export const en: Catalog = {
     'pipeline-matrix': {
       title: 'Matrix & Foreach Pipelines',
       body: '`foreach` and `matrix` in dvc.yaml define parameterized sweeps over multiple datasets, architectures, or preprocessing steps without code duplication. DVC creates distinct DAG sub-stages, evaluates dependencies independently, and caches each stage output selectively.',
+    },
+    'git-hooks': {
+      title: 'Git hooks (dvc install)',
+      body: 'dvc install adds pre-commit (dvc status), post-checkout (dvc checkout) and pre-push (dvc push) hooks to .git/hooks, so Git keeps code and data in step. Hooks are local to a clone and not versioned; --use-pre-commit-tool puts them in .pre-commit-config.yaml for the whole team.',
+    },
+    'shared-cache': {
+      title: 'Shared cache',
+      body: 'Set dvc cache dir <path>, cache.shared group and cache.type (reflink, hardlink, symlink, copy) in .dvc/config so a team uses one content-addressed cache instead of one per clone. Run dvc checkout --relink after changing the link type; machine-specific paths go to .dvc/config.local with --local.',
+    },
+    'repro-pull': {
+      title: 'repro --pull and --allow-missing',
+      body: 'On a fresh clone dvc.lock is current but the outputs are missing. Plain dvc repro runs the stages again; dvc repro --pull downloads the outputs from the remote instead (and runs a stage only if the remote lacks them); --allow-missing skips stages whose only difference is missing data.',
+    },
+    'artifacts-registry': {
+      title: 'Artifacts & the GTO registry',
+      body: 'artifacts: in dvc.yaml declares models and datasets; the separate GTO CLI turns Git tags into a registry (name@v1.0.0 for versions, name#prod#1 for stage assignments); dvc artifacts get downloads a version or the one currently in a stage.',
+    },
+    'exp-save-remove': {
+      title: 'Saving & pruning experiments',
+      body: 'dvc exp save records the workspace params and metrics as a named experiment without running anything (-n names it, -f overwrites). dvc exp remove <name> prunes one, -A all, --queue the queue, -g <git-remote> a Git remote. dvc exp gc no longer exists in DVC 3.',
     },
   },
   ui: {
@@ -725,6 +777,31 @@ export const en: Catalog = {
         q: 'Where must cloud access keys be configured to prevent leaks to Git?',
         a: ['In .dvc/config committed to Git', 'In .dvc/config.local (gitignored) or CI environment variables', 'In the README file'],
         correct: 1,
+      },
+      {
+        q: 'What does the DVC post-checkout hook do after git checkout <older-commit>?',
+        a: ['Nothing, Git ignores DVC', 'Runs dvc checkout so the workspace data matches the restored pointers', 'Deletes the cache'],
+        correct: 1,
+      },
+      {
+        q: 'You trained by hand and want to keep the result as an experiment without re-running anything. Which command?',
+        a: ['dvc exp run -S lr=0.05', 'dvc exp gc', 'dvc exp save -n <name>'],
+        correct: 2,
+      },
+      {
+        q: 'Fresh clone, dvc.lock is current, but the model file is missing. What avoids retraining?',
+        a: ['dvc repro --pull', 'dvc repro (it always restores)', 'dvc gc -w'],
+        correct: 0,
+      },
+      {
+        q: 'How does a team register a model version in the GTO registry?',
+        a: ['dvc register model', 'gto register model --version v1.0.0 (a Git tag model@v1.0.0)', 'Rename the file to model_final.pkl'],
+        correct: 1,
+      },
+      {
+        q: 'Where do the shared-cache settings cache.shared and cache.type belong?',
+        a: ['.dvc/config, committed so every clone shares them (.dvc/config.local for machine-specific values)', 'dvc.lock', 'Each person\'s shell profile'],
+        correct: 0,
       },
     ],
     helpSections: [
