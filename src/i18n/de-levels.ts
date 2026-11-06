@@ -1406,4 +1406,172 @@ export const deLevels: Record<string, LevelCopy> = {
       },
     ],
   },
+  'prod-1': {
+    seriesTitle: 'Produktionsgewohnheiten',
+    name: 'Git-Hooks: Git lässt DVC für dich laufen',
+    objective:
+      'Installiere die DVC-Git-Hooks, geh dann mit `git checkout HEAD~1` einen Commit zurück und prüfe, dass die Daten dem Code gefolgt sind, ohne dass du selbst `dvc checkout` ausführst.',
+    learning: [
+      'dvc install legt drei Hooks in .git/hooks an: pre-commit führt dvc status aus, post-checkout dvc checkout, pre-push dvc push',
+      'Mit dem post-checkout-Hook bewegt git checkout <ref> Code und Daten gemeinsam; ohne ihn behält der Workspace die neueren Daten',
+      'Hooks gehören zu einem Clone und werden nicht versioniert: Jede Person führt dvc install aus, oder das Team teilt .pre-commit-config.yaml über --use-pre-commit-tool',
+    ],
+    fieldNotes: [
+      'Schreib „dvc install ausführen“ in den Setup-Abschnitt der README, gleich neben die pip-install-Zeile',
+      'Ein fehlschlagender pre-push-Hook ist ein Feature: Er verhindert, dass Code auf dem Remote landet, bevor seine Daten gepusht sind',
+      'CI braucht die Hooks nicht; sie führt dvc pull und dvc repro ausdrücklich aus',
+    ],
+    startDialog: [
+      {
+        title: 'Der Code zieht um, die Daten bleiben zurück',
+        markdown:
+          'Du checkst den Commit der letzten Woche aus, um einen Bugreport nachzustellen. Git setzt Code und `.dvc`-Pointer zurück, aber `data/data.xml` auf der Platte bleibt die neueste Version, bis jemand `dvc checkout` ausführt.\n\nVergisst du diesen Schritt, debuggst du die heutigen Daten mit dem Code von letzter Woche. Die Zahlen sehen trotzdem plausibel aus – genau das macht es gefährlich.',
+      },
+      {
+        title: 'Drei Hooks, einmal pro Clone installiert',
+        markdown:
+          '`dvc install` schreibt drei Git-Hooks nach `.git/hooks`: **pre-commit** führt `dvc status` aus, **post-checkout** `dvc checkout` und **pre-push** `dvc push`.\n\nDanach bewegt `git checkout HEAD~1` Code und Daten gemeinsam, und `git push` bricht ab, wenn die Daten das Remote nicht erreichen. Der Fehler zeigt sich auf deinem Laptop, nicht im `dvc pull` einer Kollegin am nächsten Morgen.\n\nHooks liegen in `.git`, das Git nicht versioniert; deshalb führt jede Person `dvc install` einmal pro Clone aus. Teams, die bereits das pre-commit-Tool nutzen, verwenden `dvc install --use-pre-commit-tool` und committen stattdessen `.pre-commit-config.yaml`.',
+      },
+    ],
+  },
+  'prod-2': {
+    seriesTitle: 'Produktionsgewohnheiten',
+    name: 'Experimente speichern und aufräumen',
+    objective:
+      'Halte zwei von Hand ausprobierte Lernraten mit `dvc exp save` als benannte Experimente fest und lösche das gescheiterte anschließend mit `dvc exp remove`, sodass nur das nützliche Experiment in der Liste bleibt.',
+    learning: [
+      'dvc exp save -n <name> speichert die aktuellen Params und Metriken des Workspace als Experiment, ohne eine Stage auszuführen',
+      'Ohne -n erzeugt DVC einen Namen aus Adjektiv und Nomen; einen vorhandenen Namen überschreibt nur -f',
+      'dvc exp remove <name> löscht ein Experiment; -A entfernt alle, --queue die eingereihten, -g <git-remote> löscht es auf einem Git-Remote',
+    ],
+    fieldNotes: [
+      'Benenne ein Experiment nach der Änderung (lr-005), nicht nach dir selbst: Auf diesen Namen bezieht sich die Diskussion im Pull Request',
+      'Räum auf, bevor du teilst: dvc exp push schickt jedes Experiment, also entferne zuerst die Sackgassen',
+      'dvc exp gc gibt es in DVC 3 nicht mehr; dvc exp remove ersetzt es',
+    ],
+    startDialog: [
+      {
+        title: 'Ergebnisse, die nur in deinem Workspace existieren',
+        markdown:
+          'Du hast zwei Lernraten von Hand ausprobiert. Jedes Ergebnis steht in `params.yaml` und `metrics.json` im Workspace, und die nächste Änderung überschreibt es. `git stash` hilft nicht, denn genau diese Dateien sind das Experiment.\n\nDie ganze Pipeline noch einmal zu starten, nur um festzuhalten, was du schon hast, würde Rechenzeit verschwenden, die du bereits bezahlt hast.',
+      },
+      {
+        title: 'exp save hält fest, exp remove räumt auf',
+        markdown:
+          '`dvc exp save -n lr-005` speichert die Params und Metriken, die gerade im Workspace liegen, als Experiment. Es führt keine Stage aus: Veraltete Stages bleiben veraltet, und es wird nichts neu berechnet. Ohne `-n` denkt sich DVC einen Namen aus Adjektiv und Nomen aus, etwa `brisk-otter`; einen vorhandenen Namen erneut zu speichern schlägt fehl, außer du gibst `-f` an.\n\nDie Liste wächst schnell. `dvc exp remove lr-09` löscht ein Experiment, `dvc exp remove -A` alle, und `dvc exp remove -g origin lr-09` löscht es nach einem `dvc exp push` auf einem Git-Remote. Im Team werden Experimente geteilt, also gehört eine aufgeräumte Liste zum Review: Alle anderen müssen sonst an deinen Sackgassen vorbeiscrollen. (`dvc exp gc` wurde in DVC 3 entfernt.)',
+      },
+    ],
+  },
+  'prod-3': {
+    seriesTitle: 'Produktionsgewohnheiten',
+    name: 'Eine Vorlage, vier Stages: vars und matrix',
+    objective:
+      'Lies die `vars`- und `matrix`-Vorlage in `dvc.yaml` und reproduziere dann alle vier erzeugten Stages mit einem einzigen `dvc repro train`.',
+    learning: [
+      'vars definiert einen Wert einmal; ${name} verwendet ihn in deps, outs und cmd wieder',
+      'matrix erweitert eine Stage-Vorlage zu einer Stage pro Kombination, benannt train@cnn-a, train@cnn-b usw.; ${item.model} ist der jeweilige Wert',
+      'dvc repro train führt alle erzeugten Stages aus, dvc repro train@cnn-a nur eine; dvc dag und dvc status zeigen die erzeugten Namen',
+    ],
+    fieldNotes: [
+      'Halte das Raster klein: Jede Kombination ist eine Stage, ein Output und ein dvc.lock-Eintrag',
+      'Nimm eine Matrix für ein festes Raster und dvc exp run -S für offene Sweeps',
+      'dvc stage add kann keine Matrix anlegen; du schreibst sie von Hand in dvc.yaml',
+    ],
+    startDialog: [
+      {
+        title: 'Kopierte Stages laufen auseinander',
+        markdown:
+          'Zwei Modelle und zwei Feature-Sets ergeben vier fast identische Stages. Von Hand kopiert, driften sie auseinander: Eine bekommt ein neues Flag, eine andere behält das alte, und niemand merkt es, bis sich ein Ergebnis nicht mehr reproduzieren lässt.\n\nEine Vorlage beseitigt die Kopien.',
+      },
+      {
+        title: 'Eine Matrix-Stage lesen',
+        markdown:
+          'In `dvc.yaml` hält `vars` Werte, die du mehrfach brauchst, und `matrix` listet die Optionen auf. DVC baut für jede Kombination eine Stage: `train@cnn-a`, `train@cnn-b`, `train@xgb-a` und `train@xgb-b`. In der Vorlage werden `${item.model}` und `${item.feature}` zur jeweiligen Kombination, während `${data}` aus `vars` stammt.\n\n`cat dvc.yaml` zeigt die Vorlage, nicht die erzeugten Stages; `dvc dag` und `dvc status` zeigen die ausgeklappten Namen. `dvc repro train` führt die ganze Gruppe aus, `dvc repro train@cnn-a` nur eine – so wiederholst du eine einzelne fehlgeschlagene Zelle des Rasters, ohne die anderen drei anzufassen.',
+      },
+    ],
+  },
+  'prod-4': {
+    seriesTitle: 'Produktionsgewohnheiten',
+    name: 'Frischer Clone: repro --pull',
+    objective:
+      'Du hast das Projekt gerade geklont. dvc.lock ist aktuell, aber weder Modell noch aufbereitete Daten liegen auf der Platte. Hol die Outputs mit `dvc repro --pull` zurück, statt neu zu trainieren.',
+    learning: [
+      'Auf einem frischen Clone sagt dvc.lock, dass die Stages aktuell sind, doch die Outputs liegen weder im Workspace noch im lokalen Cache',
+      'Ein einfaches dvc repro hält fehlende Outputs für einen Grund, die Stage erneut auszuführen',
+      'dvc repro --pull lädt die fehlenden Outputs vom Remote; fehlen sie dort, läuft die Stage trotzdem, und --allow-missing überspringt solche Stages stattdessen',
+    ],
+    fieldNotes: [
+      'In CI stellt dvc repro --pull unveränderte Stages vom Remote wieder her und trainiert nur, was sich wirklich geändert hat',
+      'dvc repro --allow-missing ist die billige CI-Prüfung, dass nichts veraltet ist: Es lädt nie Daten herunter',
+      'Pushe die Outputs jeder Stage, die du committest, sonst hat --pull nichts zu holen',
+    ],
+    startDialog: [
+      {
+        title: 'Der teure Start in den Tag',
+        markdown:
+          'Du klonst das Repository auf einen neuen Rechner und startest `dvc repro`. DVC sieht, dass die in `dvc.lock` aufgeführten Outputs nicht auf der Platte liegen, hält die Stages für veraltet und beginnt wieder zu trainieren: Stunden an Rechenzeit, um Dateien neu zu erzeugen, die längst auf dem Remote liegen.',
+      },
+      {
+        title: 'Herunterladen statt neu berechnen',
+        markdown:
+          '`dvc status` direkt nach einem Clone zeigt `changed outs` mit `not in cache`: Die Stages sind gesperrt und aktuell, nur die Bytes fehlen. `dvc repro --pull` prüft jede Stage gegen `dvc.lock`; hat sich nichts geändert, lädt es die fehlenden Outputs vom Standard-Remote und macht weiter, ohne etwas auszuführen. Besitzt das Remote einen Output nicht, läuft die Stage wie gewohnt, deshalb ist das Flag als Standard unbedenklich.\n\nMit `--allow-missing` überspringt DVC Stages, deren einziger Unterschied fehlende Daten sind, und lädt nichts herunter – passend für einen CI-Job, der nur prüft, dass niemand vergessen hat, `dvc repro` auszuführen.',
+      },
+    ],
+  },
+  'prod-5': {
+    seriesTitle: 'Produktionsgewohnheiten',
+    name: 'Ein gemeinsamer Team-Cache',
+    objective:
+      'Richte das Projekt auf ein teamweites Cache-Verzeichnis aus, mach es gruppenbeschreibbar, verlinke statt zu kopieren und committe die geteilte `.dvc/config`, damit jeder Clone dasselbe Setup bekommt.',
+    learning: [
+      'dvc cache dir <pfad> setzt cache.dir in .dvc/config; mit --local landet es in .dvc/config.local und bleibt auf einem Rechner',
+      'cache.shared group macht Cache-Dateien gruppenbeschreibbar, damit mehrere Nutzer einen Cache füllen können; cache.type symlink,hardlink verlinkt statt zu kopieren, und DVC weist unbekannte Werte ab',
+      'dvc checkout --relink legt die Workspace-Dateien als Links in den neuen Cache neu an; die Einstellungen sind eine gewöhnliche Git-Änderung an .dvc/config',
+    ],
+    fieldNotes: [
+      'Lege den gemeinsamen Cache auf dasselbe Dateisystem wie die Workspaces, sonst sind Hardlinks unmöglich',
+      'Schreib nie Zugangsdaten in die geteilte .dvc/config; nutze --local für Werte, die je Rechner abweichen',
+      'Bei Links ist eine getrackte Datei das Cache-Objekt selbst: Ersetze sie und führe dvc add erneut aus, statt sie direkt zu bearbeiten',
+    ],
+    startDialog: [
+      {
+        title: 'Fünf Kopien desselben Datensatzes',
+        markdown:
+          'Fünf Leute teilen sich einen GPU-Server, und jede führt `dvc pull` aus. Jede bekommt einen privaten 50-GB-Cache im eigenen Projekt, und bis Freitag ist die Platte voll. Alle fünf Caches enthalten dieselben Dateien, denn DVC benennt jedes Objekt nach seinem Inhalts-Hash.',
+      },
+      {
+        title: 'Ein Cache, drei Einstellungen und ein Commit',
+        markdown:
+          'Ein gemeinsamer Cache ist Konfiguration, kein neues Werkzeug. `dvc cache dir /mnt/shared/dvc-cache` legt fest, wo der Cache liegt, `dvc config cache.shared group` macht seine Dateien gruppenbeschreibbar, sodass jedes Teammitglied etwas hinzufügen kann, und `dvc config cache.type symlink,hardlink` lässt Workspaces auf den Cache zeigen, statt aus ihm zu kopieren. DVC prüft die Werte und lehnt unbekannte ab, etwa `cache.shared everyone`.\n\nFühre nach einer Änderung des Link-Typs `dvc checkout --relink` aus und lies dann `cat .dvc/config` und `git status`: Die Einstellungen stehen in der committeten `.dvc/config`, ein `git commit` gibt also jedem Clone dasselbe Layout. Ein Pfad, der je Rechner abweicht, gehört stattdessen in `.dvc/config.local` (`--local`).',
+      },
+    ],
+  },
+  'prod-6': {
+    seriesTitle: 'Produktionsgewohnheiten',
+    name: 'Modell-Registry mit GTO-Tags',
+    objective:
+      'Registriere Version v1.0.0 des in dvc.yaml deklarierten `model`-Artefakts, weise sie mit GTO der Stage prod zu und lade genau diese Version dann mit `dvc artifacts get` herunter.',
+    learning: [
+      'Der Abschnitt artifacts: in dvc.yaml benennt die Modelle und Datensätze, die ein Team veröffentlicht (path und type)',
+      'GTO ist eine eigenständige CLI: gto register erzeugt den Git-Tag model@v1.0.0, gto assign den Tag model#prod#1; ein Commit trägt eine Version, die nächste Version braucht also einen neuen Commit',
+      'dvc artifacts get <url> <name> --rev <version> oder --stage <stage> lädt diese registrierte Version nach -o und schlägt fehl, solange nichts registriert ist',
+    ],
+    fieldNotes: [
+      'Deploye nach Stage, nicht nach Dateipfad: Der Dienst fragt nach „model in prod“, und eine Beförderung wird zu einem Git-Tag',
+      'Pushe die Tags mit git push --tags, sonst sieht sonst niemand die Registry',
+      'dvc artifact und dvc register sind keine Befehle; die Registry-Verben gehören zu gto',
+    ],
+    startDialog: [
+      {
+        title: 'Welches Modell läuft in Produktion?',
+        markdown:
+          'Jemand fragt, welche Modelldatei gerade den Traffic bedient. Die Antwort steckt in einem Chat-Verlauf, in einem Dateinamen wie `final_v2_REAL.pkl` oder im Kopf einer einzelnen Person. Eine Registry ersetzt das Raten durch einen Eintrag, den das ganze Team abfragen kann.',
+      },
+      {
+        title: 'Git-Tags als Registry',
+        markdown:
+          'Deklariere das Modell einmal in `dvc.yaml` unter `artifacts:` (path und type). Nutze dann die eigenständige GTO-CLI: `gto register model --version v1.0.0` erzeugt den Git-Tag `model@v1.0.0` auf dem aktuellen Commit, und `gto assign model --version v1.0.0 --stage prod` erzeugt `model#prod#1`. Weist du prod später erneut zu, entsteht `model#prod#2`, und die höchste Nummer gilt.\n\nKonsumenten fassen deinen Branch nie an: `dvc artifacts get <registry-url> model --stage prod -o deploy/model.pkl` löst den Tag auf, findet dessen Commit und lädt die Datei so herunter, wie sie dort war. GTO schreibt nur Git-Tags; pushe sie (`git push --tags`), damit andere die Registry sehen. Beförderung und Rollback sind je ein Tag.',
+      },
+    ],
+  },
 };
