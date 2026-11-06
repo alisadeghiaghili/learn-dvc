@@ -858,7 +858,8 @@ export class App {
         this.solvedFlash = true;
         const num = this.golf.length;
         const best = this.progress[this.level.id]?.bestCommands;
-        const nextBest = best === undefined ? num : Math.min(best, num);
+        // A run where the solution was played for the learner has no command count (0): keep any real best.
+        const nextBest = num === 0 ? best : best === undefined ? num : Math.min(best, num);
         this.progress[this.level.id] = { solved: true, bestCommands: nextBest };
         saveProgress(this.progress);
         this.pushOut('');
