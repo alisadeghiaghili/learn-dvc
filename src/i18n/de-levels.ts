@@ -7,16 +7,16 @@ export const deLevels: Record<string, LevelCopy> = {
     seriesTitle: 'Grundlagen',
     name: 'DVC initialisieren',
     objective:
-      'DVC in einem Git-Repository initialisieren und die DVC-Metadaten committen, damit das Team dasselbe Data-Versioning-Setup teilt.',
+      'Initialisiere DVC in einem Git-Repository und committe die Dateien, die `dvc init` gestaged hat, damit das ganze Team dasselbe Data-Versioning-Setup nutzt.',
     learning: [
       'DVC erweitert Git für Daten; es ersetzt Git nicht',
-      'dvc init legt nur .dvc/-Metadaten an — noch sind keine Daten versioniert',
-      'Git versioniert diese Metadaten; Teammates klonen denselben Workflow',
+      'dvc init braucht ein Git-Repository (oder --no-scm) und legt nur .dvc/-Metadaten an — noch ist nichts versioniert',
+      'dvc init staged .dvc/config, .dvc/.gitignore und .dvcignore bereits für dich; du committest sie nur',
     ],
     fieldNotes: [
-      'Repo-Bootstrap: git init → dvc init → .dvc sofort committen',
-      'Remote-Config in .dvc/config speichern, damit Clones denselben Data Store erben',
-      'Ohne .dvc-Commit hat jeder Teammate einen anderen Daten-Workflow',
+      'Repo-Bootstrap: git init → dvc init → git commit (dvc init hat git add schon erledigt)',
+      'Remote-Config gehört in .dvc/config, damit Clones denselben Datenspeicher erben',
+      'Ohne Commit von .dvc hat jede Person einen anderen Daten-Workflow',
     ],
     startDialog: [
       {
@@ -27,12 +27,12 @@ export const deLevels: Record<string, LevelCopy> = {
       {
         title: 'Was `dvc init` wirklich tut',
         markdown:
-          'Legt ein `.dvc/`-Verzeichnis an mit:\n\n- `config` — wo Remotes und Cache für dieses Projekt liegen\n- `.gitignore` — damit DVCs interner Cache nicht aus Versehen committed wird\n\n**Es lädt keine Daten hoch.** Du schaltest Data-Versioning *an* für dieses Projekt.\n\nMental Model: `git init` für Code ≈ `dvc init` für den Daten-Workflow.',
+          'Läuft in einem Git-Repository (außerhalb bricht `dvc init` ab und verweist auf `--no-scm`). Es legt an:\n\n- `.dvc/config` — wo Remotes und Cache für dieses Projekt liegen\n- `.dvc/.gitignore` — damit DVCs interner Cache nicht versehentlich committet wird\n- `.dvcignore` — Muster, die DVC überspringt, wie `.gitignore` für DVC\n\n**Es lädt keine Daten hoch.** Du schaltest Data-Versioning für das Projekt *ein*.\n\nMentales Modell: `git init` für Code ≈ `dvc init` für den Daten-Workflow.',
       },
       {
-        title: 'Warum du `.dvc/` mit Git committen musst',
+        title: 'Warum du das Ergebnis mit Git committen musst',
         markdown:
-          'Der `.dvc/`-Ordner ist winzig und team-facing.\n\n```\ngit add .dvc\ngit commit -m "Initialize DVC"\n```\n\nOhne das hat Clone #2 Code, aber **kein DVC-Projekt** — `dvc pull` kennt dein Cache-Layout nicht.\n\nBeobachte das Board: Workspace kann „initialized“ sein, während der Git-Setup-Commit noch fehlt.',
+          'Diese Dateien sind winzig und teamweit relevant. `dvc init` hat sie schon mit `git add` gestaged (siehe `git status`), es fehlt nur der Commit:\n\n```\ngit commit -m "Initialize DVC"\n```\n\nOhne ihn hat Clone #2 Code, aber **kein DVC-Projekt** — `dvc pull` kennt dein Cache-Layout nicht.\n\nSchau aufs Board: Der Workspace kann „initialized“ sein, während im Git-Verlauf der Setup-Commit noch fehlt.',
       },
     ],
   },
@@ -57,17 +57,28 @@ export const deLevels: Record<string, LevelCopy> = {
         markdown:
           'Vier Effekte in einem Befehl:\n\n1. Hash (md5) über den Dateiinhalt\n2. Bytes in `.dvc/cache`\n3. Kleine `.dvc`-Pointer-Datei (YAML)\n4. Rohpfad in `.gitignore`\n\nGit sieht danach nur noch den Pointer.',
       },
+      {
+        title: 'Was unter der Haube passiert',
+        markdown:
+          'Nach `dvc add`:\n\n- Der Workspace behält `data/data.xml` — standardmäßig als Kopie (`cache.type` ist `reflink,copy`; Reflinks, Hardlinks oder Symlinks sind optional)\n- `.dvc/cache/.../md5/xx/…` enthält die eigentlichen Bytes, inhaltsadressiert\n- `data/data.xml.dvc` ist YAML mit Pfad + md5 — **das, was Git speichert**\n- `data/.gitignore` ignoriert den Rohpfad\n\n**Git** → Code + Pointer. **DVC Cache/Remote** → Nutzdaten.',
+      },
+      {
+        title: 'Typischer Fehler',
+        markdown:
+          'Aus Gewohnheit `git add data/data.xml`.\n\nVor `dvc add` akzeptiert Git das (hier mit Warnung) — und bringt das Ursprungsproblem zurück. Nach `dvc add` verweigert Git: *„The following paths are ignored by one of your .gitignore files“*. Ins Git gehören **nur** die `.dvc`-Datei und die Ignore-Regeln.',
+      },
     ],
   },
   'basics-3': {
     seriesTitle: 'Grundlagen',
     name: 'Dirty Data und Status',
     objective:
-      'Daten ändern, `dvc status` lesen und mit `dvc commit` den neuen Stand in Cache und Pointer übernehmen.',
+      'Ändern sich Daten auf der Platte, erkenne es mit `dvc status`, übernimm die neue Version mit `dvc add` und halte die Pointer-Änderung dann in Git fest.',
     learning: [
-      'dvc status vergleicht Workspace vs. Pointer vs. Cache',
-      'modified = Bytes != md5 im .dvc',
-      'dvc commit akzeptiert die neue Datenversion',
+      'Workspace-Änderung ohne Pointer-Update = dirty Data',
+      'dvc status ist das Daten-Pendant zu git status',
+      'Erneutes dvc add schreibt den neuen md5 in die .dvc-Datei und die neuen Bytes in den Cache; git commit versioniert den Pointer',
+      'Die Historie behält alte md5 — später kommst du per checkout zurück',
     ],
     fieldNotes: [
       'Dirty Data ist der Normalfall nach Feature-Engineering',
@@ -75,9 +86,14 @@ export const deLevels: Record<string, LevelCopy> = {
     ],
     startDialog: [
       {
-        title: 'Dirty ist kein Fehler',
+        title: 'Daten ändern sich; Pointer hinken hinterher',
         markdown:
-          'Wie `git status` für Daten: du hast eine uncommittete Änderung.\n\nAkzeptieren: `dvc commit`\nVerwerfen: `dvc checkout`',
+          'In echten Projekten wächst der Datensatz (neuer Scrape, neue Labels).\n\n```\nedit data/data.xml\n```\n\nJetzt gilt: **Workspace-Inhalt ≠ Pointer-md5**. Das ist „dirty“, genau wie uncommitteter Code.\n\nHast du darauf trainiert, ist das Ergebnis **nicht reproduzierbar**, bis die Datenversion festgehalten ist.',
+      },
+      {
+        title: 'Status → add → Git',
+        markdown:
+          '```\ndvc status\ndvc add data/data.xml\ngit add data/data.xml.dvc\ngit commit -m "Dataset updates"\n```\n\n1. **status** — welche Datendateien abweichen\n2. **dvc add** — erneut auf die geänderte Datei: neuer md5 in die `.dvc`-Datei, neue Bytes in den Cache\n3. **git commit** — den Pointer in die Code-Zeitleiste bringen\n\nOhne Schritt 2 würde Git eine *Lüge* versionieren (alter Hash, neue Datei). (`dvc commit` ist das Gegenstück für Pipeline-Ausgaben und `--no-commit`; bei einer normal getrackten Datei ist erneutes `add` der Alltag.)',
       },
     ],
   },
@@ -256,18 +272,33 @@ export const deLevels: Record<string, LevelCopy> = {
         title: 'Sweep, nicht raten',
         markdown: '`dvc exp run -S lr=0.05` und Freunde, dann `dvc exp show`.',
       },
+      {
+        title: 'Was ein Lauf hinterlässt',
+        markdown:
+          'Jedes `dvc exp run -S` führt die Pipeline **sofort** aus und lässt den Workspace mit diesem Lauf zurück: `params.yaml` zeigt den letzten `-S`-Wert, `git status` meldet sie als geändert.\n\nJeder Lauf wird außerdem als Experiment gespeichert (versteckte Git-Refs); beide Sweeps bleiben also in `dvc exp show`, auch wenn der Workspace weiterwandert. Willst du den Workspace nicht anfassen, stelle den Lauf mit `--queue` zurück und starte ihn später.',
+      },
     ],
   },
   'exp-3': {
     seriesTitle: 'Experimente',
     name: 'Gewinner übernehmen',
-    objective: 'Mit `dvc exp apply` die beste Experimentkonfiguration in den Workspace heben.',
-    learning: ['exp apply promoted Params/Metrics', 'Dann Artefakte reproen'],
+    objective:
+      'Führe ein Experiment mit `lr=0.05` aus, liste die Experimente und wende es mit `dvc exp apply <id>` an: Der Workspace bekommt Params, Metrics und Ausgaben dieses Experiments.',
+    learning: [
+      'Auswahl nach dem Vergleich — apply befördert einen Gewinner',
+      'apply stellt Params, Metrics und Ausgabedateien wieder her; Stages sind ohne repro aktuell',
+      'Pointer + Params + Metrics bleiben für Audits verknüpft',
+    ],
     fieldNotes: ['Gewinner werden zur neuen Baseline — nicht in Notizen kopieren'],
     startDialog: [
       {
         title: 'Vom Lauf zur Baseline',
         markdown: '`dvc exp apply exp-xxxxxx` — ohne Werte neu zu tippen.',
+      },
+      {
+        title: 'apply bringt auch die Ausgaben zurück',
+        markdown:
+          '`dvc exp apply <id>` stellt `params.yaml`, Metrics **und Ausgabedateien** (etwa `model.pkl`) des Experiments im Workspace wieder her — deine neue **Baseline**. Danach ist kein `dvc repro` nötig.\n\nOffiziell wird die Baseline erst, wenn du sie mit Git committest.',
       },
     ],
   },
@@ -303,14 +334,28 @@ export const deLevels: Record<string, LevelCopy> = {
   },
   'field-3': {
     seriesTitle: 'Field Practice',
-    name: 'Gewinner promoten, dann repro',
-    objective: 'Experiment-Gewinner übernehmen und Artefakte neu bauen.',
-    learning: ['apply + repro = neue Baseline'],
-    fieldNotes: ['Produktionspfad nach einem guten Sweep'],
+    name: 'Den Gewinner in einen Commit überführen',
+    objective:
+      'Ein Gewinner-Experiment wird erst durch einen Commit zur Produktions-Baseline: ausführen, anwenden (Params und Ausgaben kommen zurück), dann `params.yaml` und `dvc.lock` committen.',
+    learning: [
+      'apply stellt Params, Metrics und Ausgaben wieder her — danach kein dvc repro nötig',
+      'Offiziell ist die Baseline erst nach einem Git-Commit von params.yaml, dvc.lock (und dvc.yaml, falls geändert)',
+      'Alternative: dvc exp branch macht aus dem Experiment einen eigenen Git-Branch für den Review',
+    ],
+    fieldNotes: [
+      'Release-Checkliste: exp show → exp apply → git add params.yaml dvc.lock → git commit → dvc push',
+      'CI kann repro auf dem Release-Commit laufen lassen und so belegen, dass das Modell zur committeten Config passt',
+    ],
     startDialog: [
       {
-        title: 'Promote und bau neu',
-        markdown: 'Erst `dvc exp apply`, dann `dvc repro`.',
+        title: 'apply ist nicht das Ende',
+        markdown:
+          '```\ndvc exp run -S lr=0.05\ndvc exp apply <id>\ngit add params.yaml dvc.lock\ngit commit -m "Promote lr=0.05"\n```\n\n`apply` legt den Gewinner in deinen **Workspace**: Params, Metrics und `model.pkl` sind zurück, Stages sind aktuell. Sehen kann es das Team aber erst nach dem Commit.',
+      },
+      {
+        title: 'Wann etwas fertig ist',
+        markdown:
+          'Eine Baseline ist fertig, wenn:\n\n1. ein Git-Commit Code + Params + `dvc.lock` festhält\n2. die Pipeline-Ausgaben zu diesem Lock passen (apply hat sie wiederhergestellt)\n3. das Remote die Objekte hat, die das Team braucht (`dvc push`)\n\nLieber ein Review-Branch? `dvc exp branch <id> <branch>` erzeugt einen aus dem Experiment.',
       },
     ],
   },
@@ -318,13 +363,18 @@ export const deLevels: Record<string, LevelCopy> = {
     seriesTitle: 'Capstone',
     name: 'End-to-End-Drill',
     objective:
-      'Von dirty Daten bis geteiltem Stand: den vollen DVC-Workflow in einem Szenario durchziehen.',
+      'Liefere ein datengestütztes Experiment Ende-zu-Ende: Remote, Push, Pipeline, Repro, Experiment, Apply — dann das Ergebnis committen, sodass train aktuell bleibt.',
     learning: ['add/commit/push/pull als eine Geschichte', 'Pipelines und Exp im Kontext'],
     fieldNotes: ['Das ist der Alltagstag im ML-Team'],
     startDialog: [
       {
         title: 'Alles zusammen',
         markdown: 'Zeit, die Teile zu einer Produktionsschicht zu machen.',
+      },
+      {
+        title: 'So sieht Erfolg aus',
+        markdown:
+          'Board: Daten getrackt, Cache gefüllt, Remote hält die Objekte.\nDAG: prepare → train reproduziert.\nExperimente: mindestens eins mit `lr=0.05`, angewendet und committet (`params.yaml`, `dvc.yaml`, `dvc.lock`).\n\nEine Mini-Produktionspipeline, die du am Whiteboard erklären kannst.',
       },
     ],
   },
@@ -414,12 +464,22 @@ export const deLevels: Record<string, LevelCopy> = {
     seriesTitle: 'Vergleich',
     name: 'exp diff nach verschachtelten Params',
     objective: 'Experimente nach verschachtelten Param-Läufen mit `dvc exp diff` vergleichen.',
-    learning: ['exp diff zeigt Param- und Metric-Drift'],
+    learning: [
+      'Zwei Läufe + diff > ein Lauf und ein Bauchgefühl',
+      'Verschachtelte Keys funktionieren mit -S (train.n_est=…)',
+      'exp diff ohne Argumente vergleicht Workspace und HEAD; nenne zwei Experimente, um sie zu vergleichen',
+    ],
     fieldNotes: ['Verschachtelte Keys wie train.lr ernst nehmen'],
     startDialog: [
       {
-        title: 'Verschachtelte Params',
-        markdown: 'Zwei Läufe, ein `train.n_est`-Weg — dann `dvc exp diff`.',
+        title: 'Sweep, dann diff',
+        markdown:
+          '```\ndvc exp run -n n50 -S train.n_est=50\ndvc exp run -n n100 -S train.n_est=100\ndvc exp diff n50 n100\n```',
+      },
+      {
+        title: 'Verschachtelte -S-Keys',
+        markdown:
+          'Beachte `train.n_est=…` — derselbe gepunktete Key wie in `params.yaml` / Stage-`-p`.\n\n`dvc exp diff` ohne Argumente vergleicht den **Workspace mit HEAD**. Gibst du zwei Experimentnamen an, zeigt es die Param- und Metric-Deltas genau zwischen diesen beiden.',
       },
     ],
   },
@@ -451,18 +511,28 @@ export const deLevels: Record<string, LevelCopy> = {
   },
   'camp-1': {
     seriesTitle: 'DVCLive',
-    name: 'Mit DVCLive instrumentieren',
+    name: 'DVCLive: aus dem Trainingsskript loggen',
     objective:
-      'Training mit DVCLive instrumentieren: Params, Metrics, Plots und Report automatisch speisen.',
+      'Sieh, wie **DVCLive** arbeitet: lies die Logging-Aufrufe in `src/train.py`, führe das Skript aus und betrachte die geschriebenen Metrics und Plots.',
     learning: [
-      'Live / log_metric / log_plot / make_report',
-      'Skalare → Metrics, Serien → Plots',
+      'DVCLive ist eine Python-Bibliothek, die das Trainingsskript importiert (`from dvclive import Live`) — kein dvc-Unterbefehl',
+      'live.log_metric → Skalare in dvclive/metrics.json; live.next_step() → ein weiterer Punkt in den Plots',
+      'log_param, log_plot, log_image und make_report ergänzen Params, eigene Plots, Bilder und einen HTML-Bericht',
     ],
-    fieldNotes: ['Brücke von Notebook zu exp show/plots'],
+    fieldNotes: [
+      'print(loss) durch live.log_metric ersetzen — dann funktionieren plots/exp von selbst',
+      'Die dvc.yaml-Einträge für metrics/plots, die auf dvclive/ zeigen, mit committen',
+    ],
     startDialog: [
       {
-        title: 'DVCLive',
-        markdown: '```python\nfrom dvclive import Live\nwith Live() as live:\n    live.log_metric("acc", 0.92)\n```',
+        title: 'Was jeder DVC-Kurs nach den Pipelines ergänzt',
+        markdown:
+          'Das Kapitel **Metrics/Plots** im offiziellen Get Started läuft über DVCLive im Trainingscode:\n\n```\nfrom dvclive import Live\n\nwith Live() as live:\n    live.log_param("lr", 0.05)\n    for epoch in range(5):\n        ...\n        live.log_metric("acc", acc)\n        live.next_step()\n```\n\nEs gibt kein `dvc live`-Kommando. `cat src/train.py` zeigt hier das instrumentierte Skript, `python src/train.py` führt es aus.',
+      },
+      {
+        title: 'Mentale Karte',
+        markdown:
+          '- `log_param` → `dvclive/params.yaml`\n- `log_metric` → `dvclive/metrics.json` + `plots/metrics/*.tsv`\n- `log_plot` → eigene Plotdaten\n- `log_image` → Bilder für den Bericht\n- `make_report` → HTML-Dashboard\n\nOhne diese Schicht bleiben `exp show` und `plots diff` in echten Projekten leer.',
       },
     ],
   },
@@ -494,27 +564,49 @@ export const deLevels: Record<string, LevelCopy> = {
   },
   'camp-4': {
     seriesTitle: 'Pipeline-Tiefe',
-    name: 'foreach Stage + Advanced Flags',
-    objective: 'Mit `--foreach` Matrix-Stages anlegen und Advanced-Flags verstehen.',
-    learning: ['--foreach expandiert einen Stage', 'no-cache / always-changed / freeze'],
-    fieldNotes: ['Per-Modell-Matrix ohne Copy-Paste'],
+    name: 'foreach-Stages in dvc.yaml',
+    objective:
+      'Lies eine `dvc.yaml`, deren **foreach** eine Definition über ein Dictionary expandiert, reproduziere jede erzeugte Stage und lies den DAG.',
+    learning: [
+      'foreach expandiert eine Definition zu vielen Stages (featurize@a, featurize@b) — geschrieben in dvc.yaml, nicht per dvc stage add',
+      '${key} und ${item.field} füllen die Vorlage aus jedem Eintrag',
+      'Jede erzeugte Stage hat eigene Outs und Invalidierung; ein DAG zeigt alle',
+    ],
+    fieldNotes: ['foreach schlägt Copy-Paste-YAML bei Jobs pro Modell / pro Region'],
     startDialog: [
       {
-        title: 'foreach',
-        markdown: '`dvc stage add --foreach a,b …` — ein Stage, viele Läufe.',
+        title: 'Die nächsten 20 % der Pipelines',
+        markdown:
+          '`foreach` (und `matrix`) gibt es nur in `dvc.yaml`. `cat dvc.yaml` zeigt ein Beispiel:\n\n```\nfeaturize:\n  foreach:\n    a: {max_features: 100}\n    b: {max_features: 500}\n  do:\n    cmd: python src/evaluate.py ${key} ${item.max_features}\n    outs: [data/features/${key}.pkl]\n```\n\nDVC expandiert es zu `featurize@a` und `featurize@b`.',
+      },
+      {
+        title: 'Stage-Optionen, die man kennen sollte',
+        markdown:
+          '- `foreach` / `matrix` — Stages aus Liste oder Raster erzeugen\n- `wdir` — aus einem anderen Verzeichnis ausführen\n- `always_changed: true` — repro überspringt nie\n- `outs: [x: {cache: false}]` — `-O`, am Cache vorbei\n\nNur die letzten drei haben Flags bei `dvc stage add` (`-w`, `--always-changed`, `-O`).',
       },
     ],
   },
   'camp-5': {
     seriesTitle: 'Collab & CI',
-    name: '.dvcignore + update + CML',
-    objective: 'Ignore-Regeln, Import-Update und CML-Kommentar im Teamkontext kombinieren.',
-    learning: ['Kollaboration braucht Ignore + frische Imports + sichtbare CI'],
+    name: '.dvcignore + import/update + CML-Kommentar',
+    objective:
+      'Übe das Trio der Team-Kurse: **`.dvcignore`**, **`dvc import` + `dvc update`** und einen **CML-PR-Kommentar** mit dem separaten `cml`-CLI.',
+    learning: [
+      '.dvcignore beschleunigt DVC auf riesigen, lauten Verzeichnisbäumen',
+      'dvc update funktioniert nur bei .dvc-Dateien aus dvc import / import-url',
+      'CML postet einen Markdown-Bericht in PRs: clone → pull → repro → cml comment create',
+    ],
     fieldNotes: ['Der letzte Kilometer bis zum Team-Workflow'],
     startDialog: [
       {
-        title: 'Team-Endgame',
-        markdown: '`.dvcignore` · `dvc update` · `dvc cml "…"` — alles zusammen.',
+        title: 'Checkliste für den Team-Tag',
+        markdown:
+          '```\nedit .dvcignore scratch/*\ndvc import <registry-url> get-started/data.xml -o data/data.xml\ndvc update data/data.xml.dvc\ndvc repro\ndvc metrics show --md > report.md\ncml comment create report.md\n```\n\nDer letzte Schritt nutzt das separate Werkzeug **CML**, nicht `dvc`. Ein Python-Einzeiler mit `dvc.api` zeigt, wie Apps dieselben Daten ohne Checkout lesen.',
+      },
+      {
+        title: 'Git-LFS vs. DVC (Prüfungsklassiker)',
+        markdown:
+          '- **Git-LFS**: große Blobs über Git-Hosts\n- **DVC**: Git hält Pointer/YAML; Remotes halten Objekte; dazu repro/exp\n- ML will Pipelines + Experimente → DVC; generische große Binärdateien kommen mit LFS vielleicht aus',
       },
     ],
   },
@@ -522,11 +614,11 @@ export const deLevels: Record<string, LevelCopy> = {
     seriesTitle: 'Cache-Disziplin',
     name: 'Ungenutzte Objekte und gc',
     objective:
-      'Ein unreferenziertes Cache-Objekt erzeugen (dirty data + neue Version) und mit `dvc gc` Platz freigeben, ohne den aktuellen Pointer zu verlieren.',
+      'Erzeuge eine Datensatzversion, die nichts mehr referenziert, und gib sie mit `dvc gc -w` frei — der aktuelle Pointer bleibt gültig.',
     learning: [
-      'Content-adressierter Cache hält alte Hashes bis gc',
-      'dvc gc entfernt Objekte ohne Referenz aus Workspace/Git-Refs',
-      'gc ist nur sicher, wenn Remotes behalten, was das Team braucht',
+      'Der inhaltsadressierte Cache behält alte Hashes bis zu gc',
+      'dvc gc braucht ein Bereichs-Flag: -w behält nur, was der Workspace nutzt, -A jeden Git-Commit',
+      'gc löscht nur im lokalen Cache; -c/--cloud bereinigt auch das Remote (danach kommt niemand mehr an diese Version)',
     ],
     fieldNotes: [
       'CI-Runner: gc nach pull+repro der SHA, die du auslieferst',
@@ -537,7 +629,17 @@ export const deLevels: Record<string, LevelCopy> = {
       {
         title: 'Cache ist ein Lager, kein Mülleimer',
         markdown:
-          'Jedes `dvc add`/`commit` schreibt ein **neues** Objekt. Alte bleiben für History-Checkout.\n\n`dvc gc` ist der Besen — behält nur Referenziertes.',
+          'Jedes `dvc add` schreibt ein **neues** Objekt. Alte bleiben, damit `dvc checkout` die Historie wiederherstellen kann.\n\nMit der Zeit werden GBs verwaister Objekte daraus. `dvc gc` ist der Besen — er behält aber nur, was im genannten Bereich liegt.',
+      },
+      {
+        title: 'Was „referenziert“ heißt',
+        markdown:
+          'Du wählst den Bereich, der **bleibt**:\n\n- `-w` — was der aktuelle Workspace nutzt\n- `-a` / `-T` — Branch-Spitzen / Tags\n- `-A` — jeder Commit\n\nOhne Bereichs-Flag läuft `dvc gc` nicht. Alles außerhalb wird aus dem lokalen Cache gelöscht; das Remote bleibt unberührt, außer mit `-c` (`--cloud`).\n\n**Regel:** erst pushen, was Produktion braucht, *dann* gc.',
+      },
+      {
+        title: 'Übung',
+        markdown:
+          '1. Datensatz verschmutzen (`edit data/data.xml`)\n2. `dvc add data/data.xml` → neuer Hash im Cache, Pointer aktualisiert\n3. `dvc gc -w` → die alte, vom Workspace nicht mehr referenzierte Version verlässt den lokalen Cache (auf dem Remote bleibt sie)\n4. Prüfen: aktuelle Daten sind weiter getrackt und sauber',
       },
     ],
   },
@@ -591,6 +693,11 @@ export const deLevels: Record<string, LevelCopy> = {
         title: 'Zwei Verben, ein Lager',
         markdown: '`fetch` füllt das Lager. `liefert` auch in die Küche (`pull`).',
       },
+      {
+        title: 'CI und fetch',
+        markdown:
+          '`dvc fetch` lädt Objekte nur nach `.dvc/cache`; `dvc checkout` verknüpft sie mit dem Workspace. In CI kannst du früh `dvc fetch` ausführen, um eine Cache-Schicht zu wärmen, und `dvc checkout` erst im Job, der die Dateien braucht. Beide akzeptieren Targets: `dvc fetch data/train.csv.dvc` holt einen Datensatz statt des ganzen Projekts.',
+      },
     ],
   },
   'pipe-4': {
@@ -605,21 +712,41 @@ export const deLevels: Record<string, LevelCopy> = {
     fieldNotes: ['always-changed für API/Scrapes', 'no-cache für riesige Warehouse-Outs'],
     startDialog: [
       {
-        title: 'Stage-Flags aus der Produktion',
-        markdown: '`--wdir` · `--always-changed` · `--no-cache` — keine Kosmetik.',
+        title: 'Stage-Flags, die Produktion nutzt',
+        markdown:
+          '- `--wdir src` — läuft, als wäre das cwd `src/`\n- `--always-changed` — bei repro immer dirty\n- `-O` / `--outs-no-cache` — Hash wird getrackt, die Bytes bleiben außerhalb des Caches (`cache: false`)\n\nDas ist keine Kosmetik; es legt fest, *wie* die Stage lügt oder ehrlich bleibt.',
+      },
+      {
+        title: 'always_changed in der Praxis',
+        markdown:
+          '`--always-changed` (`always_changed: true` in `dvc.yaml`) lässt DVC die Stage bei jedem `dvc repro` als geändert behandeln, auch wenn sich keine Abhängigkeit bewegt hat. Nutze es für Stages, die die Außenwelt lesen: einen API-Aufruf, eine Datenbankabfrage, einen Zeitstempel. Nachgelagerte Stages laufen trotzdem nur neu, wenn sich der Hash der Ausgabe wirklich unterscheidet.',
       },
     ],
   },
   'pipe-5': {
     seriesTitle: 'Pipelines',
-    name: 'foreach-Matrix + DAG',
-    objective: 'Einen Stage mit `--foreach` zur Matrix expandieren, listen und als DAG lesen.',
-    learning: ['--foreach macht aus einem Template N Stages', 'Jede Matrixzelle hat eigene Outs', 'DAG ist der Review-Vertrag'],
-    fieldNotes: ['Matrix für „diese Modelle müssen zusammen“', 'Suche gehört in `dvc exp`, Produkt in Stages'],
+    name: 'foreach und matrix in dvc.yaml',
+    objective:
+      'Lies eine `dvc.yaml`, deren `foreach` eine Vorlage zu mehreren Stages expandiert, reproduziere die ganze Matrix und lies den DAG.',
+    learning: [
+      'foreach / matrix gibt es nur in dvc.yaml — `dvc stage add` hat dafür kein Flag',
+      'Jede Matrixzelle wird zur eigenen Stage (train@50, train@100) mit eigenen Outs und eigener Invalidierung',
+      'Der DAG ist, wie Leads den Vertrag vor dem Merge prüfen',
+    ],
+    fieldNotes: [
+      'Matrix-Stages für „diese drei Modelle müssen zusammen ausgeliefert werden“',
+      'Nicht foreach, was zu `dvc exp` gehört — exp ist Suche, Stages sind Produkt',
+    ],
     startDialog: [
       {
-        title: 'foreach vs Experimente',
-        markdown: '**foreach stages** = Produkt-Matrix. **dvc exp** = Suche.',
+        title: 'foreach vs. Experimente',
+        markdown:
+          '**foreach-Stages** = Produktmatrix (muss ausgeliefert werden, reproduzierbarer Vertrag).\n**dvc exp** = Suche (viele Versuche, einen Gewinner wählen).\n\nWer beides mischt, baut Pipelines, die im Incident niemand erklären kann.',
+      },
+      {
+        title: 'Eine Vorlage, viele Stages',
+        markdown:
+          '`dvc stage add` kann so etwas nicht anlegen; du schreibst es in `dvc.yaml`. `cat dvc.yaml` zeigt die Vorlage:\n\n```\ntrain:\n  foreach: [50, 100]\n  do:\n    cmd: python src/train.py --n ${item}\n    outs: [models/model-${item}.pkl]\n```\n\nDVC expandiert sie zu `train@50` und `train@100` — `dvc stage list`, `dvc repro` und `dvc dag` sehen die expandierten Stages. `matrix:` macht dasselbe für mehrere Variablen gleichzeitig.',
       },
     ],
   },
@@ -627,25 +754,49 @@ export const deLevels: Record<string, LevelCopy> = {
     seriesTitle: 'Experimente',
     name: 'Zweimal sweepe + exp show',
     objective: 'Zwei Parametersets laufen lassen und mit `dvc exp show` vergleichen.',
-    learning: ['-S protokolliert jedes Set als Experiment', 'exp show ist die Evidenztabelle', '--queue parkt Arbeit'],
+    learning: [
+      'Jedes `dvc exp run -S` wird als eigenes Experiment mit Params und Metrics festgehalten',
+      'exp show stellt sie nebeneinander: Params und Metrics sind Spalten',
+      'Mit der Tabelle entscheiden, dann den Gewinner anwenden',
+    ],
     fieldNotes: ['Freitagssweep: queueen, am Montag show lesen'],
     startDialog: [
       {
-        title: 'Suche ohne Babysitting',
-        markdown: 'Sweeps (`-S`) + `dvc exp show`. Queue für Übernachtarbeit.',
+        title: 'Zwei Läufe, eine Tabelle',
+        markdown:
+          'Gleicher Code, gleiche Daten, zwei Lernraten:\n\n```\ndvc exp run -S lr=0.05\ndvc exp run -S lr=0.2\ndvc exp show\n```\n\nFür lange Sweeps stellst du Läufe mit `--queue` zurück und arbeitest sie später mit `dvc queue start` ab.',
+      },
+      {
+        title: 'exp show lesen',
+        markdown:
+          '`dvc exp show` listet Workspace und `HEAD`, Experimente verschachtelt unter dem Commit, von dem sie ausgingen. Params und Metrics sind Spalten; `--sort-by acc --sort-order desc` ordnet Läufe, `--only-changed` blendet Spalten aus, die nie variierten, `--md` / `--csv` exportieren die Tabelle. Zwei Zeilen vergleichst du genauer mit `dvc exp diff`.',
       },
     ],
   },
   'exp-5': {
     seriesTitle: 'Experimente',
     name: 'Gewinner applyn + Params prüfen',
-    objective: 'Sweep, `exp show`, `exp apply`, `params show`, dann repro.',
-    learning: ['apply schreibt Config in den Workspace — kein Deploy', 'Danach repro/push für Produktion', 'params show ist der Audit'],
-    fieldNotes: ['PR nennt exp-id und Begründung', 'Ohne repro bleiben Modelle stale'],
+    objective:
+      'Führe einen Sweep aus, wähle mit `exp show`, wende den Gewinner mit `exp apply` an und prüfe dann, dass `params.yaml` und `dvc status` übereinstimmen.',
+    learning: [
+      'apply bringt Params, Metrics und Ausgaben in den Workspace — es „deployt“ nicht',
+      'Nach apply params.yaml und dvc.lock committen und Artefakte pushen',
+      'params show und status sind das Audit nach apply',
+    ],
+    fieldNotes: [
+      'Die PR-Beschreibung nennt die angewendete Exp-ID und den Grund',
+      'Anwenden ist kein Release: geteilt wird erst, wenn params.yaml und dvc.lock committet sind',
+    ],
     startDialog: [
       {
         title: 'Gewinner ist kein Release',
-        markdown: '`exp apply` → `dvc repro` → `dvc push`.',
+        markdown:
+          '`exp apply` = Gewinner-Params, Metrics **und Ausgaben** im Workspace wiederherstellen.\n`git commit` von `params.yaml` + `dvc.lock` = zur Baseline machen.\n`dvc push` = die Bytes teilen.',
+      },
+      {
+        title: 'Audit nach apply',
+        markdown:
+          'Zwei schnelle Checks schließen den Kreis:\n\n- `dvc params show` — die Gewinnerwerte stehen wirklich in `params.yaml`\n- `dvc status` — die Pipeline meldet *up to date*, weil apply die Ausgaben dieses Laufs wiederhergestellt hat\n\nListet `status` die Stage weiter als geändert, weicht etwas anderes (Code oder Daten) vom angewendeten Lauf ab.',
       },
     ],
   },
@@ -660,6 +811,11 @@ export const deLevels: Record<string, LevelCopy> = {
         title: 'Review wie Erwachsene',
         markdown: '`dvc params diff` + `dvc metrics diff`.',
       },
+      {
+        title: 'Die beiden Diffs lesen',
+        markdown:
+          '`dvc params diff` vergleicht `params.yaml` im Workspace mit `HEAD`; mit zwei Revisionen (`dvc params diff main feature`) vergleichst du Commits. `dvc metrics diff` zeigt pro Metrik alten Wert, neuen Wert und die Änderung. Mit `--md` fügst du die Tabelle in einen PR ein, mit `--all` erscheinen auch unveränderte Werte.',
+      },
     ],
   },
   'cmp-4': {
@@ -672,6 +828,11 @@ export const deLevels: Record<string, LevelCopy> = {
       {
         title: 'Plots sind keine Deko',
         markdown: '`dvc plots show` / `dvc plots diff`.',
+      },
+      {
+        title: 'Plots sind auch nur Dateien',
+        markdown:
+          '`dvc plots show` rendert die unter `plots:` in `dvc.yaml` deklarierten Dateien nach `dvc_plots/index.html`; `dvc plots diff` legt denselben Plot zweier Revisionen übereinander (standardmäßig Workspace gegen `HEAD`). Das Vega-Template wählst du mit `-t` / `--template` (`linear`, `simple`, `confusion`, …); `--json` oder `--show-vega` liefern die Spezifikation statt HTML, falls CI sie braucht.',
       },
     ],
   },
@@ -686,6 +847,11 @@ export const deLevels: Record<string, LevelCopy> = {
         title: 'Ein Pin mit Konsequenzen',
         markdown: 'Freeze schützt. Versteckt aber Staleness, wenn man es vergisst.',
       },
+      {
+        title: 'Freeze steht in dvc.yaml',
+        markdown:
+          '`dvc freeze` schreibt `frozen: true` in die Stage in `dvc.yaml`; die Entscheidung wird also wie jede andere Änderung in Git reviewt. Eine eingefrorene Stage überspringt `dvc repro` auch bei geänderten Abhängigkeiten, und `dvc status` meldet sie nicht mehr als geändert. Verbinde jedes Einfrieren mit einem Grund und einem Ticket zum Auftauen.',
+      },
     ],
   },
   'meta-5': {
@@ -698,6 +864,11 @@ export const deLevels: Record<string, LevelCopy> = {
       {
         title: 'Vertrag vs Quittung',
         markdown: '`cat dvc.yaml` · `cat dvc.lock`.',
+      },
+      {
+        title: 'Was in dvc.lock steht',
+        markdown:
+          'Für jede Stage hält `dvc.lock` das genaue `cmd`, md5 und Größe jeder Abhängigkeit, die Werte der verfolgten Params und den md5 jeder Ausgabe fest. Anhand dieser Einträge entscheidet DVC, ob eine Stage veraltet ist — deshalb behebt man einen Konflikt in `dvc.lock` durch erneutes `dvc repro`, nie durch Hash-Handarbeit.',
       },
     ],
   },
@@ -712,44 +883,82 @@ export const deLevels: Record<string, LevelCopy> = {
         title: 'Leihen, nicht horten',
         markdown: '`dvc get` = Kopie. `dvc import` = Pin + Update-Pfad.',
       },
+      {
+        title: 'update fasst nur Importe an',
+        markdown:
+          '`dvc import` hält in der `.dvc`-Datei fest, woher die Daten kamen (`repo` und `rev_lock`). `dvc update data/external.csv.dvc` liest diese Quelle erneut und verschiebt den Pin. Bei einer `.dvc`-Datei aus einfachem `dvc add` hat `dvc update` keine Quelle zum Lesen und scheitert.',
+      },
     ],
   },
   'camp-6': {
     seriesTitle: 'Collab & CI',
     name: 'CI-Skelett: pull, repro, comment',
-    objective: 'Kanonische CI-Schleife: pull, repro, metrics lesen, CML-Kommentar, Quittung committen.',
-    learning: ['CI: clone → pull → repro → cml comment', 'Schwere Bytes in der DVC-Remote', 'CML macht Metriken reviewbar'],
+    objective:
+      'Führe die klassische CI-Schleife aus: Daten ziehen, Pipeline reproduzieren, Markdown-Metrikbericht schreiben, ihn mit dem separaten `cml`-CLI posten, den Receipt committen.',
+    learning: [
+      'CI-Gerüst: clone → pull → repro → cml comment',
+      'Schwere Bytes bleiben im DVC-Remote; Git bleibt klein',
+      'CML ist ein eigenes CLI (cml comment create report.md), das einen Markdown-Bericht zum PR-Kommentar macht',
+    ],
     fieldNotes: ['Das ist das YAML aus den GitHub Actions Beispielen'],
     startDialog: [
       {
-        title: 'CI-Religion in drei Zeilen',
-        markdown: '```\ndvc pull\ndvc repro\ndvc cml "…"\n```',
+        title: 'Die Drei-Zeilen-CI-Religion',
+        markdown:
+          '```\ndvc pull\ndvc repro\ncml comment create report.md\n```\n\nZwischen repro und Kommentar erzeugst du den Bericht: `dvc metrics show --md > report.md`. Der Rest ist Installationsarbeit.',
+      },
+      {
+        title: 'Das GitHub-Actions-Gerüst',
+        markdown:
+          '```\n- uses: iterative/setup-dvc@v1\n- uses: iterative/setup-cml@v2\n- run: |\n    dvc pull\n    dvc repro\n    dvc metrics show --md > report.md\n    cml comment create report.md\n  env:\n    REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n```\n\n`cml` wird getrennt von `dvc` installiert; es braucht nur die Markdown-Datei und ein Token.',
       },
     ],
   },
   'camp-7': {
     seriesTitle: 'Collab & CI',
     name: 'DVCLive-Metriken nach exp show',
-    objective: 'Lauf mit DVCLive instrumentieren und in der Experimenttabelle sehen.',
-    learning: ['DVCLive verbrückt Trainingscode → metrics/plots', 'Skalare = Metrics, Serien = Plots'],
+    objective:
+      'Führe ein Experiment aus, dessen Trainingsskript schon mit DVCLive loggt, und sieh die Metrics in `dvc exp show` und die Kurven in `dvc plots show`.',
+    learning: [
+      'DVCLive ist eine Python-Bibliothek, die train.py aufruft — kein dvc-Unterbefehl',
+      'Mit live.log_metric geloggte Skalare werden Metrics; Schritte werden Plots',
+      'exp show ist die menschenlesbare Tabelle über dieser Brücke',
+    ],
     fieldNotes: ['Ein Live() in train.py schlägt zehn shell echoes'],
     startDialog: [
       {
-        title: 'Keine Copy-Paste-Loss-Kurven',
-        markdown: 'DVCLive schreibt in der Form, die DVC schon versteht.',
+        title: 'Schluss mit Loss-Kurven per Copy-Paste',
+        markdown:
+          'Das Trainingsskript loggt selbst (`cat src/train.py`):\n\n```\nfrom dvclive import Live\n\nwith Live() as live:\n    for epoch in range(5):\n        ...\n        live.log_metric("acc", acc)\n        live.next_step()\n```\n\nDVC muss nur das Skript ausführen und `dvclive/metrics.json` sowie `dvclive/plots/` lesen.',
+      },
+      {
+        title: 'Vom Skript zur Tabelle',
+        markdown:
+          '`dvc exp run -S lr=0.05` führt die Pipeline aus, dabei schreibt DVCLive seine Dateien. Danach:\n\n- `dvc exp show` — eine Zeile pro Experiment, die geloggten Metrics als Spalten\n- `dvc plots show` — die Schritt-für-Schritt-Kurven von DVCLive\n\nTrage `dvclive/metrics.json` unter `metrics:` und `dvclive/plots` unter `plots:` in `dvc.yaml` ein, dann findet DVC sie automatisch.',
       },
     ],
   },
   'collab-1': {
     seriesTitle: 'Collab & CI',
     name: 'Pointer-PR-Disziplin',
-    objective: 'Voller Daten-PR-Pfad: dirty → status → add/commit → git commit nur Pointer.',
-    learning: ['PR-Review ist Pointer-md5 + lock, nicht Gigabytes', 'Ohne dvc commit lügt der Pointer'],
+    objective:
+      'Geh den kompletten Daten-PR-Pfad: dirty → status → erneut add → git commit nur des Pointers — nie der Rohbytes.',
+    learning: [
+      'Review-Fläche ist Pointer-md5 + Lock, nicht Gigabytes',
+      'Die Commit-Message ist die menschliche Erzählung; .dvc die maschinelle',
+      'Ohne erneutes add landet ein lügender Pointer im PR',
+    ],
     fieldNotes: ['CI failt, wenn jemand getrackte Daten staged'],
     startDialog: [
       {
-        title: 'Der einzige sichere Daten-PR',
-        markdown: 'Status → add → commit → git add nur Pointer-Dateien → commit.',
+        title: 'Der einzig sichere Daten-PR',
+        markdown:
+          '1. Daten ändern\n2. `dvc status`\n3. `dvc add` (schreibt neuen md5 und cacht die Bytes)\n4. `git add` **nur Pointer-Dateien**\n5. `git commit`\n\nAlles andere ist ein Datenleck oder eine Lüge.',
+      },
+      {
+        title: 'Die Pointer-only-Regel absichern',
+        markdown:
+          'Nach `dvc add` scheitert `git add data/data.xml`, weil DVC den Pfad in `.gitignore` eingetragen hat — das ist das Sicherheitsnetz. Ergänze eine CI-Prüfung als zweites: lehne einen PR ab, dessen Diff einen Pfad mit `.dvc`-Datei berührt.',
       },
     ],
   },
@@ -763,6 +972,11 @@ export const deLevels: Record<string, LevelCopy> = {
       {
         title: '2-Uhr-Checkliste',
         markdown: 'Commit → pointer → md5 → remote? → checkout + `dvc checkout`.',
+      },
+      {
+        title: 'Ein Modell bis zu den Bytes zurückverfolgen',
+        markdown:
+          'Starte beim Release-Commit oder -Tag. `git show <rev>:data/data.xml.dvc` liefert den md5; `dvc.lock` in diesem Commit listet den md5 jeder Abhängigkeit und Ausgabe sowie die verwendeten Params. `dvc diff <alt> <neu>` zeigt, was sich zwischen zwei Releases geändert hat. Liegt das Objekt weder im Cache noch im Remote, endet die Spur — deshalb pusht man vor dem Taggen.',
       },
     ],
   },
@@ -780,7 +994,13 @@ export const deLevels: Record<string, LevelCopy> = {
     startDialog: [
       {
         title: 'Der Handoff-Vertrag',
-        markdown: 'Geteilt erst wenn: Bytes auf Remote + Pointer in Git + `dvc pull` funktioniert.',
+        markdown:
+          'Geteilt erst wenn: Bytes auf Remote + Pointer in Git + `dvc pull` funktioniert.',
+      },
+      {
+        title: 'Die Übergabe aus einem frischen Clone prüfen',
+        markdown:
+          'Eine Übergabe zählt erst, wenn ein frischer `git clone` samt `dvc pull` funktioniert. Die Reihenfolge ist wichtig: zuerst `dvc push` (Bytes), dann den Git-Commit pushen (Pointer). Andersherum holt ein Kollege einen Pointer, dessen Daten noch nicht im Remote liegen. `dvc status --cloud` listet auf, was noch nur lokal existiert.',
       },
     ],
   },
@@ -792,39 +1012,81 @@ export const deLevels: Record<string, LevelCopy> = {
     learning: ['yaml = Absicht, lock = Quittung', 'Lock nie von Hand mergen'],
     fieldNotes: ['Playbook: status → repro → commit → status'],
     startDialog: [
-      { title: 'Zwei Personen, ein Vertrag', markdown: 'Repro, dann neue Quittung committen.' },
+      {
+        title: 'Zwei Personen, ein Vertrag',
+        markdown: 'Repro, dann neue Quittung committen.',
+      },
+      {
+        title: 'Konflikte in dvc.lock auflösen',
+        markdown:
+          '`dvc.lock` wird generiert, deshalb löst man einen Konflikt dort nicht zeilenweise. Nimm eine der beiden Seiten (`git checkout --ours dvc.lock`), führe `dvc repro` erneut aus — Stages mit unveränderten Eingaben überspringt der Run-Cache —, prüfe den Diff und committe. Konflikte in `dvc.yaml` oder `params.yaml` brauchen zuerst eine menschliche Entscheidung, weil sie ändern, was laufen soll.',
+      },
     ],
   },
   'reg-4': {
     seriesTitle: 'Registry & Wiederverwendung',
     name: 'Upstream pinnen und updaten',
-    objective: 'Import mit Pin lesen, dann bewusst `dvc update`.',
-    learning: ['import pinnt path + md5', 'update ist ein Review-Ereignis'],
+    objective:
+      'Importiere Upstream-Daten an ein Release gepinnt, lies den Pin und verschiebe ihn dann bewusst mit `dvc update --rev` — Versionssprünge sind Review-Ereignisse.',
+    learning: [
+      'import schreibt einen Pin (Quell-Repo, Rev und md5), den du in der .dvc-Datei lesen kannst',
+      'update --rev ist ein bewusster Sprung, wie ein Bibliotheks-Upgrade',
+      'status belegt, dass der Sprung sauber gelandet ist',
+    ],
     fieldNotes: ['Update-Bump im PR mit Changelog-Link'],
     startDialog: [
-      { title: 'Mit Quittung leihen', markdown: 'get kopiert · import pinnt · update bewegt den Pin.' },
+      {
+        title: 'Ausleihen mit Quittung',
+        markdown:
+          '`dvc get` kopiert.\n`dvc import` kopiert **und** pinnt.\n`dvc update` verschiebt den Pin mit Absicht.\n\nLies `cat data/external.csv.dvc`, bevor du updatest — wisse, was du zurücklässt.',
+      },
+      {
+        title: 'An eine Rev pinnen, per PR anheben',
+        markdown:
+          '`dvc import … --rev v1.0` bindet den Import an einen Tag, Branch oder Commit des Quell-Repos. Ein einfaches `dvc update` löst dieselbe Rev neu auf (nützlich bei Branches); `dvc update --rev v2.0 …` ändert die Rev selbst. In beiden Fällen landet der neue md5 in der `.dvc`-Datei, der Sprung erscheint also im Git-Diff zum Review.',
+      },
     ],
   },
   'capstone-2': {
     seriesTitle: 'Collab & CI',
     name: 'Abschluss-Checkpoint end-to-end',
-    objective: 'Abschlussdrill: dirty → status → add/commit → push → Pointer-only git commit.',
+    objective:
+      'Abschlussübung: dirty Data → status → erneut add → Push zum Remote → Pointer-only-Git-Commit. Eine saubere Geschichte, die ein Lead prüfen kann.',
     learning: ['End-to-end ist eine Erzählung', 'Ohne Push/Pointer-Commit bricht der nächste Teammate'],
     fieldNotes: ['Onboarding-Gate für Datenarbeit'],
     startDialog: [
-      { title: 'Abschluss', markdown: 'Keine neuen Befehle. **Eine stimmige Geschichte.**' },
+      {
+        title: 'Abschluss',
+        markdown: 'Keine neuen Befehle. **Eine stimmige Geschichte.**',
+      },
+      {
+        title: 'Was „fertig“ heißt, schriftlich',
+        markdown:
+          'Pack die Checkliste ins PR-Template:\n\n- [ ] `dvc status` sauber\n- [ ] `dvc status --cloud` zeigt Cache und Remote synchron\n- [ ] nur `.dvc`- / `.gitignore`- / `dvc.lock`-Änderungen im Diff\n\nEin Review, das nicht alle drei abhaken kann, sollte nicht gemergt werden.',
+      },
     ],
   },
   'api-1': {
     seriesTitle: 'Collab & CI',
     name: 'Daten lesen ohne checkout (dvc.api)',
-    objective: 'DVC-API im Simulator nutzen und Workspace-Pointer-Vertrag prüfen.',
-    learning: ['dvc.api liest getrackte Daten in Apps/Notebooks', 'API ersetzt checkout nicht für Dateien auf Platte'],
+    objective:
+      'Lies getrackte Daten aus Python mit `dvc.api`, während die Datei im Workspace fehlt, prüfe dann, dass der Workspace weiter zu den Pointern passt, und stelle ihn wieder her.',
+    learning: [
+      'dvc.api ist ein Python-Modul (read, open, get_url, params_show) — es gibt kein `dvc api`-Kommando',
+      'API-Lesezugriffe streamen aus Cache/Remote; sie ersetzen checkout nicht, wenn Dateien auf der Platte nötig sind',
+      'status bleibt der Ehrlichkeitscheck nach jedem Leser',
+    ],
     fieldNotes: ['Dashboards nutzen dvc.api + gepinnten Commit, keine Ad-hoc-Downloads'],
     startDialog: [
       {
-        title: 'Bytes im Code leihen',
-        markdown: '`dvc.api` für Apps. `dvc checkout` für Workspaces.',
+        title: 'Bytes im Code ausleihen',
+        markdown:
+          '`dvc.api` ist für **Apps**, die Daten lesen; `dvc checkout` für **Workspaces**, die Dateien brauchen. Derselbe md5-Vertrag in beiden Fällen.\n\nIn diesem Level fehlt die Datei im Workspace — die API liest sie trotzdem aus Cache oder Remote:\n\n```\npython -c "import dvc.api; print(dvc.api.read(\'data/data.xml\'))"\n```',
+      },
+      {
+        title: 'Die Revision pinnen',
+        markdown:
+          'Ohne `rev=` liest du, was der aktuelle Checkout sagt. Dienste sollten pinnen: `dvc.api.read(path, rev="v1.2.0")` (Tag, Branch oder Commit) und bei Bedarf `repo=` und `remote=`. Ein falscher oder ungetrackter Pfad löst `PathMissingError` aus; lieber hart scheitern als auf veralteten Bytes weiterarbeiten.',
       },
     ],
   },
@@ -839,6 +1101,11 @@ export const deLevels: Record<string, LevelCopy> = {
         title: 'Minimum eines ernsthaften PR',
         markdown: 'params diff → repro → metrics diff → plots diff.',
       },
+      {
+        title: 'CI das Paket erzeugen lassen',
+        markdown:
+          'Lass CI `dvc params diff --md`, `dvc metrics diff --md` und `dvc plots diff` gegen die PR-Basis (`origin/main`) ausführen und das Ergebnis mit `cml comment create` posten. Reviewer sehen Absicht, Wirkung und Kurven, ohne den Branch auszuchecken. Ein leerer Abschnitt ist ebenfalls eine Aussage: Schreib ihn in den PR, statt ihn wegzulassen.',
+      },
     ],
   },
   'mastery-1': {
@@ -847,7 +1114,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Verlorene Maschine simulieren: Workspace leeren, aus Remote fetch+pull, Status prüfen.',
     learning: ['DR = Remote + committete Pointer', 'fetch füllt Cache; pull stellt den Tree her'],
     fieldNotes: ['Quartals-DR-Drill: neue Maschine, clone, pull, metrics'],
-    startDialog: [{ title: 'Wenn der Laptop stirbt', markdown: 'Git hat die Pointer-History. Die DVC-Remote die Bytes.' }],
+    startDialog: [
+      {
+        title: 'Wenn der Laptop stirbt',
+        markdown: 'Git hat die Pointer-History. Die DVC-Remote die Bytes.',
+      },
+      {
+        title: 'Den Wiederherstellungsweg üben',
+        markdown:
+          'Für die Wiederherstellung braucht es zweierlei: die Git-Historie (Pointer, `dvc.yaml`, `dvc.lock`) und ein intaktes Remote. Nach dem Verlust des Laptops baut `git clone` plus `dvc pull` das Projekt wieder auf und überspringt vorhandene Objekte. Prüfe das Remote *vor* dem Ernstfall: `dvc status --cloud` listet Objekte auf, die lokal existieren, aber nie im Storage ankamen — genau die, die eine defekte Platte mitnehmen würde.',
+      },
+    ],
   },
   'mastery-2': {
     seriesTitle: 'Collab & CI',
@@ -855,23 +1132,63 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Richtiges Werkzeug wählen: LFS vs DVC lesen, dann DVC-Tracking für ML-Daten.',
     learning: ['LFS = Blobs in Git-Remotes; DVC = Pointer + Objektspeicher + Pipelines', 'ML will fast immer DVC'],
     fieldNotes: ['Entscheidungstabelle im Wiki statt Slack-Folklore'],
-    startDialog: [{ title: 'Langweilig richtig wählen', markdown: 'Repro/exp/cache/pipeline → DVC.' }],
+    startDialog: [
+      {
+        title: 'Langweilig richtig wählen',
+        markdown: 'Repro/exp/cache/pipeline → DVC.',
+      },
+      {
+        title: 'Was sich beim Abschied von LFS ändert',
+        markdown:
+          'Git LFS legt Dateiinhalte beim Git-Host ab und versioniert Dateien einzeln. DVC speichert Inhalte in einem Storage deiner Wahl (S3, GCS, Azure, SSH, …) und ergänzt Pipelines (`dvc.yaml`), Experimente und Metriken. Die Migration heißt `git lfs untrack`, dann `dvc add` pro Artefakt und `dvc push`; Kollegen brauchen danach Zugriff auf das DVC-Remote, nicht nur auf den Git-Host.',
+      },
+    ],
   },
   'mastery-3': {
     seriesTitle: 'Collab & CI',
     name: 'CI Secrets + pull + comment',
-    objective: 'Produktions-CI-Körper: pull, repro, metrics, CML, Quittung committen.',
+    objective:
+      'Führe den CI-Körper für Produktion aus, wenn das Secret-gestützte Remote schon konfiguriert ist: pull, repro, Metrikbericht, CML-Kommentar, Receipt committen.',
     learning: ['Credentials in CI-Secrets, nie in .dvc/config', 'CI-Körper ist pull → repro → comment'],
     fieldNotes: ['OIDC/Rollen-Auth schlägt langlebige Keys'],
-    startDialog: [{ title: 'CI für die Security-Abteilung', markdown: 'Secrets im Vault. Remote-Config in Git. Bytes in der DVC-Remote.' }],
+    startDialog: [
+      {
+        title: 'CI für die Security-Abteilung',
+        markdown: 'Secrets im Vault. Remote-Config in Git. Bytes in der DVC-Remote.',
+      },
+      {
+        title: 'Wie die Secrets zu DVC kommen',
+        markdown:
+          'Die Remote-URL steht in `.dvc/config`; die Zugangsdaten kommen als Umgebungsvariablen aus dem CI-Secret-Store (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) oder besser über eine vom Job angenommene OIDC-Rolle. `dvc pull` und `dvc push` lesen sie aus der Umgebung, `cml` bekommt sein eigenes `REPO_TOKEN`. Ins Repo wird nichts geschrieben.',
+      },
+    ],
   },
   'mastery-4': {
     seriesTitle: 'Collab & CI',
     name: 'Artifact-Promote: Modell zum Release',
-    objective: 'Gewinner-Experiment zum Release: apply, repro, push, Git-Narrativ.',
-    learning: ['Release = apply + repro + push + git commit', 'exp apply ist kein Deploy'],
-    fieldNotes: ['Checkliste: apply → repro → push → commit → tag'],
-    startDialog: [{ title: 'Vom Gewinner zum Release', markdown: 'exp → show → apply → repro → push → git commit.' }],
+    objective:
+      'Befördere ein Gewinner-Experiment in eine Release-Geschichte: anwenden (Params und Ausgaben kehren zurück), Bytes pushen, Params und Lock in Git committen.',
+    learning: [
+      'Release = angewendete Params + wiederhergestellte Artefakte + gepushte Bytes + Git-Commit',
+      'exp apply ist kein Deploy; Push ist ohne Historie kein Release',
+      'Der Release-Commit ist das, wonach das Incident-Team fragt',
+    ],
+    fieldNotes: [
+      'Release-Checkliste: apply → push → commit → tag',
+      'Gewichte nie per Mail schicken; der Release-Commit ist der Vertrag',
+    ],
+    startDialog: [
+      {
+        title: 'Vom Gewinner zum Release',
+        markdown:
+          'Suchen (`exp`) → wählen (`show`) → anwenden → **teilen** (`push`) → **merken** (`git commit`). `apply` hat die Ausgaben des Gewinners schon wiederhergestellt, es gibt nichts neu zu bauen.',
+      },
+      {
+        title: 'Was in den Release-Commit gehört',
+        markdown:
+          '`git add params.yaml dvc.lock` — die Gewinnerwerte plus der Receipt des Laufs, der sie erzeugt hat. Die Modelldatei selbst bleibt aus Git heraus (DVC ignoriert sie); `dvc push` hat ihre Bytes ins Remote gebracht. Tagge den Commit (`git tag v1.4.0`), damit `dvc.api`- und `dvc pull`-Nutzer ihn pinnen können.',
+      },
+    ],
   },
   'mastery-5': {
     seriesTitle: 'Review & Vergleich',
@@ -879,15 +1196,44 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Confusion-Template rendern und plots diff — Klassifikations-Review ohne Notebook.',
     learning: ['Templates kodieren die Lesart', 'plots diff ist der Zwilling von metrics diff'],
     fieldNotes: ['Klassifikation-Releases hängen immer eine Confusion-Matrix an'],
-    startDialog: [{ title: 'Matrix lesen, nicht den Mittelwert', markdown: '`dvc plots show --template confusion`.' }],
+    startDialog: [
+      {
+        title: 'Matrix lesen, nicht den Mittelwert',
+        markdown: '`dvc plots show --template confusion`.',
+      },
+      {
+        title: 'Das Confusion-Template befüllen',
+        markdown:
+          'Das Template `confusion` erwartet eine Tabelle mit einer Zeile pro Vorhersage: einer Spalte `actual` und einer Spalte `predicted` (CSV, TSV oder JSON). Deklariere es in `dvc.yaml` unter `plots:` mit `template: confusion`, `x: actual`, `y: predicted`. `dvc plots diff` kann die Matrix dann für zwei Revisionen übereinanderlegen.',
+      },
+    ],
   },
   'mastery-6': {
     seriesTitle: 'Meta & Vertragsdateien',
-    name: 'External Data + no-cache Vertrag',
-    objective: 'Stage mit External/no-cache Out, listen, repro, DAG als Vertrag lesen.',
-    learning: ['External/no-cache trackt Identität ohne Warehouse-Bytes', 'DAG ist der Datenvertrag vor dem Merge'],
-    fieldNotes: ['Warehouse-Tabellen sind external outs, keine Cache-Objekte'],
-    startDialog: [{ title: 'Wenn Bytes woanders liegen', markdown: '`-O` / cache:false trackt den **Namen**, nicht das Lager.' }],
+    name: 'No-cache-Ausgaben und externe Daten',
+    objective:
+      'Deklariere eine Stage, deren Ausgabe den DVC-Cache überspringt (`-O`), reproduziere sie und verstehe den Unterschied zu externen Ausgaben.',
+    learning: [
+      '-O / --outs-no-cache (cache: false in dvc.yaml): DVC trackt den Hash der Datei, kopiert sie aber nicht in den Cache',
+      'Eine No-cache-Ausgabe wird nicht gitignored, Git kann sie also halten, wenn sie klein ist',
+      'Externe Ausgaben (ein s3://-Pfad) sind ein anderes, wenig empfohlenes Feature; besser Cloud-Versionierung oder import-url',
+    ],
+    fieldNotes: [
+      'Kleine Berichtsdateien, Metrics und Plot-Daten: cache: false, damit Reviewer sie im PR sehen',
+      'Riesige Tabellen im Warehouse: aus dem Code referenzieren, nicht zu Stage-Ausgaben machen',
+    ],
+    startDialog: [
+      {
+        title: 'Gecacht oder nicht?',
+        markdown:
+          'Eine normale `-o`-Ausgabe geht in den Cache und wird gitignored. `-O` / `--outs-no-cache` setzt `cache: false`: Die Datei bleibt im Workspace und **Git kann sie versionieren**, während `dvc.lock` ihren Hash weiter festhält.\n\nEs heißt **nicht** „liegt außerhalb des Repos“.',
+      },
+      {
+        title: 'Externe Ausgaben sind etwas anderes',
+        markdown:
+          'Eine *externe* Ausgabe ist ein Pfad außerhalb des Workspace wie `s3://bucket/file` und braucht `--external` plus einen konfigurierten Remote-Cache. Das ist ein Altlast-Feature mit vielen Tücken: Liegen die Daten schon in einem Bucket, versioniere sie mit `dvc import-url` oder der Versionierung des Buckets und lass Stage-Ausgaben lokal.',
+      },
+    ],
   },
   'mastery-7': {
     seriesTitle: 'Remotes',
@@ -895,7 +1241,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Team-Remote konfigurieren: Nicht-Secrets in Config, Secrets aus env/CI — nie Credentials committen.',
     learning: ['URL und Non-Secrets in .dvc/config', 'Secrets aus env/CI/Rollen', 'remote modify kodiert Auth-Policy'],
     fieldNotes: ['.dvc/config im PR reviewen — keine langlebigen Keys', 'OIDC/Rollen statt access_key_id in CI'],
-    startDialog: [{ title: 'Credentials sind keine Projektdateien', markdown: 'URL/Profil teilen. `secret_access_key` niemals.' }],
+    startDialog: [
+      {
+        title: 'Credentials sind keine Projektdateien',
+        markdown: 'URL/Profil teilen. `secret_access_key` niemals.',
+      },
+      {
+        title: 'Wo Zugangsdaten liegen dürfen',
+        markdown:
+          'DVC liest Cloud-Zugangsdaten auch aus den üblichen Quellen: Umgebungsvariablen (`AWS_ACCESS_KEY_ID`, `GOOGLE_APPLICATION_CREDENTIALS`), gemeinsame Profildateien (`~/.aws/credentials`) sowie Instanz- oder OIDC-Rollen — keine davon berührt das Repo. `dvc remote modify --local` bleibt für Überschreibungen pro Rechner. Ist ein Secret je in der Git-Historie gelandet, rotiere es; den Commit zu löschen reicht nicht.',
+      },
+    ],
   },
   'mastery-8': {
     seriesTitle: 'Collab & CI',
@@ -903,7 +1259,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Keine Schrittliste. Daten dirty machen, Pointer committen, Objekte pushen.',
     learning: ['Transfer-Test: Pfad selbst entwerfen', 'Done = sauberer Status + Pointer in Git + Bytes auf Remote'],
     fieldNotes: ['Onboarding-/Hiring-Gate für Data Engineers'],
-    startDialog: [{ title: 'Open Lab', markdown: 'Dieses Level **kein Rezept**. Ziel ist ein Zustand.' }],
+    startDialog: [
+      {
+        title: 'Offenes Labor',
+        markdown: 'Dieses Level **kein Rezept**. Ziel ist ein Zustand.',
+      },
+      {
+        title: 'Einen Zielzustand verifizieren',
+        markdown:
+          'Vertraue nicht dem grünen Text des letzten Befehls; frage den Zustand ab. `dvc status` für den Workspace, `dvc status --cloud` für Cache gegen Remote, `git status` und `git log` für das, was Git weiß. Drei saubere Antworten = fertig.',
+      },
+    ],
   },
   'xfer-1': {
     seriesTitle: 'Transfer',
@@ -911,7 +1277,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Keine neuen Befehle. Pointer lesen, Git vs DVC erklären, Integrität mit status/diff beweisen.',
     learning: ['Pointer ist der Vertrag: path + md5', 'Wer .dvc nicht erklären kann, besitzt die Skill nicht'],
     fieldNotes: ['Incident-Fragen starten hier'],
-    startDialog: [{ title: 'Erkläre es oder du besitzt es nicht', markdown: 'Dieses Level verlangt **Evidenz**, keine neuen Flags.' }],
+    startDialog: [
+      {
+        title: 'Erkläre es oder du besitzt es nicht',
+        markdown: 'Dieses Level verlangt **Evidenz**, keine neuen Flags.',
+      },
+      {
+        title: 'Was eine .dvc-Datei enthält',
+        markdown:
+          'Unter `outs` stehen `md5`, `size` und `path`; ein Verzeichnis ergänzt `nfiles` und einen md5 mit Endung `.dir`, der ein Manifest-Objekt im Cache bezeichnet. Die Datei beschreibt Inhalt, sie enthält ihn nie. Widersprechen sich `git show HEAD:data/data.xml.dvc` und `dvc status` beim md5, ist der Workspace die Seite, die aus der Reihe fällt.',
+      },
+    ],
   },
   'xfer-2': {
     seriesTitle: 'Transfer',
@@ -919,7 +1295,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Handoff: dirty → Evidenz → Pointer → Remote → History.',
     learning: ['Ohne Push/Pointer-Commit bricht der nächste Teammate', 'status vor commit ist nicht verhandelbar'],
     fieldNotes: ['Definition of done für Datenarbeit'],
-    startDialog: [{ title: 'Kein Sicherheitsnetz', markdown: 'Du bist on-call. Liefer den Handoff.' }],
+    startDialog: [
+      {
+        title: 'Kein Sicherheitsnetz',
+        markdown: 'Du bist on-call. Liefer den Handoff.',
+      },
+      {
+        title: 'Warum diese Reihenfolge',
+        markdown:
+          '`dvc add` (Cache + Pointer) → `dvc push` (Bytes erreichen das Remote) → `git commit` / `git push` (der Pointer wird sichtbar). Geht Git zuerst, holt ein Kollege einen Pointer auf Daten, die das Remote noch nicht hat. `dvc status --cloud` vor der Ankündigung fängt das ab.',
+      },
+    ],
   },
   'xfer-3': {
     seriesTitle: 'Transfer',
@@ -927,15 +1313,44 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Train-Stage selbst entwerfen: deps, params, outs, metrics. Dann repro + DAG.',
     learning: ['deps = Invalidierung, params = Stellschrauben, metrics = Evidenz', 'Fehlende deps sind stille Produktionsfehler'],
     fieldNotes: ['Interview-Drill: Stage skizzieren, dann tippen'],
-    startDialog: [{ title: 'Du entwirfst es', markdown: 'Erst denken, dann tippen. Dann repro + dag.' }],
+    startDialog: [
+      {
+        title: 'Du entwirfst es',
+        markdown: 'Erst denken, dann tippen. Dann repro + dag.',
+      },
+      {
+        title: 'Vertrags-Checkliste',
+        markdown:
+          'Bevor du tippst: Welche Dateien müssen die Stage invalidieren (`-d`: Daten **und** Code)? Welche Hyperparameter (`-p`)? Was ist das Artefakt (`-o`), und welche Datei ist eine Metrikdatei, die `dvc metrics` lesen kann (`-m`)? Fehlt eines davon, läuft die Stage nie neu oder immer neu.',
+      },
+    ],
   },
   'xfer-4': {
     seriesTitle: 'Transfer',
     name: 'Experiment-Lifecycle + Fehlerrecovery',
-    objective: 'Schlechten und guten Lauf fahren, Gewinner wählen, bis params/Artefakte/Status stimmen.',
-    learning: ['Ein schlechter Lauf ist Datenmaterial', 'apply ist fertig erst nach params + repro + status'],
-    fieldNotes: ['Fehlgeschlagenen Lauf nie vor exp show löschen'],
-    startDialog: [{ title: 'Der erste Versuch ist absichtlich falsch', markdown: 'Erst der schlechte Hyperparameter. Dann der bessere.' }],
+    objective:
+      'Führe eine schlechte und eine gute Konfiguration aus, wähle mit Belegen, wende den Gewinner an und prüfe, dass Params, Ausgaben und Status übereinstimmen.',
+    learning: [
+      'Ein schlechter Lauf sind Daten — behalten, lernen, dann den Gewinner anwenden',
+      'Benannte Läufe (-n) machen apply und diff eindeutig',
+      'apply ist fertig, wenn params show und status übereinstimmen; dann committen',
+    ],
+    fieldNotes: [
+      'Nie einen fehlgeschlagenen Lauf löschen, bevor du exp show gelesen hast',
+      'Checkliste nach apply: Params → Status → params.yaml + dvc.lock committen',
+    ],
+    startDialog: [
+      {
+        title: 'Der erste Versuch ist absichtlich falsch',
+        markdown:
+          'Starte mit einem **schlechten** Hyperparameter und benenne den Lauf (`-n bad`).\n\nDann ein besserer (`-n good`). Wähle mit `exp show`, wende den Gewinner per Namen an.',
+      },
+      {
+        title: 'Wiederherstellung ohne Panik',
+        markdown:
+          'Hast du den falschen Lauf angewendet, ist nichts verloren: beide Experimente sind gespeichert. `dvc exp apply bad` / `dvc exp apply good` wechseln den Workspace in Sekunden. Der Commit ist der Punkt ohne Rückkehr: anwenden, `dvc params show` und `dvc status` prüfen, erst dann committen.',
+      },
+    ],
   },
   'xfer-5': {
     seriesTitle: 'Transfer',
@@ -943,7 +1358,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'ML-PR-Evidenzpaket liefern. Ohne Metric-Bewegung nicht mergen.',
     learning: ['Review-Bar: params + metrics + plots diff', 'Keine Metric-Bewegung = nicht mergen'],
     fieldNotes: ['Das ist die Review-Vorlage fürs Team'],
-    startDialog: [{ title: 'Du bist der Reviewer', markdown: 'Drei Diffs. Fehlt die Wirkung, besteht das Level nicht.' }],
+    startDialog: [
+      {
+        title: 'Du bist der Reviewer',
+        markdown: 'Drei Diffs. Fehlt die Wirkung, besteht das Level nicht.',
+      },
+      {
+        title: 'Wenn sich die Metriken nicht bewegt haben',
+        markdown:
+          'Zeigt `dvc metrics diff` keine Änderung, frag, wozu der PR existiert: falsche Basis (`dvc metrics diff main` vergleicht mit einem anderen Branch), eine Stage, die nicht neu lief (`dvc status`), oder eine Metrikdatei, die nicht unter `metrics:` deklariert ist. Ein PR mit Codeänderungen und leeren Belegen ist eine Bitte um Belege, keine um Zustimmung.',
+      },
+    ],
   },
   'xfer-6': {
     seriesTitle: 'Transfer',
@@ -951,7 +1376,17 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Datei weg. Kette pointer → cache/remote → Workspace wiederherstellen.',
     learning: ['Verlorene Datei ≠ verlorene Daten', 'fetch vs pull ist die Reparatur-Reihenfolge'],
     fieldNotes: ['Das ist das 2-Uhr-Runbook'],
-    startDialog: [{ title: 'Die Datei ist weg', markdown: '`data/data.xml` fehlt. **Repariere ohne Panik.**' }],
+    startDialog: [
+      {
+        title: 'Die Datei ist weg',
+        markdown: '`data/data.xml` fehlt. **Repariere ohne Panik.**',
+      },
+      {
+        title: 'Reihenfolge der Diagnose',
+        markdown:
+          'Geh die Kette vom billigsten Check aus durch: (1) `git log -- data/data.xml.dvc` — ist der Pointer committet? (2) `dvc status` — passt der Workspace dazu? (3) `dvc fetch` — existieren die Objekte in Cache oder Remote? (4) `dvc checkout`. Das erste fehlschlagende Glied zeigt, wo die Kette bricht; spring nicht direkt zu `dvc pull` und hoffe.',
+      },
+    ],
   },
   'xfer-7': {
     seriesTitle: 'Transfer',
@@ -959,6 +1394,16 @@ export const deLevels: Record<string, LevelCopy> = {
     objective: 'Stale Lock erzeugen, nur per repro fixen, dann yaml vs lock beweisen.',
     learning: ['Lock nie von Hand editieren', 'Stale Lock = falsche Quittung für jeden Clone'],
     fieldNotes: ['CI sollte failen, wenn lock nach repro dirty ist'],
-    startDialog: [{ title: 'Die Quittung muss stimmen', markdown: 'Params ändern. Mit `repro` fixen, nicht mit dem Editor.' }],
+    startDialog: [
+      {
+        title: 'Die Quittung muss stimmen',
+        markdown: 'Params ändern. Mit `repro` fixen, nicht mit dem Editor.',
+      },
+      {
+        title: 'dvc.lock im Review ehrlich halten',
+        markdown:
+          'Behandle `dvc.lock` als generierte Ausgabe: Ein PR, der es von Hand ändert, ist verdächtig. Zwei billige CI-Wächter: `dvc status` muss nach dem Checkout „Data and pipelines are up to date.“ ausgeben, und `dvc repro` auf dem PR darf die Datei nicht verändern (`git diff --exit-code dvc.lock`). `dvc repro --dry` zeigt, was laufen würde, ohne es auszuführen.',
+      },
+    ],
   },
 };

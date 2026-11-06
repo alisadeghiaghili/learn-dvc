@@ -629,6 +629,13 @@ function runPython(state: RepoState, args: string[], finish: Finish): { state: R
   return finish(state, ok(`Ran ${script}`));
 }
 
+/** True for a stage output that DVC caches (and therefore adds to .gitignore). */
+function isCachedStageOut(state: RepoState, path: string): boolean {
+  return state.pipeline.some(
+    (s) => s.outs.includes(path) && !s.metrics.includes(path) && !(state.stageMeta[s.name]?.noCache ?? []).includes(path),
+  );
+}
+
 /** dvc.lock is the execution receipt: refreshed by repro, exp run and exp apply. */
 function writeLock(state: RepoState): void {
   state.files['dvc.lock'] = makeFile('dvc.lock', 'yaml', {
@@ -946,7 +953,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     if (sub === 'status') {
       const tree = gitTree(state);
       const staged = state.gitStaged;
-      const present = Object.values(state.files).filter((f) => f.present && !f.gitignored);
+      const present = Object.values(state.files).filter(
+        (f) => f.present && !f.gitignored && !isCachedStageOut(state, f.path),
+      );
       const untracked = present
         .filter((f) => !(f.path in tree) && !staged.includes(f.path))
         .map((f) => f.path);
@@ -1015,8 +1024,10 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       const addAll = flagArgs.includes('-A') || flagArgs.includes('--all');
       if (!paths.length && !addAll) return { state, result: fail('Nothing specified, nothing added.') };
       const tree = gitTree(state);
+      // DVC git-ignores cached stage outputs even when the fixture never wrote the .gitignore entry
+      const gitIgnored = (f: WorkspaceFile) => f.gitignored || isCachedStageOut(state, f.path);
       const isChanged = (f: WorkspaceFile) =>
-        f.present && !f.gitignored && (!(f.path in tree) || (tree[f.path] !== null && tree[f.path] !== f.contentId));
+        f.present && !gitIgnored(f) && (!(f.path in tree) || (tree[f.path] !== null && tree[f.path] !== f.contentId));
       const added: string[] = [];
       const ignored: string[] = [];
       const warnings: string[] = [];
@@ -1041,7 +1052,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         }
         const f = state.files[p];
         if (f && f.present) {
-          if (f.gitignored) {
+          if (gitIgnored(f)) {
             ignored.push(p);
             continue;
           }
@@ -1059,7 +1070,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         if (under.length) {
           const hits = under.filter(isChanged);
           for (const x of hits) stage(x.path);
-          if (!hits.length && under.every((x) => x.gitignored)) ignored.push(p);
+          if (!hits.length && under.every((x) => gitIgnored(x))) ignored.push(p);
           continue;
         }
         if (p.endsWith('.dvc') && state.files[p.slice(0, -4)]?.tracked) {
@@ -1080,7 +1091,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
               'The following paths are ignored by one of your .gitignore files:',
               ...ignored,
               'hint: Use -f if you really want to add them.',
-              'hint: DVC git-ignores tracked data on purpose: commit the .dvc pointer instead.',
+              'hint: DVC git-ignores tracked data and cached outputs on purpose: commit the .dvc pointer or dvc.lock instead.',
             ].join('\n'),
           ),
         };
@@ -2246,6 +2257,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
             : `Pulled experiment refs from Git remote '${target}' (refs/exps synced).\nView shared team experiments with \`dvc exp show\`.`,
         ),
       );
+    }
+    if (esub === 'list') {
+      if (!state.experiments.length) return { state, result: ok('No experiments to list.') };
+      const base = state.gitCommits[state.gitCommits.length - 1]?.hash ?? 'HEAD';
+      return { state, result: ok([`${base}:`, ...state.experiments.map((e) => `\t${e.name ?? e.id} [${e.id}]`)].join('\n')) };
     }
     if (esub === 'branch') {
       const id = args[2] || (state.experiments[state.experiments.length - 1]?.id ?? 'exp-latest');
