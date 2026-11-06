@@ -6,6 +6,13 @@ import { campLevels } from './camp';
 import { advancedLevels } from './advanced';
 import { transferLevels } from './transfer';
 
+/** A directory that is already a Git repository (`git init` done), DVC not initialized yet. */
+function gitOnlyRepo(): RepoState {
+  const s = emptyState();
+  ensureGit(s);
+  return s;
+}
+
 function rawRepo(): RepoState {
   const s = emptyState();
   s.initialized = true;
@@ -83,17 +90,17 @@ export const basicsLevels: LevelDef[] = [
     seriesTitle: 'Basics',
     name: 'Initialize DVC',
     difficulty: 1,
-    par: 3,
-    hint: 'dvc init; git add .dvc; git commit -m "Initialize DVC"',
+    par: 2,
+    hint: 'dvc init; git commit -m "Initialize DVC"',
     objective:
-      'Initialize DVC inside a Git repository and commit the DVC metadata so the team shares the same data-versioning setup.',
+      'Initialize DVC inside a Git repository and commit the files `dvc init` staged, so the whole team shares the same data-versioning setup.',
     learning: [
       'DVC extends Git for data; it does not replace Git',
-      'dvc init only creates .dvc/ metadata — no data is versioned yet',
-      'Git versions that metadata; teammates clone the same workflow',
+      'dvc init needs a Git repository (or --no-scm) and only creates .dvc/ metadata — no data is versioned yet',
+      'dvc init already stages .dvc/config, .dvc/.gitignore and .dvcignore with Git; you only commit them',
     ],
     fieldNotes: [
-      'Repo bootstrap: git init → dvc init → commit .dvc immediately',
+      'Repo bootstrap: git init → dvc init → git commit (dvc init already ran git add for you)',
       'Store remote config in .dvc/config so clones inherit the same data store',
       'If .dvc is not committed, every teammate has a different data workflow',
     ],
@@ -106,15 +113,15 @@ export const basicsLevels: LevelDef[] = [
       {
         title: 'What `dvc init` actually does',
         markdown:
-          'Creates a `.dvc/` directory with:\n\n- `config` — where remotes and cache live for this project\n- `.gitignore` — so DVC’s internal cache is not committed by accident\n\n**It does not upload data.** You are turning data-versioning *on* for this project.\n\nMental model: `git init` for code ≈ `dvc init` for the data workflow.',
+          'Run inside a Git repository (outside one, `dvc init` stops and suggests `--no-scm`). It creates:\n\n- `.dvc/config` — where remotes and cache live for this project\n- `.dvc/.gitignore` — so DVC’s internal cache is not committed by accident\n- `.dvcignore` — patterns DVC should skip, like `.gitignore` for DVC\n\n**It does not upload data.** You are turning data-versioning *on* for this project.\n\nMental model: `git init` for code ≈ `dvc init` for the data workflow.',
       },
       {
-        title: 'Why you must Git-commit `.dvc/`',
+        title: 'Why you must Git-commit the result',
         markdown:
-          'The `.dvc/` folder is tiny and team-facing.\n\n```\ngit add .dvc\ngit commit -m "Initialize DVC"\n```\n\nIf you skip this, clone #2 has code but **no DVC project** — `dvc pull` will not know your cache layout.\n\nWatch the board: Workspace can be “initialized” while Git history still lacks the setup commit.',
+          'These files are tiny and team-facing. `dvc init` already ran `git add` on them (check `git status`), so only the commit is left:\n\n```\ngit commit -m "Initialize DVC"\n```\n\nIf you skip this, clone #2 has code but **no DVC project** — `dvc pull` will not know your cache layout.\n\nWatch the board: Workspace can be “initialized” while Git history still lacks the setup commit.',
       },
     ],
-    startState: emptyState(),
+    startState: gitOnlyRepo(),
     goal: {
       kind: 'allOf',
       checks: [
@@ -126,7 +133,7 @@ export const basicsLevels: LevelDef[] = [
         },
       ],
     },
-    solution: ['dvc init', 'git add .dvc', 'git commit -m "Initialize DVC"'],
+    solution: ['dvc init', 'git commit -m "Initialize DVC"'],
   },
   {
     id: 'basics-2',
@@ -157,12 +164,12 @@ export const basicsLevels: LevelDef[] = [
       {
         title: 'What happens under the hood',
         markdown:
-          'After `dvc add`:\n\n| Place | Content |\n| --- | --- |\n| Workspace | still has `data/data.xml` (linked to cache) |\n| `.dvc/cache/.../md5/xx/…` | the actual bytes, content-addressed |\n| `data/data.xml.dvc` | YAML: path + md5 — **what Git stores** |\n| `data/.gitignore` | ignores the raw path |\n\nTwo systems, one workflow:\n\n- **Git** → code + pointers (small, reviewable)\n- **DVC cache/remote** → data payloads',
+          'After `dvc add`:\n\n| Place | Content |\n| --- | --- |\n| Workspace | still has `data/data.xml` — a copy by default (`cache.type` is `reflink,copy`; reflinks, hardlinks or symlinks are opt-in) |\n| `.dvc/cache/.../md5/xx/…` | the actual bytes, content-addressed |\n| `data/data.xml.dvc` | YAML: path + md5 — **what Git stores** |\n| `data/.gitignore` | ignores the raw path |\n\nTwo systems, one workflow:\n\n- **Git** → code + pointers (small, reviewable)\n- **DVC cache/remote** → data payloads',
       },
       {
         title: 'Common mistake',
         markdown:
-          'People `git add data/data.xml` out of habit.\n\nThat reintroduces the original problem. After DVC tracks a file, **only** the `.dvc` file and ignore rules belong in Git.\n\nOn the board, the data card should show `.dvc` + `gitignored`, and Cache should show the md5 object.',
+          'People `git add data/data.xml` out of habit.\n\nBefore `dvc add`, Git happily accepts it (and prints a warning here) — that reintroduces the original problem. After `dvc add`, Git refuses: *“The following paths are ignored by one of your .gitignore files”*. **Only** the `.dvc` file and the ignore rules belong in Git.\n\nOn the board, the data card should show `.dvc` + `gitignored`, and Cache should show the md5 object.',
       },
     ],
     startState: rawRepo(),
@@ -193,13 +200,14 @@ export const basicsLevels: LevelDef[] = [
     name: 'Dirty data and status',
     difficulty: 3,
     par: 5,
-    hint: 'edit data/data.xml; dvc status; dvc commit; git add data/data.xml.dvc; git commit -m "Dataset updates"',
+    hint:
+      'edit data/data.xml; dvc status; dvc add data/data.xml; git add data/data.xml.dvc; git commit -m "Dataset updates"',
     objective:
-      'When data changes on disk, detect it with `dvc status`, promote it to cache/pointer with `dvc commit`, then record the pointer change in Git.',
+      'When data changes on disk, detect it with `dvc status`, accept the new version with `dvc add`, then record the pointer change in Git.',
     learning: [
       'Workspace change without pointer update = dirty data',
       'dvc status is the data analogue of git status',
-      'dvc commit updates pointer+cache; git commit versions that pointer',
+      'dvc add again records the new md5 in the .dvc file and the new bytes in the cache; git commit versions that pointer',
       'History keeps old md5 — you can go back with checkout later',
     ],
     fieldNotes: [
@@ -213,9 +221,9 @@ export const basicsLevels: LevelDef[] = [
           'In real projects the dataset grows (new scrape, new labels).\n\n```\nedit data/data.xml\n```\n\nNow **workspace content ≠ pointer md5**. That is “dirty”, exactly like uncommitted code.\n\nIf you trained on this file, the result is **not reproducible** until the data version is recorded.',
       },
       {
-        title: 'Status → commit → Git',
+        title: 'Status → add → Git',
         markdown:
-          '```\ndvc status\ndvc commit\ngit add data/data.xml.dvc\ngit commit -m "Dataset updates"\n```\n\n1. **status** — human-readable: which data files drifted\n2. **dvc commit** — write new md5 into `.dvc` + ensure cache holds those bytes\n3. **git commit** — publish that pointer change to the code timeline\n\nWithout step 2, Git would version a *lie* (old hash, new file).',
+          '```\ndvc status\ndvc add data/data.xml\ngit add data/data.xml.dvc\ngit commit -m "Dataset updates"\n```\n\n1. **status** — human-readable: which data files drifted\n2. **dvc add** — run it again on the changed file: new md5 into the `.dvc` file, new bytes into the cache\n3. **git commit** — publish that pointer change to the code timeline\n\nWithout step 2, Git would version a *lie* (old hash, new file). (`dvc commit` is the sibling for pipeline outputs and `--no-commit` adds; for a plain tracked file, re-`add` is the everyday move.)',
       },
       {
         title: 'Why this matters for ML',
@@ -240,7 +248,7 @@ export const basicsLevels: LevelDef[] = [
     solution: [
       'edit data/data.xml',
       'dvc status',
-      'dvc commit',
+      'dvc add data/data.xml',
       'git add data/data.xml.dvc',
       'git commit -m "Dataset updates"',
     ],
@@ -682,9 +690,9 @@ export const experimentLevels: LevelDef[] = [
           'Change **one thing**: learning rate.\n\n```\ndvc exp run -S lr=0.05\ndvc exp run -S lr=0.2\ndvc exp show\n```\n\nIf data version and code stay constant, metric differences are attributable to `lr` — that is science, not vibes.',
       },
       {
-        title: 'Production tip',
+        title: 'What a run leaves behind',
         markdown:
-          'In real DVC, `-S` applies to that experiment run. Here the simulator keeps workspace params at the last set value — still run each sweep as a separate `exp run` so both appear in history.\n\nAlways `dvc exp show` before deciding.',
+          'Each `dvc exp run -S` runs the pipeline **right now** and leaves the workspace holding that run: `params.yaml` shows the last `-S` value and `git status` reports it as modified.\n\nEvery run is also saved as an experiment (hidden Git refs), so both sweeps stay in `dvc exp show` after the workspace moves on. To run without touching the workspace, `--queue` the run and start it later.\n\nAlways `dvc exp show` before deciding.',
       },
     ],
     startState: (() => {
@@ -718,17 +726,17 @@ export const experimentLevels: LevelDef[] = [
     par: 4,
     hint: 'dvc exp run -S lr=0.05; dvc exp show; dvc exp apply exp-xxxxxx',
     objective:
-      'Run an experiment with `lr=0.05`, list experiments, then `dvc exp apply <id>` so workspace params become that experiment’s params.',
+      'Run an experiment with `lr=0.05`, list experiments, then `dvc exp apply <id>` so the workspace gets that experiment’s params, metrics and outputs.',
     learning: [
       'Selection after comparison — apply promotes a winner',
-      'Workspace baseline becomes the chosen config',
+      'apply restores the experiment’s params, metrics and output files, so stages are up to date without a repro',
       'Pointers + params + metrics stay linked for audit',
     ],
     startDialog: [
       {
         title: 'From table to baseline',
         markdown:
-          '```\ndvc exp run -S lr=0.05\ndvc exp show\ndvc exp apply <exp-id>\n```\n\n`apply` copies that experiment’s params/metrics into the workspace — your new **baseline**.\n\nWithout apply, the “best run” lives only in history; nobody knows which config shipped.',
+          '```\ndvc exp run -S lr=0.05\ndvc exp show\ndvc exp apply <exp-id>\n```\n\n`apply` brings that experiment’s `params.yaml`, metrics **and output files** (like `model.pkl`) back into the workspace — your new **baseline**. No `dvc repro` is needed afterwards.\n\nWithout apply, the “best run” lives only in history; nobody knows which config shipped. (The baseline is only official after you commit it with Git.)',
       },
       {
         title: 'Closing the loop',
@@ -954,31 +962,32 @@ export const fieldLevels: LevelDef[] = [
     id: 'field-3',
     series: 'field',
     seriesTitle: 'Field practice',
-    name: 'Promote winner then repro',
+    name: 'Promote the winner into a commit',
     difficulty: 5,
     par: 3,
-    hint: 'dvc exp run -S lr=0.05; dvc exp apply exp-…; dvc repro',
+    hint:
+      'dvc exp run -S lr=0.05; dvc exp apply exp-…; git add params.yaml dvc.lock; git commit -m "Promote lr=0.05"',
     objective:
-      'Winning experiment must become the production baseline: run, apply, then `dvc repro` so artifacts match the new params.',
+      'A winning experiment becomes the production baseline only when it is committed: run, apply (params and outputs come back), then commit `params.yaml` and `dvc.lock`.',
     learning: [
-      'apply updates workspace params/metrics, not magically all artifacts',
-      'After apply, stages are stale until repro materializes new outputs',
-      'Shipping config without repro produces “params say X, model is Y”',
+      'apply restores params, metrics and outputs — no dvc repro needed afterwards',
+      'The baseline is official only after a Git commit of params.yaml, dvc.lock (and dvc.yaml if it changed)',
+      'Alternative: dvc exp branch turns the experiment into its own Git branch for review',
     ],
     fieldNotes: [
-      'Release checklist: exp show → exp apply winner → dvc repro → git commit pointer/yaml/params → dvc push',
+      'Release checklist: exp show → exp apply winner → git add params.yaml dvc.lock → git commit → dvc push',
       'CI can re-run repro on the release commit to prove the model matches committed config',
     ],
     startDialog: [
       {
-        title: 'The incomplete promotion',
+        title: 'Apply is not the end',
         markdown:
-          '```\ndvc exp run -S lr=0.05\ndvc exp apply <id>\ndvc repro\n```\n\nMany teams stop at apply. Metrics on the experiment are recorded; **model.pkl on disk** may still be the old run until repro.',
+          '```\ndvc exp run -S lr=0.05\ndvc exp apply <id>\ngit add params.yaml dvc.lock\ngit commit -m "Promote lr=0.05"\n```\n\n`apply` puts the winner into your **workspace**: params, metrics and `model.pkl` are back, stages are up to date. But nobody else sees it until the change is committed.',
       },
       {
         title: 'Definition of done',
         markdown:
-          'A baseline is done when:\n\n1. Git commit pins code + params + data pointers\n2. Pipeline outputs are regenerated (or cached) for that lock\n3. Remote holds the objects teammates need\n\nApply + repro is how you get (1) and (2) aligned.',
+          'A baseline is done when:\n\n1. Git commit pins code + params + `dvc.lock`\n2. Pipeline outputs match that lock (apply restored them)\n3. Remote holds the objects teammates need (`dvc push`)\n\nPrefer a review branch? `dvc exp branch <id> <branch>` creates one from the experiment.',
       },
     ],
     startState: promotePipelineRepo(),
@@ -989,12 +998,14 @@ export const fieldLevels: LevelDef[] = [
         { kind: 'paramsAt', key: 'lr', value: 0.05 },
         { kind: 'stageUpToDate', name: 'train' },
         { kind: 'workspaceHas', paths: ['model.pkl'] },
+        { kind: 'gitCommitMessageIncludes', text: 'Promote', requireFilesAny: ['params.yaml', 'dvc.lock'] },
       ],
     },
     solution: [
       'dvc exp run -S lr=0.05',
       'dvc exp apply exp-',
-      'dvc repro',
+      'git add params.yaml dvc.lock',
+      'git commit -m "Promote lr=0.05"',
     ],
   },
   {
@@ -1004,9 +1015,10 @@ export const fieldLevels: LevelDef[] = [
     name: 'Capstone: ship a data version',
     difficulty: 5,
     par: 10,
-    hint: 'remote add; push; stage prepare+train; repro; exp run; exp apply; (optionally repro again)',
+    hint:
+      'remote add; push; stage prepare+train; repro; exp run; exp apply; git add params.yaml dvc.yaml dvc.lock; git commit',
     objective:
-      'Ship a data-backed experiment end-to-end: remote, push, pipeline, repro, experiment, apply — then leave train up to date.',
+      'Ship a data-backed experiment end-to-end: remote, push, pipeline, repro, experiment, apply — then commit the result so train stays up to date.',
     learning: [
       'Integrate the whole loop under time pressure',
       'Every missing step shows up as a broken board or failed goal',
@@ -1021,12 +1033,12 @@ export const fieldLevels: LevelDef[] = [
       {
         title: 'Capstone',
         markdown:
-          'You have tracked `data/data.xml`, code for prepare/train, and params — **no remote, no pipeline runs**.\n\nDeliver:\n\n1. Default remote + `dvc push` data objects\n2. `prepare` then `train` stages + `dvc repro`\n3. `dvc exp run -S lr=0.05` + `dvc exp apply`\n4. End with `train` up to date and `model.pkl` present\n\nUse `steps` freely. This is a drill, not a trick.',
+          'You have tracked `data/data.xml`, code for prepare/train, and params — **no remote, no pipeline runs**.\n\nDeliver:\n\n1. Default remote + `dvc push` data objects\n2. `prepare` then `train` stages + `dvc repro`\n3. `dvc exp run -S lr=0.05` + `dvc exp apply`\n4. Commit `params.yaml`, `dvc.yaml` and `dvc.lock`, with `train` up to date and `model.pkl` present\n\nUse `steps` freely. This is a drill, not a trick.',
       },
       {
         title: 'Success looks like',
         markdown:
-          'Board: data tracked, cache filled, remote holds objects.\nDAG: prepare → train reproduced.\nExperiments: at least one with `lr=0.05` applied.\n\nThat is a miniature production pipeline you can explain on an interview whiteboard.',
+          'Board: data tracked, cache filled, remote holds objects.\nDAG: prepare → train reproduced.\nExperiments: at least one with `lr=0.05` applied and committed.\n\nThat is a miniature production pipeline you can explain on an interview whiteboard.',
       },
     ],
     startState: capstoneRepo(),
@@ -1041,6 +1053,7 @@ export const fieldLevels: LevelDef[] = [
         { kind: 'workspaceHas', paths: ['model.pkl'] },
         { kind: 'experimentCount', min: 1 },
         { kind: 'paramsAt', key: 'lr', value: 0.05 },
+        { kind: 'gitCommitMessageIncludes', text: 'Ship', requireFilesAny: ['params.yaml', 'dvc.lock'] },
       ],
     },
     solution: [
@@ -1051,7 +1064,8 @@ export const fieldLevels: LevelDef[] = [
       'dvc repro',
       'dvc exp run -S lr=0.05',
       'dvc exp apply exp-',
-      'dvc repro',
+      'git add params.yaml dvc.yaml dvc.lock',
+      'git commit -m "Ship lr=0.05 baseline"',
     ],
   },
   {

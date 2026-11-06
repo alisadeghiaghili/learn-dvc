@@ -82,6 +82,17 @@ function pipelineRepo(): RepoState {
   return s;
 }
 
+/** Data and code are in place, but no stage exists yet: the learner designs it. */
+function noStageRepo(): RepoState {
+  const s = pipelineRepo();
+  s.pipeline = [];
+  delete s.files['model.pkl'];
+  delete s.files['metrics.json'];
+  s.metrics = {};
+  s.generated = [];
+  return s;
+}
+
 export const transferLevels: LevelDef[] = [
   {
     id: 'xfer-1',
@@ -109,8 +120,9 @@ export const transferLevels: LevelDef[] = [
           'This level does **not** teach new flags.\n\nIt asks you to **read evidence** and act on it.\n\n`cat data/data.xml.dvc` — what do you see?\n`dvc status` — is the workspace honest?',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'What a .dvc file contains',
+        markdown:
+          'Under `outs` it lists `md5`, `size` and `path`; a directory adds `nfiles` and an md5 ending in `.dir` that names a manifest object in the cache. The file describes content, it never contains it. If `git show HEAD:data/data.xml.dvc` and `dvc status` disagree about the md5, the workspace is the side that is out of line.',
       },
     ],
     startState: trackedRemote(),
@@ -130,7 +142,8 @@ export const transferLevels: LevelDef[] = [
     name: 'Ship under pressure — no skipped links',
     difficulty: 5,
     par: 7,
-    hint: 'edit data/data.xml; dvc status; dvc add data/data.xml; dvc commit; dvc push; git add data/data.xml.dvc data/.gitignore; git commit -m "data: ship v2"',
+    hint:
+      'edit data/data.xml; dvc status; dvc add data/data.xml; dvc push; git add data/data.xml.dvc data/.gitignore; git commit -m "data: ship v2"',
     objective:
       'Production handoff in one flow: dirty → evidence → pointer → remote → history. Goal is a clean audited state, not a checklist.',
     learning: [
@@ -149,8 +162,9 @@ export const transferLevels: LevelDef[] = [
           'You are the on-call engineer. Dataset changed. Team needs it tomorrow.\n\n**Finish the handoff.**',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'Why this order',
+        markdown:
+          '`dvc add` (cache + pointer) → `dvc push` (bytes reach the remote) → `git commit` / `git push` (the pointer becomes visible). If Git goes first, a teammate pulls a pointer for data the remote does not have yet. `dvc status --cloud` before you announce catches that.',
       },
     ],
     startState: trackedRemote(),
@@ -170,7 +184,6 @@ export const transferLevels: LevelDef[] = [
       'edit data/data.xml',
       'dvc status',
       'dvc add data/data.xml',
-      'dvc commit',
       'dvc push',
       'git add data/data.xml.dvc data/.gitignore',
       'git commit -m "data: ship v2"',
@@ -202,11 +215,12 @@ export const transferLevels: LevelDef[] = [
           'No copy-paste solution first.\n\nThink: what must the stage **depend on**? What should it **emit**?\n\nThen prove it with repro + dag.',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'Contract checklist',
+        markdown:
+          'Before you type: which files must invalidate the stage (`-d`: data **and** code)? Which hyperparameters (`-p`)? What is the artifact (`-o`) and which file is a metrics file `dvc metrics` can read (`-m`)? A stage missing one of these is either never re-run or always re-run.',
       },
     ],
-    startState: pipelineRepo(),
+    startState: noStageRepo(),
     goal: {
       kind: 'allOf',
       checks: [
@@ -227,27 +241,29 @@ export const transferLevels: LevelDef[] = [
     name: 'Experiment lifecycle + error recovery',
     difficulty: 5,
     par: 7,
-    hint: 'dvc exp run -S lr=0.2; dvc exp show; dvc exp run -S lr=0.05; dvc exp apply exp-; dvc params show; dvc repro; dvc status',
+    hint:
+      'dvc exp run -n bad -S lr=0.2; dvc exp run -n good -S lr=0.05; dvc exp show; dvc exp apply good; dvc params show; dvc status',
     objective:
-      'Run a bad and a good config, choose with evidence, apply the winner, and recover until params/artifacts/status agree.',
+      'Run a bad and a good config, choose with evidence, apply the winner, and verify params, outputs and status agree.',
     learning: [
       'A bad run is data — keep it, learn, then apply the winner',
-      'apply is not done until params show + repro + status agree',
-      'Recovery is a skill: re-apply, re-repro, re-check',
+      'Naming runs (-n) makes apply and diff unambiguous',
+      'apply is done when params show and status agree; then commit',
     ],
     fieldNotes: [
       'Never delete a failed run before reading exp show',
-      'Post-apply checklist: params → repro → status',
+      'Post-apply checklist: params → status → commit params.yaml + dvc.lock',
     ],
     startDialog: [
       {
         title: 'First try is wrong on purpose',
         markdown:
-          'Run a **bad** hyperparameter first.\n\nThen a better one. Choose with `exp show`.\n\nThen recover to a consistent release state.',
+          'Run a **bad** hyperparameter first, name it (`-n bad`).\n\nThen a better one (`-n good`). Choose with `exp show`, apply the winner by name.',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'Recovery without panic',
+        markdown:
+          'If you applied the wrong run, nothing is lost: both experiments are still stored. `dvc exp apply bad` / `dvc exp apply good` swap the workspace between them in seconds. The commit is the point of no return, so apply, check `dvc params show` and `dvc status`, and only then commit.',
       },
     ],
     startState: pipelineRepo(),
@@ -259,11 +275,11 @@ export const transferLevels: LevelDef[] = [
       ],
     },
     solution: [
-      'dvc exp run -S lr=0.05',
+      'dvc exp run -n bad -S lr=0.2',
+      'dvc exp run -n good -S lr=0.05',
       'dvc exp show',
-      'dvc exp apply exp-',
+      'dvc exp apply good',
       'dvc params show',
-      'dvc repro',
       'dvc status',
     ],
   },
@@ -293,8 +309,9 @@ export const transferLevels: LevelDef[] = [
           'Change a hyperparameter.\n\nGather **all three** diffs.\n\nIf effect is missing, this level is not passed by “running commands” alone — the goal is a consistent evidence pack.',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'When metrics did not move',
+        markdown:
+          'If `dvc metrics diff` shows no change, ask why the PR exists: wrong baseline (`dvc metrics diff main` compares with another branch), a stage that did not re-run (`dvc status`), or a metrics file not declared under `metrics:`. A PR with code changes and empty evidence is a request for evidence, not for approval.',
       },
     ],
     startState: pipelineRepo(),
@@ -338,8 +355,9 @@ export const transferLevels: LevelDef[] = [
         markdown: '`data/data.xml` disappeared from disk.\n\n**Repair without panicking.**',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'Order of diagnosis',
+        markdown:
+          'Walk the chain from the cheapest check: (1) `git log -- data/data.xml.dvc` — is the pointer committed? (2) `dvc status` — does the workspace match it? (3) `dvc fetch` — do the objects exist in cache or remote? (4) `dvc checkout`. The first failing link tells you where the chain is broken; do not jump to `dvc pull` and hope.',
       },
     ],
     startState: (() => {
@@ -389,8 +407,9 @@ export const transferLevels: LevelDef[] = [
         markdown: 'Change params. See status complain.\n\nFix with `repro`, not with an editor.',
       },
       {
-        title: 'Production note',
-        markdown: 'Read the evidence before you type. Status first, then act.\n\nIf you cannot explain the step, you are guessing.',
+        title: 'Keeping dvc.lock honest in review',
+        markdown:
+          'Treat `dvc.lock` as generated output: a PR that edits it by hand is suspicious. Two cheap CI guards: `dvc status` must print “Data and pipelines are up to date.” after checkout, and `dvc repro` on the PR must leave the file unchanged (`git diff --exit-code dvc.lock`). `dvc repro --dry` shows what would run without running it.',
       },
     ],
     startState: pipelineRepo(),
