@@ -357,6 +357,9 @@ export class TerminalView {
     const headText = head.length ? `${head.join(' ')} ` : '';
     // After completing a word, leave a space so the next Tab moves to the next word.
     this.inputEl.value = `${headText}${chosen}`;
+    // Remember the line as it is now, so the next Tab recognises it and advances the cycle.
+    const after = parseLine(this.inputEl.value);
+    this.wordKey = `${after.head.join(' ')}|${after.afterSpace ? '' : after.current}`;
     this.focus();
     this.syncGhost();
 
