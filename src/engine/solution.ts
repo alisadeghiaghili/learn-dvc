@@ -61,7 +61,9 @@ function matchSolutionCommand(historyCmd: string, solutionCmd: string): boolean 
   const h = normalizeWs(historyCmd);
   const s = normalizeWs(solutionCmd);
   if (h === s) return true;
-  if (h.startsWith(`${s} `) || s.startsWith(`${h} `)) return true;
+  // A longer history command covers a shorter solution command, never the other way round:
+  // `dvc exp run` does not do what `dvc exp run -S lr=0.5` asks for.
+  if (h.startsWith(`${s} `)) return true;
 
   if (/^git\s+checkout\b/i.test(s) && /^git\s+checkout\b/i.test(h)) {
     const sRef = parseArgs(s)[2] ?? '';
@@ -153,7 +155,10 @@ function liveEffectContradicts(state: RepoState, cmd: string): boolean {
   }
   if (/^edit\b/i.test(c)) {
     const path = parseArgs(c)[1];
-    if (path === '.dvcignore') return false;
+    if (path === '.dvcignore') {
+      const pat = parseArgs(c)[2];
+      return !!pat && !(state.dvcIgnore ?? []).includes(pat);
+    }
     const kv = parseArgs(c)[2];
     if (path === 'params.yaml' && kv?.includes('=')) {
       const parsed = parseKeyValue(kv);
@@ -273,6 +278,11 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
       : fail(pull ? 'run `dvc pull`' : 'run `dvc fetch`');
   }
 
+  if (/^edit\s+\.dvcignore\b/i.test(cmd)) {
+    const pat = parseArgs(cmd)[2];
+    return pat && (state.dvcIgnore ?? []).includes(pat) ? ok(`ignored ${pat}`) : fail(cmd);
+  }
+
   if (/^edit\b/.test(cmd)) {
     const path = parseArgs(cmd)[1];
     if (!path) return fail(cmd);
@@ -354,11 +364,6 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
       if (dataPath && (state.dataVersions[dataPath] ?? 0) > 0) return ok('import updated');
     }
     return fail(cmd);
-  }
-
-  if (/^edit\s+\.dvcignore\b/i.test(cmd)) {
-    const pat = parseArgs(cmd)[2];
-    return pat && (state.dvcIgnore ?? []).includes(pat) ? ok(`ignored ${pat}`) : fail(cmd);
   }
 
   if (/^dvc\s+plots\b/i.test(cmd)) {
