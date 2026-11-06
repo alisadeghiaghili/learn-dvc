@@ -344,4 +344,38 @@ describe('Tab completion', () => {
     press('Tab');
     expect(input().value).toBe('dvc');
   });
+
+  it('cycles through ambiguous words on repeated Tab and shows the choices', () => {
+    type('dvc re');
+    press('Tab');
+    expect(input().value).toBe('dvc remote');
+    expect(hintBox().hidden).toBe(false);
+    expect(hintBox().textContent).toContain('Tab word 1/3');
+    expect(hintBox().querySelector('code')!.textContent).toBe('remote · repro · remove');
+    press('Tab');
+    expect(input().value).toBe('dvc repro');
+    expect(hintBox().textContent).toContain('Tab word 2/3');
+    press('Tab');
+    expect(input().value).toBe('dvc remove');
+    press('Tab');
+    expect(input().value).toBe('dvc remote');
+  });
+
+  it('starts a fresh cycle after the user types something else', () => {
+    type('dvc re');
+    press('Tab');
+    press('Tab');
+    expect(input().value).toBe('dvc repro');
+    type('dvc ex');
+    press('Tab');
+    expect(input().value).toBe('dvc exp');
+  });
+
+  it('cycles through next words after a space as well', () => {
+    type('dvc ');
+    press('Tab');
+    expect(input().value).toBe('dvc init');
+    press('Tab');
+    expect(input().value).toBe('dvc add');
+  });
 });
