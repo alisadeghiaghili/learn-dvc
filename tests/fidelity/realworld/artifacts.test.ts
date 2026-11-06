@@ -87,16 +87,42 @@ describe('gto (separate CLI)', () => {
     expect(text.split(/\s+/)).toEqual(expect.arrayContaining(['model@v1.0.0', 'model#prod#1']));
   });
 
-  it('assigning the same stage again increments the counter (model#prod#2)', () => {
-    const text = tagsOf(assigned(), 'gto register model --version v1.1.0', 'gto assign model --version v1.1.0 --stage prod');
+  // GTO allows one version per commit, so the next version needs a new commit.
+  // https://github.com/iterative/gto/blob/main/gto/registry.py  (GitRegistry.register, line 154: raise VersionExistsForCommit)
+  it('assigning the same stage to a newer version increments the counter (model#prod#2)', () => {
+    const text = tagsOf(
+      assigned(),
+      'edit data/data.xml',
+      'dvc add data/data.xml',
+      'git add data/data.xml.dvc',
+      'git commit -m "retrain"',
+      'gto register model --version v1.1.0',
+      'gto assign model --version v1.1.0 --stage prod',
+    );
     expect(text.split(/\s+/)).toEqual(expect.arrayContaining(['model#prod#1', 'model#prod#2']));
   });
 
-  it('registering an artifact that dvc.yaml does not declare fails and creates no tag', () => {
-    const { steps } = run(artifactsRepo(), 'gto register ghost --version v1.0.0', 'git tag');
-    expect(steps[0]!.result.ok).toBe(false);
-    expect(steps[0]!.text).toMatch(/ghost/);
-    expect(steps[1]!.text).not.toMatch(/ghost/);
+  // https://github.com/iterative/gto/blob/main/gto/registry.py  (GitRegistry.register, lines 149-154)
+  it('a second version on the same commit is refused (VersionExistsForCommit)', () => {
+    const { last } = run(registered(), 'gto register model --version v1.1.0');
+    expect(last.result.ok).toBe(false);
+    expect(last.text).toMatch(/v1\.0\.0/);
+  });
+
+  // GTO does not check dvc.yaml when registering: GitRegistry.register calls
+  // find_artifact(name, create_new=True) (gto/registry.py line 149; gto/base.py lines 579-585),
+  // so any valid name gets a tag. It is `dvc artifacts get` that needs the artifact declared in dvc.yaml.
+  it('registering a name that dvc.yaml does not declare still creates the tag, but dvc artifacts get cannot use it', () => {
+    const { steps } = run(
+      artifactsRepo(),
+      'gto register ghost --version v1.0.0',
+      'git tag',
+      `dvc artifacts get ${REGISTRY_URL} ghost --rev v1.0.0 -o out/ghost.pkl`,
+    );
+    expect(steps[0]!.result.ok).toBe(true);
+    expect(steps[1]!.text.split(/\s+/)).toContain('ghost@v1.0.0');
+    expect(steps[2]!.result.ok).toBe(false);
+    expect(steps[2]!.text).toMatch(/ghost/);
   });
 
   it('assigning a version that was never registered fails', () => {
