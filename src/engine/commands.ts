@@ -680,6 +680,28 @@ function recordExperiment(state: RepoState, name?: string): ExperimentRun {
   return run;
 }
 
+const EXP_ADJECTIVES = [
+  'agile', 'bland', 'brisk', 'calm', 'dusty', 'eager', 'fancy', 'hardy', 'jolly', 'keen', 'lucid',
+  'mossy', 'noble', 'plush', 'quiet', 'rapid', 'sunny', 'tidy', 'vivid', 'witty',
+];
+const EXP_NOUNS = [
+  'acorn', 'bison', 'cedar', 'delta', 'ember', 'finch', 'grove', 'heron', 'islet', 'jasper', 'kiwi',
+  'lotus', 'maple', 'newt', 'otter', 'pecan', 'quail', 'raven', 'tulip', 'walnut',
+];
+
+/** `adjective-noun` experiment name, unique among the saved experiments (like DVC's generated names). */
+function generateExpName(state: RepoState): string {
+  const taken = new Set(state.experiments.map((e) => e.name));
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const h = fakeMd5(`expname:${JSON.stringify(state.params)}:${state.experiments.length}:${attempt}`);
+    const adj = EXP_ADJECTIVES[parseInt(h.slice(0, 6), 16) % EXP_ADJECTIVES.length]!;
+    const noun = EXP_NOUNS[parseInt(h.slice(6, 12), 16) % EXP_NOUNS.length]!;
+    const name = `${adj}-${noun}`;
+    if (!taken.has(name)) return name;
+  }
+  return `run-${state.experiments.length + 1}-saved`;
+}
+
 export function executeCommand(prev: RepoState, rawInput: string): { state: RepoState; result: CommandResult } {
   const raw = rawInput.trim();
   const out = executeCommandInner(prev, rawInput);
@@ -2378,6 +2400,143 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         ),
       };
     }
+    if (esub === 'save') {
+      const p = parseArgv(args.slice(2), ['-n', '--name', '-I', '--include-untracked', '-m', '--message']);
+      let name = p.val('-n', '--name');
+      const message = p.val('-m', '--message');
+      if (name !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+        return {
+          state,
+          result: fail(`ERROR: invalid experiment name '${name}'. Use letters, digits, '.', '_' and '-' (it becomes a Git ref name).`),
+        };
+      }
+      const included: string[] = [];
+      args.slice(2).forEach((a, i, all) => {
+        if ((a === '-I' || a === '--include-untracked') && all[i + 1]) included.push(all[i + 1]!);
+      });
+      for (const path of included) {
+        if (!state.files[path]?.present) {
+          return { state, result: fail(`ERROR: cannot include '${path}': no such file in the workspace.`) };
+        }
+      }
+      if (name !== undefined) {
+        const at = state.experiments.findIndex((e) => e.name === name);
+        if (at >= 0) {
+          if (!p.has('-f', '--force')) {
+            return {
+              state,
+              result: fail(
+                `ERROR: Experiment conflicts with existing experiment '${name}'.\nTo overwrite the existing experiment run:\n\n\tdvc exp save -f -n ${name}`,
+              ),
+            };
+          }
+          state.experiments.splice(at, 1);
+        }
+      } else {
+        name = generateExpName(state);
+      }
+      // nothing runs: the workspace params and metrics are stored as they are
+      const run = recordExperiment(state, name);
+      if (message) run.message = message;
+      return finish(
+        state,
+        ok(
+          [
+            `Experiment has been saved with name '${name}'.`,
+            `  params:  ${JSON.stringify(run.params)}`,
+            `  metrics: ${JSON.stringify(run.metrics)}`,
+            ...(included.length ? [`  included untracked: ${included.join(', ')}`] : []),
+            ...(message ? [`  message: ${message}`] : []),
+            'No stage was re-run: `dvc exp save` stores what the workspace holds right now.',
+            `Compare with \`dvc exp show\`, keep it with \`dvc exp apply ${name}\`, share it with \`dvc exp push origin\`.`,
+          ].join('\n'),
+        ),
+      );
+    }
+    if (esub === 'remove') {
+      const p = parseArgv(args.slice(2), ['-g', '--git-remote', '--rev', '-n', '--num']);
+      const names = p.pos;
+      const all = p.has('-A', '--all', '--all-commits');
+      const queue = p.has('--queue');
+      const rev = p.val('--rev');
+      const gitRemote = p.val('-g', '--git-remote');
+      if (!names.length && !all && !queue && !rev) {
+        return {
+          state,
+          result: fail('ERROR: Either provide an `experiment` argument, or use the `--rev` or `--all-commits` (`--all`) flag.'),
+        };
+      }
+      const match = (e: ExperimentRun, n: string) => e.name === n || e.id === n || e.id.startsWith(n);
+      const lines: string[] = [];
+      if (queue) {
+        lines.push(`Removed ${state.expQueue.length} queued experiment(s).`);
+        state.expQueue = [];
+        if (!names.length && !all && !rev) return finish(state, ok(lines.join('\n')));
+      }
+      if (gitRemote) {
+        if (!(state.gitRemotes ?? []).includes(gitRemote)) {
+          const isDvc = state.remotes.some((r) => r.name === gitRemote);
+          return {
+            state,
+            result: fail(
+              isDvc
+                ? `ERROR: '${gitRemote}' is a DVC remote (data storage), not a Git remote.\n\`-g/--git-remote\` deletes experiment refs from a Git remote such as \`origin\` (see \`git remote -v\`).`
+                : `ERROR: unknown Git remote '${gitRemote}'. Known Git remotes: ${(state.gitRemotes ?? []).join(', ') || '(none)'}.`,
+            ),
+          };
+        }
+        const remoteSet = ((state.expRemotes ??= {})[gitRemote] ??= []);
+        const pushed = (n: string) => remoteSet.includes(n);
+        const selected = all ? [...remoteSet] : names;
+        const unknown = selected.filter((n) => !pushed(n));
+        if (unknown.length) {
+          return {
+            state,
+            result: fail(
+              `ERROR: Experiment(s) ${unknown.map((n) => `'${n}'`).join(', ')} not found in Git remote '${gitRemote}'. Push first with \`dvc exp push ${gitRemote}\`; \`-g\` can only delete what is already there.`,
+            ),
+          };
+        }
+        state.expRemotes![gitRemote] = remoteSet.filter((n) => !selected.includes(n));
+        lines.push(`Removed experiments from Git remote '${gitRemote}': ${selected.join(', ') || '(none)'}`);
+        return finish(state, ok(lines.join('\n')));
+      }
+      let doomed: ExperimentRun[];
+      if (names.length) {
+        const unknown = names.filter((n) => !state.experiments.some((e) => match(e, n)));
+        if (unknown.length) {
+          return {
+            state,
+            result: fail(`ERROR: Experiment(s) ${unknown.map((n) => `'${n}'`).join(', ')} not found. List them with \`dvc exp list\`; nothing was removed.`),
+          };
+        }
+        doomed = state.experiments.filter((e) => names.some((n) => match(e, n)));
+      } else if (all) {
+        doomed = [...state.experiments];
+      } else if (rev) {
+        const base = resolveGitRef(state, rev);
+        if (!base) return { state, result: fail(`ERROR: unknown revision '${rev}'.`) };
+        doomed = state.experiments.filter((e) => base.hash.startsWith(e.commitRef) || e.commitRef.startsWith(base.hash));
+      } else {
+        doomed = [];
+      }
+      state.experiments = state.experiments.filter((e) => !doomed.includes(e));
+      lines.push(doomed.length ? `Removed experiments: ${doomed.map((e) => e.name ?? e.id).join(', ')}` : 'No experiments to remove.');
+      return finish(state, ok(lines.join('\n')));
+    }
+    if (esub === 'gc') {
+      return {
+        state,
+        result: fail(
+          [
+            'ERROR: `dvc exp gc` was removed in DVC 3 (it is no longer a `dvc exp` subcommand).',
+            'Use `dvc exp remove <name>` for one experiment, `dvc exp remove -A` for all of them,',
+            '`dvc exp remove --queue` for queued runs and `dvc exp remove -g <git-remote> <name>` for a Git remote.',
+            'Unused cache objects are collected with `dvc gc` (-w, -A, -c), not with experiments commands.',
+          ].join('\n'),
+        ),
+      };
+    }
     if (esub === 'push' || esub === 'pull') {
       const target = args.slice(2).find((a) => !a.startsWith('-')) ?? 'origin';
       const gitRemotes = state.gitRemotes ?? [];
@@ -2395,6 +2554,12 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
               : `ERROR: unknown Git remote '${target}'. Known Git remotes: ${gitRemotes.join(', ') || '(none)'}. Add one with \`git remote add <name> <url>\`.`,
           ),
         };
+      }
+      if (esub === 'push') {
+        const wanted = args.slice(2).filter((a) => !a.startsWith('-')).slice(1);
+        const names = wanted.length ? wanted : state.experiments.map((e) => e.name ?? e.id);
+        const remoteSet = ((state.expRemotes ??= {})[target] ??= []);
+        for (const n of names) if (!remoteSet.includes(n)) remoteSet.push(n);
       }
       return finish(
         state,
