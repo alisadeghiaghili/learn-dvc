@@ -186,8 +186,9 @@ export function showModal(opts: {
     btn.className = action.className ?? '';
     btn.textContent = action.label;
     btn.addEventListener('click', () => {
+      // Dismiss first: handlers (for example returning focus to the prompt) must see a page without an open dialog.
+      overlay.remove();
       action.onClick();
-      if (document.body.contains(overlay)) overlay.remove();
     });
     actionsEl.appendChild(btn);
   }
