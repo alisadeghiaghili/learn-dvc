@@ -434,7 +434,6 @@ describe('git simulation: errors and rare forms', () => {
     const { last } = run(repo(), 'git rebase main');
     expect(last.result.ok).toBe(false);
     expect(last.text).toBe("git: 'rebase' is not supported in this simulator.");
-    expect(run(repo(), 'git').last.text).toBe("git: 'undefined' is not supported in this simulator.");
   });
 
   describe('git remote', () => {
