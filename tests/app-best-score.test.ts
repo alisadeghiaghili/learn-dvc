@@ -4,11 +4,9 @@ import {
   clearSavedState,
   clickModalButton,
   installBrowserStubs,
-  modalEl,
   mount,
   startLevelViaUi,
   submit,
-  termInput,
 } from './app-harness';
 import { setLocale, ui } from '../src/i18n';
 import { STORAGE_KEY } from '../src/ui/progress';

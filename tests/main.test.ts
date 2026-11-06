@@ -4,6 +4,9 @@ import { en } from '../src/i18n/en';
 import { de } from '../src/i18n/de';
 import { clearSavedState, installBrowserStubs, modalButtons, modalEl, termInput } from './app-harness';
 
+// The first import compiles the whole app, which is slow under coverage instrumentation.
+vi.setConfig({ testTimeout: 30000 });
+
 async function boot(): Promise<void> {
   vi.resetModules();
   await import('../src/main');

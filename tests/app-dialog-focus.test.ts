@@ -11,7 +11,6 @@ import {
   termInput,
 } from './app-harness';
 import { setLocale, ui } from '../src/i18n';
-import { STORAGE_KEY } from '../src/ui/progress';
 
 vi.mock('../src/ui/confetti', () => ({
   launchConfetti: vi.fn(() => ({ stop: vi.fn() })),
@@ -30,10 +29,6 @@ afterEach(() => {
   setLocale('en');
   document.body.innerHTML = '';
 });
-
-function storedProgress(): Record<string, { solved: boolean; bestCommands?: number }> {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{"progress":{}}').progress;
-}
 
 describe('focus after dismissing a dialog with its own button', () => {
   it('returns to the prompt after cancelling the solution dialog', () => {
