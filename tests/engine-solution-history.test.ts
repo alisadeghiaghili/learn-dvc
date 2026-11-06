@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { executeCommand } from '../src/engine/commands';
 import { solutionProgress } from '../src/engine/solution';
 import { emptyState, makeFile } from '../src/engine/state';
 import type { RepoState } from '../src/engine/types';
@@ -24,8 +23,8 @@ describe('a less specific command must not credit a more specific solution step'
   });
 
   it('a plain `dvc exp run` does not credit `dvc exp run -S lr=0.5`', () => {
-    const s = executeCommand(project(), 'dvc exp run').state;
-    expect(s.commandHistory).toContain('dvc exp run');
+    const s = project();
+    s.commandHistory = ['dvc exp run'];
     expect(done(s, 'dvc exp run -S lr=0.5')).toBe(false);
   });
 

@@ -61,7 +61,9 @@ function matchSolutionCommand(historyCmd: string, solutionCmd: string): boolean 
   const h = normalizeWs(historyCmd);
   const s = normalizeWs(solutionCmd);
   if (h === s) return true;
-  if (h.startsWith(`${s} `) || s.startsWith(`${h} `)) return true;
+  // A longer history command covers a shorter solution command, never the other way round:
+  // `dvc exp run` does not do what `dvc exp run -S lr=0.5` asks for.
+  if (h.startsWith(`${s} `)) return true;
 
   if (/^git\s+checkout\b/i.test(s) && /^git\s+checkout\b/i.test(h)) {
     const sRef = parseArgs(s)[2] ?? '';
