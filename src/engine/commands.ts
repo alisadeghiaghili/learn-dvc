@@ -233,6 +233,14 @@ function runDvcLive(state: RepoState, cmd: string): string[] {
   ];
 }
 
+/** Pipeline outputs that a stage declares but that are not in the workspace (fresh clone, deleted file). */
+function missingOuts(state: RepoState, stage: PipelineStage): string[] {
+  return stage.outs.filter((o) => {
+    const f = state.files[o];
+    return !!f && !f.present;
+  });
+}
+
 function reproStage(state: RepoState, stage: PipelineStage): string[] {
   const logs: string[] = [];
   if (stage.frozen) {
@@ -255,7 +263,14 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
   }
 
   const sig = stageRunSig(stage, state);
-  if (stage.lastRunSig === sig || state.runCache.includes(sig)) {
+  // the run cache only helps when the outputs it points at can be checked out from the local cache
+  const lost = missingOuts(state, stage);
+  const restorable = lost.every((o) => state.cache.includes(state.files[o]!.contentId));
+  if ((stage.lastRunSig === sig || state.runCache.includes(sig)) && restorable) {
+    if (lost.length) {
+      for (const o of lost) state.files[o]!.present = true;
+      logs.push(`Stage '${stage.name}' is cached - skipping run, checking out outputs`);
+    }
     logs.push(`Stage '${stage.name}' restored from run cache (same inputs/params) — skip work.`);
     stage.upToDate = true;
     stage.stale = undefined;
@@ -498,7 +513,18 @@ function targetFiles(state: RepoState, targets: string[]): { files: WorkspaceFil
 function pipelineStatusLines(state: RepoState): string[] {
   const out: string[] = [];
   for (const s of state.pipeline) {
-    if (s.frozen || s.upToDate) continue;
+    if (s.frozen) continue;
+    if (s.upToDate) {
+      // locked and current, but the outputs are not in the workspace (fresh clone / deleted file)
+      const lost = missingOuts(state, s);
+      if (lost.length) {
+        out.push(`${s.name}:`, '\tchanged outs:');
+        for (const o of lost) {
+          out.push(`\t\t${state.cache.includes(state.files[o]!.contentId) ? 'deleted:           ' : 'not in cache:       '}${o}`);
+        }
+      }
+      continue;
+    }
     out.push(`${s.name}:`);
     const st = s.stale;
     if (st && (st.deps.length || st.params.length)) {
@@ -2018,28 +2044,69 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     const err = requireInit(state);
     if (err) return { state, result: err };
     if (!state.pipeline.length) return { state, result: fail('ERROR: no stages to reproduce. Define one with `dvc stage add`.') };
-    const target = args[1];
+    const rp = parseArgv(args.slice(1));
+    const pull = rp.has('--pull');
+    const allowMissing = rp.has('--allow-missing');
+    const target = rp.pos[0];
     const logs: string[] = [];
+
+    // which stages are in scope, in pipeline order
+    let scope: PipelineStage[];
     if (target) {
-      const stage = state.pipeline.find((s) => s.name === target);
-      if (!stage) return { state, result: fail(`ERROR: stage '${target}' not found.`) };
-      for (const name of runPipelineFrom(state, target)) {
-        const s = state.pipeline.find((x) => x.name === name);
-        if (!s) continue;
-        if (s.upToDate) {
-          logs.push(`Stage '${s.name}' didn't change, skipping.`);
-          continue;
-        }
-        logs.push(...reproStage(state, s));
+      // a matrix/foreach group name (`train`) stands for every generated stage `train@...`
+      const roots = state.pipeline.some((s) => s.name === target)
+        ? [target]
+        : state.pipeline.filter((s) => s.name.startsWith(`${target}@`)).map((s) => s.name);
+      if (!roots.length) return { state, result: fail(`ERROR: stage '${target}' not found.`) };
+      const wanted = new Set(roots.flatMap((r) => runPipelineFrom(state, r)));
+      scope = state.pipeline.filter((s) => wanted.has(s.name));
+      // keep dependency order for a single chain
+      if (roots.length === 1) {
+        scope = runPipelineFrom(state, roots[0]!).flatMap((n) => state.pipeline.find((x) => x.name === n) ?? []);
       }
     } else {
-      for (const s of state.pipeline) {
-        if (s.upToDate) {
-          logs.push(`Stage '${s.name}' didn't change, skipping.`);
+      scope = [...state.pipeline];
+    }
+
+    // stages whose lock is current but whose outputs are not in the workspace (fresh clone)
+    const gone = (s: PipelineStage) => (s.upToDate && !s.frozen ? missingOuts(state, s) : []);
+    let remoteName: string | undefined;
+    if (pull && !allowMissing && scope.some((s) => gone(s).length)) {
+      const rr = resolveRemote(state, undefined, 'pull missing outputs for repro --pull');
+      if ('error' in rr) return { state, result: fail(rr.error) };
+      remoteName = rr.name;
+    }
+
+    for (const s of scope) {
+      const lost = gone(s);
+      if (s.upToDate && !lost.length) {
+        logs.push(`Stage '${s.name}' didn't change, skipping.`);
+        continue;
+      }
+      if (lost.length && allowMissing) {
+        logs.push(`Stage '${s.name}' didn't change, skipping (outputs missing locally, --allow-missing).`);
+        continue;
+      }
+      if (lost.length && pull && remoteName) {
+        const store = remoteStore(state, remoteName);
+        const need = lost.filter((o) => !state.cache.includes(state.files[o]!.contentId));
+        if (need.every((o) => store.includes(state.files[o]!.contentId))) {
+          logs.push(`Pulling data for stage '${s.name}'`);
+          for (const o of need) {
+            const id = state.files[o]!.contentId;
+            addCache(state, id);
+            logs.push(`  pulled ${o} (${shortMd5(id)}…) ← ${remoteName}`);
+          }
+          for (const o of lost) {
+            state.files[o]!.present = true;
+            if (!state.generated.includes(o)) state.generated.push(o);
+          }
+          logs.push(`Stage '${s.name}' didn't change, skipping (outputs pulled from remote '${remoteName}', not re-run).`);
           continue;
         }
-        logs.push(...reproStage(state, s));
+        logs.push(`Unable to pull data for stage '${s.name}': remote '${remoteName}' does not hold its outputs. Running it instead.`);
       }
+      logs.push(...reproStage(state, s));
     }
     writeLock(state);
     return finish(state, ok(logs.join('\n')));
