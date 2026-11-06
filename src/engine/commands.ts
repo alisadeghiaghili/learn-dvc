@@ -706,6 +706,103 @@ function recordExperiment(state: RepoState, name?: string): ExperimentRun {
   return run;
 }
 
+// ── .dvc/config, shared cache ────────────────────────────────────────────────
+
+const CACHE_LINK_TYPES = ['reflink', 'hardlink', 'symlink', 'copy'];
+
+/** Mirrors dvc/config_schema.py: cache.type is a list of link types, cache.shared accepts only `group`. */
+function validateConfigValue(key: string, value: string): string | null {
+  const k = key.toLowerCase();
+  if (k === 'cache.type') {
+    const bad = value.split(',').map((t) => t.trim()).filter((t) => !CACHE_LINK_TYPES.includes(t));
+    if (bad.length) {
+      return [
+        `ERROR: configuration error - config file error: Unsupported cache type(s): ${bad.join(', ')}`,
+        `cache.type takes a comma-separated list of: ${CACHE_LINK_TYPES.join(', ')} (DVC tries them in order).`,
+      ].join('\n');
+    }
+  }
+  if (k === 'cache.shared' && value.toLowerCase() !== 'group') {
+    return [
+      `ERROR: configuration error - config file error: expected one of group for cache.shared, got '${value}'`,
+      'The only supported value is `group`: it makes the cache group-writable for a shared team cache.',
+    ].join('\n');
+  }
+  return null;
+}
+
+function readConfigValue(state: RepoState, key: string): string | undefined {
+  return state.dvcConfigLocal?.[key] ?? state.dvcConfig?.[key];
+}
+
+/** Record a changed `.dvc/config` so Git sees a modification (the committed content becomes the baseline). */
+function touchConfigFile(state: RepoState, local: boolean): void {
+  const path = local ? '.dvc/config.local' : '.dvc/config';
+  let f = state.files[path];
+  if (!f) {
+    f = makeFile(path, 'meta', { gitignored: local });
+    state.files[path] = f;
+  }
+  if (local) return;
+  for (let i = state.gitCommits.length - 1; i >= 0; i--) {
+    const c = state.gitCommits[i]!;
+    if (c.files?.includes(path)) {
+      c.blobs ??= {};
+      if (c.blobs[path] === undefined) c.blobs[path] = f.contentId;
+      break;
+    }
+  }
+  f.contentId = fakeMd5(`config:${JSON.stringify(state.dvcConfig ?? {})}:${JSON.stringify(state.remotes)}`);
+}
+
+function writeConfigValue(state: RepoState, key: string, value: string, local: boolean): void {
+  if (local) (state.dvcConfigLocal ??= {})[key] = value;
+  else (state.dvcConfig ??= {})[key] = value;
+  touchConfigFile(state, local);
+}
+
+function unsetConfigValue(state: RepoState, key: string, local: boolean): boolean {
+  const store = local ? state.dvcConfigLocal : state.dvcConfig;
+  if (!store || !(key in store)) return false;
+  delete store[key];
+  touchConfigFile(state, local);
+  return true;
+}
+
+/** INI text of `.dvc/config` (or `.dvc/config.local`) in the layout DVC writes. */
+function renderConfigIni(state: RepoState, local: boolean): string {
+  const sections = new Map<string, [string, string][]>();
+  const add = (section: string, opt: string, value: string) => {
+    if (!sections.has(section)) sections.set(section, []);
+    sections.get(section)!.push([opt, value]);
+  };
+  const conf = (local ? state.dvcConfigLocal : state.dvcConfig) ?? {};
+  if (!local) {
+    const def = state.remotes.find((r) => r.isDefault);
+    if (def) add('core', 'remote', def.name);
+  }
+  for (const [key, value] of Object.entries(conf).sort(([a], [b]) => a.localeCompare(b))) {
+    const parts = key.split('.');
+    if (parts[0] === 'remote' && parts.length >= 3) add(`'remote "${parts[1]}"'`, parts.slice(2).join('.'), value);
+    else add(parts[0]!, parts.slice(1).join('.'), value);
+  }
+  if (!local) {
+    for (const r of state.remotes) {
+      const name = `'remote "${r.name}"'`;
+      const existing = sections.get(name) ?? [];
+      if (!existing.some(([o]) => o === 'url')) existing.unshift(['url', r.url]);
+      sections.set(name, existing);
+    }
+  }
+  const rank = (x: string) => (x === 'core' ? 0 : x.startsWith("'remote") ? 1 : 2);
+  const lines: string[] = [];
+  for (const sec of [...sections.keys()].sort((a, b) => rank(a) - rank(b))) {
+    lines.push(`[${sec}]`);
+    for (const [o, v] of sections.get(sec)!) lines.push(`    ${o} = ${v}`);
+  }
+  return lines.join('\n');
+}
+
 const EXP_ADJECTIVES = [
   'agile', 'bland', 'brisk', 'calm', 'dusty', 'eager', 'fancy', 'hardy', 'jolly', 'keen', 'lucid',
   'mossy', 'noble', 'plush', 'quiet', 'rapid', 'sunny', 'tidy', 'vivid', 'witty',
@@ -857,6 +954,10 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           ].join('\n'),
         ),
       };
+    }
+    if (path === '.dvc/config' && state.initialized) return { state, result: ok(renderConfigIni(state, false)) };
+    if (path === '.dvc/config.local' && state.files['.dvc/config.local']) {
+      return { state, result: ok(renderConfigIni(state, true)) };
     }
     if (path === 'dvc.yaml' && state.dvcYaml) return { state, result: ok(state.dvcYaml) };
     if (path === 'dvc.yaml' && state.pipeline.length) {
@@ -1106,7 +1207,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           for (const meta of ['.dvc/config', '.dvc/.gitignore']) {
             if (!state.files[meta]) state.files[meta] = makeFile(meta, 'meta');
             const committed = state.gitCommits.some((c) => c.files?.includes(meta));
-            if (!committed) stage(meta);
+            if (!committed || isChanged(state.files[meta]!)) stage(meta);
           }
           continue;
         }
@@ -1533,26 +1634,47 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   }
 
   if (sub === 'config') {
-    const isLocal = args.includes('--local');
-    const clean = args.slice(1).filter((a) => !a.startsWith('-'));
-    if (!clean.length) {
+    const cp = parseArgv(args.slice(1));
+    const isLocal = cp.has('--local');
+    const clean = cp.pos;
+    if (cp.has('-l', '--list') || !clean.length) {
       const lines = ['core.analytics = false'];
       for (const r of state.remotes) {
         lines.push(`remote.${r.name}.url = ${r.url}`);
       }
+      for (const [k, v] of Object.entries(state.dvcConfig ?? {})) lines.push(`${k} = ${v}`);
       if (state.files['.dvc/config.local']) {
         lines.push('[local] remote.myremote.secret_access_key = ***');
       }
+      for (const [k, v] of Object.entries(state.dvcConfigLocal ?? {})) lines.push(`[local] ${k} = ${v}`);
       return { state, result: ok(lines.join('\n')) };
     }
-    const key = clean[0];
-    const val = clean[1] ?? 'true';
+    const key = clean[0]!;
     const secretKeys = ['secret', 'key', 'password', 'token', 'credential'];
-    const isSecret = secretKeys.some((s) => key.toLowerCase().includes(s));
-    if (isLocal) {
-      if (!state.files['.dvc/config.local']) {
-        state.files['.dvc/config.local'] = makeFile('.dvc/config.local', 'meta', { gitignored: true });
+    const isSecret = secretKeys.some((x) => key.toLowerCase().includes(x));
+    if (cp.has('-u', '--unset')) {
+      const removed = unsetConfigValue(state, key, isLocal);
+      return removed
+        ? finish(state, ok(`Unset ${key} in ${isLocal ? '.dvc/config.local' : '.dvc/config'}.`))
+        : { state, result: fail(`ERROR: configuration error - config file error: option '${key}' does not exist in ${isLocal ? '.dvc/config.local' : '.dvc/config'}`) };
+    }
+    if (clean.length === 1) {
+      // read-back: `dvc config cache.type` prints the value, nothing is written
+      const value = readConfigValue(state, key);
+      if (value === undefined) {
+        const [section, ...rest] = key.split('.');
+        return {
+          state,
+          result: fail(`ERROR: configuration error - config file error: option '${rest.join('.')}' doesn't exist in section '${section}'`),
+        };
       }
+      return { state, result: ok(isSecret && state.dvcConfigLocal?.[key] !== undefined ? '***' : value) };
+    }
+    const val = clean[1]!;
+    const invalid = validateConfigValue(key, val);
+    if (invalid) return { state, result: fail(invalid) };
+    writeConfigValue(state, key, val, isLocal);
+    if (isLocal) {
       return finish(
         state,
         ok(
@@ -1569,6 +1691,39 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       );
     }
     return finish(state, ok(`Set ${key}=${val} in .dvc/config (shared via Git).`));
+  }
+
+  if (sub === 'cache') {
+    const err = requireInit(state);
+    if (err) return { state, result: err };
+    if (args[1] !== 'dir') {
+      return {
+        state,
+        result: fail(`ERROR: unknown command 'dvc cache ${args[1] ?? ''}'. This simulator has \`dvc cache dir [path]\` (also set the link type with \`dvc config cache.type\`).`),
+      };
+    }
+    const dp = parseArgv(args.slice(2));
+    const local = dp.has('--local');
+    const file = local ? '.dvc/config.local' : '.dvc/config';
+    if (dp.has('-u', '--unset')) {
+      unsetConfigValue(state, 'cache.dir', local);
+      return finish(state, ok(`Unset cache.dir in ${file}: the cache is back at .dvc/cache.`));
+    }
+    const dir = dp.pos[0];
+    if (!dir) return { state, result: ok(readConfigValue(state, 'cache.dir') ?? '.dvc/cache') };
+    writeConfigValue(state, 'cache.dir', dir, local);
+    return finish(
+      state,
+      ok(
+        [
+          `Cache directory is now '${dir}' (cache.dir in ${file}).`,
+          'Objects already in the old cache are not moved: copy them over, or let teammates re-fill the new directory with `dvc pull`.',
+          local
+            ? 'Stored in .dvc/config.local: only this machine uses the path, Git never sees it.'
+            : 'Stored in .dvc/config: commit it so every clone uses the same cache location.',
+        ].join('\n'),
+      ),
+    );
   }
 
   if (sub === 'freeze' || sub === 'unfreeze') {
@@ -1708,11 +1863,26 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'checkout') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const path = args[1];
+    const co = parseArgv(args.slice(1));
+    const path = co.pos[0];
     const targets = path
       ? [path]
       : Object.values(state.files).filter((f) => f.tracked).map((f) => f.path);
     const lines: string[] = [];
+    if (co.has('--relink')) {
+      const linkType = readConfigValue(state, 'cache.type') ?? 'reflink,copy';
+      const relinkable = targets.filter((p) => {
+        const f = state.files[p];
+        return !!f?.tracked && !!f.pointerMd5 && f.present && state.cache.includes(f.pointerMd5);
+      });
+      lines.push(
+        `Relinking ${relinkable.length} tracked file(s) from the cache using cache.type=${linkType} (first link type the filesystem supports wins).`,
+        ...relinkable.map((p) => `  relinked ${p}`),
+      );
+      if (readConfigValue(state, 'cache.shared') === 'group') {
+        lines.push('cache.shared=group: new cache files are group-writable, so teammates in the same group can add to it.');
+      }
+    }
     for (const p of targets) {
       const f = state.files[p];
       if (!f || !f.tracked || !f.pointerMd5) {
