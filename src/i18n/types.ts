@@ -97,6 +97,8 @@ export interface UiCopy {
   difficultyOf: (n: number) => string;
   solvedLabel: string;
   levelsTitle: string;
+  /** Display title per level series id; must cover every `series` used by allLevels. */
+  seriesTitles: Record<string, string>;
   aboutTitle: string;
   aboutPublished: string;
   aboutBoard: string;

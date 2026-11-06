@@ -443,7 +443,7 @@ export class App {
             </button>`;
           })
           .join('');
-        return `<div class="series-block"><h3>${escapeHtml(s.title)}</h3><div class="level-list">${rows}</div></div>`;
+        return `<div class="series-block"><h3>${escapeHtml(ui().seriesTitles[s.id] ?? s.title)}</h3><div class="level-list">${rows}</div></div>`;
       })
       .join('');
 

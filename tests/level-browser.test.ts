@@ -4,8 +4,6 @@ import { en } from '../src/i18n/en';
 import { de } from '../src/i18n/de';
 import { fa } from '../src/i18n/fa';
 
-type WithSeriesTitles = { seriesTitles?: Record<string, string> };
-
 const locales = { en, de, fa } as const;
 
 function firstAppearanceOrder(): string[] {
@@ -63,29 +61,25 @@ describe('level browser series titles', () => {
 
   for (const [code, catalog] of Object.entries(locales)) {
     describe(code, () => {
-      const titles = (catalog as unknown as WithSeriesTitles).seriesTitles;
-
-      it('defines a title map', () => {
-        expect(titles, `${code} has no seriesTitles`).toBeTruthy();
-      });
+      const titles = catalog.ui.seriesTitles;
 
       it('has a non-empty title for every series that is not the raw id', () => {
         for (const id of ids) {
-          const title = titles?.[id];
-          expect(title?.trim().length ?? 0, `${code} title for "${id}"`).toBeGreaterThan(0);
+          const title = titles[id];
+          expect(title.trim().length, `${code} title for "${id}"`).toBeGreaterThan(0);
           expect(title, `${code} title for "${id}" must not be the raw id`).not.toBe(id);
         }
       });
 
       it('gives each series a distinct title', () => {
-        const values = ids.map((id) => titles?.[id]);
+        const values = ids.map((id) => titles[id]);
         expect(new Set(values).size).toBe(ids.length);
       });
     });
   }
 
   it('uses Persian letters, not Arabic ones, in fa titles', () => {
-    const titles = (fa as unknown as WithSeriesTitles).seriesTitles ?? {};
+    const titles = fa.ui.seriesTitles;
     for (const [id, t] of Object.entries(titles)) {
       expect(t, `fa title for "${id}"`).not.toMatch(/[يك]/);
     }

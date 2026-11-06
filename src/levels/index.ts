@@ -1189,25 +1189,22 @@ export function getNextLevel(id: string): LevelDef | undefined {
   return i >= 0 ? allLevels[i + 1] : undefined;
 }
 
+/**
+ * Groups levels by series, in order of each series' first appearance, so the
+ * level browser follows the real learning path. `title` is the English
+ * fallback taken from the first level; the UI prefers the localized map.
+ */
 export function seriesOf(): { id: string; title: string; levels: LevelDef[] }[] {
-  const order = ['basics', 'remote', 'pipe', 'exp', 'meta', 'cmp', 'camp', 'reg', 'prod', 'field'];
-  const titles: Record<string, string> = {
-    basics: 'Basics',
-    remote: 'Remotes',
-    pipe: 'Pipelines',
-    exp: 'Experiments',
-    meta: 'Metafiles',
-    cmp: 'Compare',
-    camp: 'Camp / DVCLive',
-    reg: 'Registry & CI',
-    prod: 'Production habits',
-    field: 'Field practice',
-  };
-  return order.map((id) => ({
-    id,
-    title: titles[id],
-    levels: allLevels.filter((l) => l.series === id),
-  }));
+  const groups = new Map<string, { id: string; title: string; levels: LevelDef[] }>();
+  for (const l of allLevels) {
+    let g = groups.get(l.series);
+    if (!g) {
+      g = { id: l.series, title: l.seriesTitle, levels: [] };
+      groups.set(l.series, g);
+    }
+    g.levels.push(l);
+  }
+  return [...groups.values()];
 }
 
 /** What an independent DVC user should be able to do after this course. */
