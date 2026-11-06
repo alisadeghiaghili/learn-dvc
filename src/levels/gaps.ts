@@ -298,13 +298,14 @@ export const compareLevels: LevelDef[] = [
     name: 'exp diff two runs',
     difficulty: 4,
     par: 4,
-    hint: 'dvc exp run -S train.n_est=50; dvc exp run -S train.n_est=100; dvc exp diff',
+    hint:
+      'dvc exp run -n n50 -S train.n_est=50; dvc exp run -n n100 -S train.n_est=100; dvc exp diff n50 n100',
     objective:
       'Run two experiments with different nested hyperparameters and compare them with `dvc exp diff`.',
     learning: [
       'Two runs + diff > one run and a guess',
       'Nested keys work with -S (train.n_est=…)',
-      'exp diff is the decision artifact',
+      'exp diff with no arguments compares workspace and HEAD; name two experiments to compare them',
     ],
     fieldNotes: [
       'Keep sweeps single-variable when possible',
@@ -314,12 +315,12 @@ export const compareLevels: LevelDef[] = [
       {
         title: 'Sweep then diff',
         markdown:
-          '```\ndvc exp run -S train.n_est=50\ndvc exp run -S train.n_est=100\ndvc exp diff\n```',
+          '```\ndvc exp run -n n50 -S train.n_est=50\ndvc exp run -n n100 -S train.n_est=100\ndvc exp diff n50 n100\n```',
       },
       {
         title: 'Nested -S keys',
         markdown:
-          'Note `train.n_est=…` — the same dotted key as `params.yaml` / stage `-p`.\n\n`dvc exp diff` prints the param and metric deltas between the last two experiments.',
+          'Note `train.n_est=…` — the same dotted key as `params.yaml` / stage `-p`.\n\n`dvc exp diff` with no arguments compares the **workspace against HEAD**. Give it two experiment names and it prints the param and metric deltas between exactly those two.',
       },
     ],
     startState: (() => {
@@ -343,9 +344,9 @@ export const compareLevels: LevelDef[] = [
       checks: [{ kind: 'experimentCount', min: 2 }],
     },
     solution: [
-      'dvc exp run -S train.n_est=50',
-      'dvc exp run -S train.n_est=100',
-      'dvc exp diff',
+      'dvc exp run -n n50 -S train.n_est=50',
+      'dvc exp run -n n100 -S train.n_est=100',
+      'dvc exp diff n50 n100',
     ],
   },
 ];

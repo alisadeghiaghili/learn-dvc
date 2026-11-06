@@ -54,54 +54,101 @@ function courseRepo(): RepoState {
   return s;
 }
 
+/** courseRepo whose src/train.py already uses DVCLive (`Live()` / `log_metric`). */
+function liveCourseRepo(): RepoState {
+  const s = courseRepo();
+  s.live.instrumented = true;
+  s.pipeline[0]!.metrics = ['dvclive/metrics.json'];
+  return s;
+}
+
+/** A dvc.yaml with a dictionary `foreach` that expands to featurize@a and featurize@b. */
+function foreachCourseRepo(): RepoState {
+  const s = courseRepo();
+  s.pipeline = ['a', 'b'].map((key) => ({
+    name: `featurize@${key}`,
+    deps: ['src/evaluate.py'],
+    outs: [`data/features/${key}.pkl`],
+    cmd: `python src/evaluate.py ${key} ${key === 'a' ? 100 : 500}`,
+    params: [],
+    metrics: [],
+    frozen: false,
+    upToDate: false,
+  }));
+  s.dvcYaml = [
+    'stages:',
+    '  featurize:',
+    '    foreach:',
+    '      a:',
+    '        max_features: 100',
+    '      b:',
+    '        max_features: 500',
+    '    do:',
+    '      cmd: python src/evaluate.py ${key} ${item.max_features}',
+    '      deps:',
+    '        - src/evaluate.py',
+    '      outs:',
+    '        - data/features/${key}.pkl',
+  ].join('\n');
+  return s;
+}
+
+/** The registry data is not in the project yet: the learner imports it (like the Get Started tutorial). */
+function importCourseRepo(): RepoState {
+  const s = courseRepo();
+  delete s.files['data/data.xml'];
+  delete s.files['data/data.xml.dvc'];
+  s.cache = [];
+  s.gitCommits = s.gitCommits.filter((c) => c.message !== 'Add raw data');
+  return s;
+}
+
 /** Targets a data-camp / official-get-started level DVC learner must hit. */
 export const campLevels: LevelDef[] = [
   {
     id: 'camp-1',
     series: 'camp',
     seriesTitle: 'DVCLive',
-    name: 'Instrument with DVCLive',
+    name: 'DVCLive: log from the training script',
     difficulty: 4,
-    par: 5,
-    hint: 'dvc live start; dvc live log param train.lr=0.05; dvc live log metric acc=0.92; dvc live log plot roc.json; dvc live report',
+    par: 4,
+    hint: 'cat src/train.py; python src/train.py; ls; dvc plots show',
     objective:
-      'Exercise the **DVCLive** surface courses teach: Live start, log_param, log_metric, log_plot, make report.',
+      'See how **DVCLive** works: read the logging calls inside `src/train.py`, run the script, and look at the metrics and plots it writes.',
     learning: [
-      'DVCLive lives in training code (not a separate notebook hack)',
-      'log_metric → scalars for metrics show/exp',
-      'log_plot → series for plots show/diff templates',
-      'make_report → human HTML',
+      'DVCLive is a Python library imported by the training script (`from dvclive import Live`) — not a dvc subcommand',
+      'live.log_metric → scalars in dvclive/metrics.json; live.next_step() → one more point on the plots',
+      'log_param, log_plot, log_image and make_report add params, custom plots, images and an HTML report',
     ],
     fieldNotes: [
       'Replace print(loss) with live.log_metric — then plots/exp work for free',
-      'Commit dvc.yaml metrics/plots hooks DVCLive generates',
+      'Commit the dvc.yaml metrics/plots entries that point at dvclive/',
     ],
     startDialog: [
       {
         title: 'What every DVC course adds after pipelines',
         markdown:
-          'Official Get Started **Metrics/Plots** chapter is powered by DVCLive in `evaluate.py`.\n\n```\ndvc live start\ndvc live log param train.lr=0.05\ndvc live log metric acc=0.92\ndvc live log metric loss=0.21\ndvc live log image confusion.png\ndvc live log plot roc.json\ndvc live report\n```\n\nHere we simulate the API so you learn **what to call** and **why**.',
+          'Official Get Started **Metrics/Plots** chapter is powered by DVCLive inside the training code:\n\n```\nfrom dvclive import Live\n\nwith Live() as live:\n    live.log_param("lr", 0.05)\n    for epoch in range(5):\n        ...\n        live.log_metric("acc", acc)\n        live.next_step()\n```\n\nThere is no `dvc live` command. `cat src/train.py` here shows the instrumented script; `python src/train.py` runs it.',
       },
       {
         title: 'Mental map',
         markdown:
-          '| API | Artifact |\n| --- | --- |\n| log_param | params.yaml keys |\n| log_metric | metrics.json scalars |\n| log_plot | plots series / JSON |\n| log_image | report images |\n| make_report | HTML dashboard |\n\nWithout this layer, `exp show` and `plots diff` stay empty in real projects.',
+          '| Python call | Artifact |\n| --- | --- |\n| `log_param` | `dvclive/params.yaml` |\n| `log_metric` | `dvclive/metrics.json` + `plots/metrics/*.tsv` |\n| `log_plot` | custom plot data |\n| `log_image` | images for the report |\n| `make_report` | HTML dashboard |\n\nWithout this layer, `exp show` and `plots diff` stay empty in real projects.',
       },
     ],
-    startState: courseRepo(),
+    startState: liveCourseRepo(),
     goal: {
       kind: 'allOf',
       checks: [
         { kind: 'liveMetricLogged', name: 'acc' },
-        { kind: 'runCacheHits', min: 0 },
+        { kind: 'workspaceHas', paths: ['dvclive/metrics.json'] },
       ],
     },
     solution: [
-      'dvc live start',
-      'dvc live log param train.lr=0.05',
-      'dvc live log metric acc=0.92',
-      'dvc live log plot roc.json',
-      'dvc live report',
+      'cat src/train.py',
+      'python src/train.py',
+      'ls',
+      'dvc plots show',
     ],
   },
   {
@@ -192,56 +239,60 @@ export const campLevels: LevelDef[] = [
     id: 'camp-4',
     series: 'camp',
     seriesTitle: 'Pipeline depth',
-    name: 'foreach stage + advanced flags',
+    name: 'foreach stages in dvc.yaml',
     difficulty: 5,
     par: 4,
-    hint: 'dvc stage add -n featurize --foreach a,b -p featurize.max_features -d src/evaluate.py -o data/features python src/evaluate.py; dvc stage list',
+    hint: 'cat dvc.yaml; dvc stage list; dvc repro; dvc dag',
     objective:
-      'Create a **foreach** stage (matrix expansion) and recognize advanced stage flags courses mention: `--wdir`, `--always-changed`, `--outs-no-cache`.',
+      'Read a `dvc.yaml` whose **foreach** expands one definition over a dictionary, reproduce every stage it produces and read the DAG.',
     learning: [
-      'foreach expands one definition into many stages (featurize[a], featurize[b])',
-      'always_changed = never run-cache skip',
-      'no-cache outs / external paths = data lives outside DVC cache',
+      'foreach expands one definition into many stages (featurize@a, featurize@b) — it is written in dvc.yaml, not via dvc stage add',
+      '${key} and ${item.field} fill the template from each entry',
+      'Each stage the template produces has its own outs and invalidation; one DAG shows them all',
     ],
-    fieldNotes: [
-      'foreach beats copy-paste YAML for per-model / per-region jobs',
-    ],
+    fieldNotes: ['foreach beats copy-paste YAML for per-model / per-region jobs'],
     startDialog: [
       {
         title: 'The next 20% of pipelines',
         markdown:
-          '```\ndvc stage add -n featurize --foreach a,b \\\n  -p featurize.max_features \\\n  -d src/evaluate.py -o data/features \\\n  python src/evaluate.py\ndvc stage list\n```\n\nAlso know: `--wdir`, `--always-changed`, `-O` / `--outs-no-cache`, `s3://…` external outs.',
+          '`foreach` (and `matrix`) live in `dvc.yaml` only. Run `cat dvc.yaml` to read one:\n\n```\nfeaturize:\n  foreach:\n    a: {max_features: 100}\n    b: {max_features: 500}\n  do:\n    cmd: python src/evaluate.py ${key} ${item.max_features}\n    outs: [data/features/${key}.pkl]\n```\n\nDVC expands it to `featurize@a` and `featurize@b`.',
       },
       {
-        title: 'Flags cheat-sheet',
+        title: 'Stage options worth knowing',
         markdown:
-          '| Flag | Meaning |\n| --- | --- |\n| --foreach a,b | matrix stages |\n| --wdir src | run from another dir |\n| --always-changed | skip cache |\n| --outs-no-cache | do not cache out |\n| s3://… deps/outs | external path |',
+          '| Option | Meaning |\n| --- | --- |\n| `foreach` / `matrix` | generate stages from a list or grid |\n| `wdir` | run from another directory |\n| `always_changed: true` | never skipped by repro |\n| `outs: [x: {cache: false}]` | `-O`, keep out of the cache |\n\nOnly the last three can also be set with `dvc stage add` flags.',
       },
     ],
-    startState: courseRepo(),
+    startState: foreachCourseRepo(),
     goal: {
       kind: 'allOf',
-      checks: [{ kind: 'stageExists', name: 'featurize' }],
+      checks: [
+        { kind: 'stageUpToDate', name: 'featurize@a' },
+        { kind: 'stageUpToDate', name: 'featurize@b' },
+      ],
     },
     solution: [
-      'dvc stage add -n featurize --foreach a,b -p featurize.max_features -d src/evaluate.py -o data/features python src/evaluate.py',
+      'cat dvc.yaml',
       'dvc stage list',
+      'dvc repro',
+      'dvc dag',
     ],
   },
   {
     id: 'camp-5',
     series: 'camp',
     seriesTitle: 'Collab & CI',
-    name: '.dvcignore + update + CML comment',
+    name: '.dvcignore + import/update + CML comment',
     difficulty: 4,
-    par: 5,
-    hint: 'edit .dvcignore scratch/*; dvc update data/data.xml.dvc; dvc repro; dvc cml "accuracy improved"',
+    par: 7,
+    hint:
+      'edit .dvcignore scratch/*; dvc import <url> get-started/data.xml -o data/data.xml; dvc update data/data.xml.dvc; dvc repro; dvc metrics show --md > report.md; cml comment create report.md',
     objective:
-      'Do the collab trio courses drill: **`.dvcignore`**, **`dvc update`** (imports), and a **CML-style PR comment**.',
+      'Do the collab trio courses drill: **`.dvcignore`**, **`dvc import` + `dvc update`**, and a **CML PR comment** from the separate `cml` CLI.',
     learning: [
       '.dvcignore speeds DVC on huge noisy trees',
-      'dvc update refreshes imported registry files',
-      'CML posts metrics to PRs: clone → pull → repro → cml comment',
+      'dvc update only works on .dvc files created by dvc import / import-url',
+      'CML posts a Markdown report to PRs: clone → pull → repro → cml comment create',
     ],
     fieldNotes: [
       'CI without dvc pull is a lie about reproducibility',
@@ -251,7 +302,7 @@ export const campLevels: LevelDef[] = [
       {
         title: 'Team-day checklist',
         markdown:
-          '```\nedit .dvcignore scratch/*\ndvc update data/data.xml.dvc\ndvc repro\ndvc cml \"accuracy improved\"\n```\n\nThen `dvc api` shows how apps read data without a full checkout.',
+          '```\nedit .dvcignore scratch/*\ndvc import <registry-url> get-started/data.xml -o data/data.xml\ndvc update data/data.xml.dvc\ndvc repro\ndvc metrics show --md > report.md\ncml comment create report.md\n```\n\nThe last step uses the separate **CML** tool, not `dvc`. A Python one-liner with `dvc.api` shows how apps read the same data without a checkout.',
       },
       {
         title: 'Git-LFS vs DVC (exam favorite)',
@@ -259,7 +310,7 @@ export const campLevels: LevelDef[] = [
           '- **Git-LFS**: large blobs via Git hosts\n- **DVC**: Git keeps pointers/YAML; remotes keep objects; plus repro/exp\n- ML wants pipelines + experiments → DVC; generic big binaries may be enough with LFS',
       },
     ],
-    startState: courseRepo(),
+    startState: importCourseRepo(),
     goal: {
       kind: 'allOf',
       checks: [
@@ -269,10 +320,12 @@ export const campLevels: LevelDef[] = [
     },
     solution: [
       'edit .dvcignore scratch/*',
+      'dvc import https://github.com/iterative/dataset-registry get-started/data.xml -o data/data.xml',
       'dvc update data/data.xml.dvc',
       'dvc repro',
-      'dvc cml "accuracy improved"',
-      'dvc api',
+      'dvc metrics show --md > report.md',
+      'cml comment create report.md',
+      'python -c "import dvc.api; print(dvc.api.get_url(\'data/data.xml\'))"',
     ],
   },
 ];

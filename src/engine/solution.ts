@@ -341,14 +341,9 @@ function liveStatus(state: RepoState, cmd: string, solution: string[] = [cmd]): 
     return { command: cmd, done: true, note: 'inspect drift (does not block completion)', optional: true };
   }
 
-  if (/^dvc\s+live\b/i.test(cmd) || /^dvc\s+queue\b/i.test(cmd) || /^dvc\s+update\b/i.test(cmd) || /^dvc\s+cml\b/i.test(cmd) || /^dvc\s+api\b/i.test(cmd)) {
+  if (/^dvc\s+queue\b/i.test(cmd) || /^dvc\s+update\b/i.test(cmd)) {
     if (commandInHistory(state, (h) => matchSolutionCommand(h, cmd))) {
       return ok('ran');
-    }
-    if (/^dvc\s+live\s+log\s+metric\s+(\S+)/i.test(cmd)) {
-      const m = cmd.match(/metric\s+([^=\s]+)=/i);
-      const name = m?.[1];
-      if (name && (state.live?.metrics?.[name]?.length ?? 0) > 0) return ok(`live metric ${name}`);
     }
     if (/^dvc\s+queue\s+start/i.test(cmd) || /--run-all/.test(cmd)) {
       return (state.expQueue?.length ?? 0) === 0 && state.experiments.length > 0 ? ok('queue drained') : fail(cmd);

@@ -1,38 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { emptyState } from '../src/engine/state';
 import { executeCommand } from '../src/engine/commands';
 import { solutionComplete, solutionProgress } from '../src/engine/solution';
 import { getLevel, allLevels } from '../src/levels';
 
 describe('solution checklist mirrors goals', () => {
-  it('basics-1 checklist: init → git add → commit', () => {
+  it('basics-1 checklist: init → commit (dvc init stages its own files)', () => {
     const level = getLevel('basics-1');
     expect(level).toBeTruthy();
     expect(level!.solution).toEqual([
       'dvc init',
-      'git add .dvc',
       'git commit -m "Initialize DVC"',
     ]);
 
-    let state = emptyState();
+    let state = structuredClone(level!.startState);
     let steps = solutionProgress(state, level!.solution);
     expect(steps[0].done).toBe(false);
     expect(steps[0].command).toBe('dvc init');
     expect(steps[1].done).toBe(false);
-    expect(steps[1].command).toBe('git add .dvc');
-    expect(steps[2].done).toBe(false);
 
     state = executeCommand(state, 'dvc init').state;
     steps = solutionProgress(state, level!.solution);
     expect(steps[0].done).toBe(true);
     expect(steps[1].done).toBe(false);
-    expect(steps[2].done).toBe(false);
     expect(solutionComplete(state, level!.solution)).toBe(false);
-
-    state = executeCommand(state, 'git add .dvc').state;
-    steps = solutionProgress(state, level!.solution);
-    expect(steps[1].done).toBe(true);
-    expect(steps[2].done).toBe(false);
 
     state = executeCommand(state, 'git commit -m "Initialize DVC"').state;
     steps = solutionProgress(state, level!.solution);

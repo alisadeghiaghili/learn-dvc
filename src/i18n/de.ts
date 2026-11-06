@@ -20,9 +20,9 @@ export const de: Catalog = {
       title: 'dvc init',
       lines: [
         'DVC erweitert Git für Daten; es ersetzt Git nicht.',
-        'Init legt nur lokale Metadaten unter .dvc/ an (config, Ignore-Regeln).',
+        'Es braucht ein Git-Repository (oder --no-scm) und legt nur lokale Metadaten an: .dvc/config, .dvc/.gitignore, .dvcignore.',
         'Noch ist kein Datensatz versioniert — du hast nur den Workflow aktiviert.',
-        'Diese kleinen Dateien musst du mit Git committen, damit das Team dasselbe DVC-Setup hat.',
+        'dvc init hat diese kleinen Dateien bereits gestaged; committe sie, damit das Team dasselbe DVC-Setup hat.',
       ],
     },
     'dvc-add': {
@@ -46,9 +46,9 @@ export const de: Catalog = {
     'dvc-commit': {
       title: 'dvc commit',
       lines: [
-        'Aktualisiert den .dvc-Pointer auf den aktuellen Datei-Hash und stellt sicher, dass das Objekt im Cache liegt.',
-        'Das ist der Daten-Commit. Den Pointer committest du danach weiterhin mit git.',
-        'Ohne dvc commit würde Git einen Pointer speichern, der nicht mehr zu den Daten passt.',
+        'Aktualisiert den .dvc-Pointer (oder dvc.lock) auf den aktuellen Datei-Hash und stellt sicher, dass das Objekt im Cache liegt.',
+        'Das ist der Daten-Commit für direkt geänderte Dateien oder solche mit --no-commit; für eine normal getrackte Datei erledigt dvc add dasselbe.',
+        'Den Pointer committest du danach weiterhin mit git — sonst speichert Git einen Pointer, der nicht mehr zu den Daten passt.',
       ],
     },
     'dvc-remote-add': {
@@ -111,16 +111,17 @@ export const de: Catalog = {
     'dvc-exp-run': {
       title: 'dvc exp run',
       lines: [
-        'Führt die Pipeline im Experimentkontext aus, ohne Branch-Spam.',
+        'Führt die Pipeline als Experiment aus und lässt die Ergebnisse in deinem Workspace.',
         'Params aus -S / params.yaml werden mit Metrics für den Vergleich festgehalten.',
-        'Experiments sind First-Class: list, diff, Gewinner zurück in den Workspace.',
+        'Jeder Lauf liegt unter refs/exps: auflisten, diffen, Gewinner anwenden.',
       ],
     },
     'dvc-exp-apply': {
       title: 'dvc exp apply',
       lines: [
-        'Übernimmt Params/Metrics eines gewählten Experiments in den Workspace.',
-        'So wird aus einem „winning run“ die neue Baseline — ohne Werte neu zu tippen.',
+        'Stellt Params, Metrics und Ausgabedateien eines Experiments im Workspace wieder her.',
+        'Die Stages sind danach aktuell — kein dvc repro nötig.',
+        'Committe params.yaml und dvc.lock, damit der Gewinner die neue Baseline wird.',
       ],
     },
     edit: {
@@ -148,11 +149,11 @@ export const de: Catalog = {
       ],
     },
     'dvc-live': {
-      title: 'dvc live (DVCLive)',
+      title: 'DVCLive (Python-Bibliothek)',
       lines: [
-        'DVCLive instrumentiert Python (Live / log_metric / log_plot / make_report).',
-        'Skalare werden Metrics; Serien Plots; HTML-Report für Menschen.',
-        'Offizielle Kurse sehen die Brücke von Notebook zu exp show/plots hier.',
+        'DVCLive importiert das Trainingsskript: `from dvclive import Live`, dann live.log_metric / log_plot / log_image / make_report.',
+        'Skalare landen in dvclive/metrics.json; jedes live.next_step() fügt den Plots einen Punkt hinzu.',
+        'Trägst du diese Pfade unter metrics: / plots: in dvc.yaml ein, finden exp show / plots show sie.',
       ],
     },
     'exp-queue': {
@@ -165,15 +166,16 @@ export const de: Catalog = {
     'dvc-update': {
       title: 'dvc update',
       lines: [
-        'Aktualisiert einen importierten .dvc-Target auf die neueste Upstream-Registry-Version.',
+        'Aktualisiert ein importiertes .dvc-Target auf die neueste Upstream-Version (oder eine neue --rev).',
+        'Funktioniert nur bei .dvc-Dateien aus dvc import oder dvc import-url; bei selbst per dvc add getrackten Daten führst du dvc add erneut aus.',
         'Danach repro, wenn der Import eine Pipeline-Dep ist.',
       ],
     },
     cml: {
       title: 'CML',
       lines: [
-        'CML kommentiert Metrics/Plots auf GitHub/GitLab-PRs aus der CI.',
-        'CI-Skelett: checkout → dvc pull → dvc repro → cml comment.',
+        'CML postet aus CI Berichte in GitHub/GitLab-PRs. Es ist ein eigenes CLI (`cml comment create report.md`), kein dvc-Unterbefehl.',
+        'CI-Gerüst: checkout → dvc pull → dvc repro → dvc metrics show --md > report.md → cml comment create.',
       ],
     },
     'dvc-freeze': {
@@ -210,9 +212,9 @@ export const de: Catalog = {
     'dvc-gc': {
       title: 'dvc gc',
       lines: [
-        'Entfernt Cache-Objekte ohne Referenz aus Workspace/Git-Refs.',
+        'Entfernt Cache-Objekte außerhalb des Bereichs, den du behältst: -w Workspace, -A alle Commits, -a Branch-Spitzen, -T Tags.',
+        'Ohne Bereichs-Flag läuft es nicht; -c / --cloud löscht auch im Remote.',
         'Erst pushen, was Produktion braucht, dann gc — sonst löschst du die letzte Kopie.',
-        'CI-Runner: gc die ausgelieferte SHA, nicht das ganze Lager.',
       ],
     },
     'dvc-plots': {
@@ -229,14 +231,6 @@ export const de: Catalog = {
         'params diff = Absicht. metrics diff = Wirkung.',
         'Beide in den ML-PR. Reviewer öffnen kein Notebook.',
         'Kein Metric-Move → nicht mergen.',
-      ],
-    },
-    'dvc-api': {
-      title: 'dvc.api',
-      lines: [
-        'Python-API, um getrackte Daten / exp_show aus einem DVC-Repo zu lesen.',
-        'Apps und Notebooks leihen Bytes, ohne den Workspace umzuschreiben.',
-        'md5-Vertrag gilt weiter — Commit pinnen.',
       ],
     },
     'dvc-config': {
@@ -259,7 +253,7 @@ export const de: Catalog = {
       title: 'dvc exp push / pull / branch',
       lines: [
         'Experimente liegen in versteckten Git-Refs (refs/exps), um Branch-Wildwuchs im Team zu vermeiden.',
-        '`dvc exp push` und `dvc exp pull` synchronisieren experimentelle Läufe und Metriken im Team.',
+        '`dvc exp push <git_remote>` und `dvc exp pull <git_remote>` nutzen ein Git-Remote wie origin — kein DVC-Remote.',
         '`dvc exp branch <id> <branch>` überführt ein erfolgreiches Experiment direkt in einen regulären Git-Branch für PR-Reviews.',
       ],
     },
@@ -291,7 +285,7 @@ export const de: Catalog = {
     },
     dirty: {
       title: 'Dirty Data',
-      body: 'Workspace-Bytes ≠ Pointer-md5 (oder Datei fehlt). dvc status zeigt das. Fix: dvc commit (neue Version akzeptieren) oder dvc checkout (Drift verwerfen).',
+      body: 'Workspace-Bytes ≠ Pointer-md5 (oder Datei fehlt). dvc status zeigt das. Fix: dvc add (neue Version akzeptieren) oder dvc checkout (Drift verwerfen).',
     },
     checkout: {
       title: 'Version materialisieren',
@@ -315,7 +309,7 @@ export const de: Catalog = {
     },
     exp: {
       title: 'Experimente',
-      body: 'dvc exp run führt die Pipeline mit festgehaltenen Params/Metrics aus, ohne Branch-Explosion. exp apply befördert die Gewinner-Konfig in den Workspace; dann Artefakte reproen.',
+      body: 'dvc exp run führt die Pipeline mit festgehaltenen Params/Metrics aus, ohne Branch-Explosion. exp apply stellt Params, Metrics und Ausgaben eines Gewinners im Workspace wieder her; committe params.yaml und dvc.lock, damit er zur Baseline wird.',
     },
     'run-cache': {
       title: 'Run Cache',
@@ -355,11 +349,11 @@ export const de: Catalog = {
     },
     foreach: {
       title: 'foreach / Matrix-Stages',
-      body: 'dvc stage add --foreach expandiert einen Stage in viele (z. B. pro Modell). Kurs-Level-Alternative zu Copy-Paste-Stages.',
+      body: 'foreach und matrix schreibst du in dvc.yaml — dvc stage add kennt diese Option nicht. Eine Vorlage expandiert zu vielen Stages (train@50, train@100): die Alternative zu Copy-Paste-Stages.',
     },
     'external-outs': {
       title: 'Externe Daten / no-cache',
-      body: 'Deps/Outs können außerhalb des Projekts liegen (s3://…). cache: false / -O, wenn DVC die Bytes nicht kopieren soll. Externe Datensätze mit import-url tracken/updaten.',
+      body: 'Deps/Outs können außerhalb des Projekts liegen (s3://…) — ein Nischenfeature. -O / cache: false ist etwas anderes: Die Datei bleibt im Workspace und ihr Hash wird getrackt, die Bytes bleiben aber außerhalb des Caches. Für Daten in einem Bucket besser dvc import-url.',
     },
     api: {
       title: 'dvc.api',
@@ -387,7 +381,7 @@ export const de: Catalog = {
     },
     gc: {
       title: 'Garbage Collection',
-      body: 'dvc gc entfernt Cache-Objekte, die von Workspace/Git-Refs, die du behältst, nicht referenziert sind. Nach gc ggf. dvc pull, wenn ein referenzierter Hash nur auf der Remote lag.',
+      body: 'dvc gc entfernt Cache-Objekte außerhalb des Bereichs, den du behältst (-w Workspace, -A alle Commits, -a/-T Branches/Tags); mit -c wird auch das Remote bereinigt. Nach gc ggf. dvc pull, wenn ein referenzierter Hash nur auf der Remote lag.',
     },
     'api-handson': {
       title: 'dvc.api in Produktions-Apps',
@@ -423,7 +417,7 @@ export const de: Catalog = {
     },
     'exp-lifecycle': {
       title: 'Experiment-Lebenszyklus (push / pull / branch)',
-      body: 'DVC speichert Experimente in internen Git-Referenzen (refs/exps), um Branches sauber zu halten. `dvc exp push` und `dvc exp pull` synchronisieren Läufe im Team. Mit `dvc exp branch` wird ein validiertes Experiment in einen regulären Git-Branch für PR-Reviews überführt.',
+      body: 'DVC speichert Experimente in internen Git-Referenzen (refs/exps), um Branches sauber zu halten. `dvc exp push <git_remote>` und `dvc exp pull` synchronisieren Läufe im Team über ein Git-Remote wie origin (kein DVC-Remote). Mit `dvc exp branch` wird ein validiertes Experiment in einen regulären Git-Branch für PR-Reviews überführt.',
     },
     'pipeline-matrix': {
       title: 'Matrix & Foreach Pipelines',
@@ -736,7 +730,7 @@ export const de: Catalog = {
         q: 'Nach exp apply — was fehlt noch vor Produktion?',
         a: [
           'Nichts — apply deployed',
-          'dvc repro Artefakte, dvc push, Release in Git committen',
+          'params.yaml + dvc.lock committen, dvc push der Artefakte',
           'Branch umbenennen',
         ],
         correct: 1,

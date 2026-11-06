@@ -1,23 +1,27 @@
-import type { CommandResult, GitCommit, PipelineStage, RepoState } from './types';
+import type { CommandResult, ExperimentRun, GitCommit, PipelineStage, RepoState, WorkspaceFile } from './types';
 import { commitHash, expId, fakeMd5, shortMd5 } from './hash';
 import { teachAfterCommand } from './teach';
 import { findConcept, formatConcepts } from './glossary';
 import { tokenize } from './tokenizer';
+import { findUnknownFlag } from './flags';
 import {
   addCache,
-  addRemoteObject,
   applyDataEdit,
   cloneState,
   computeDirtyPaths,
   defaultRemote,
   ensureGit,
+  gitTree,
   isDirtyFile,
   isDirOut,
+  isGitRepo,
   makeFile,
   parseKeyValue,
   pipelineSignature,
+  remoteStore,
   removeWorkspaceFile,
   restoreWorkspaceFromPointer,
+  setDefaultRemote,
   setParam,
   stageRunSig,
 } from './state';
@@ -51,7 +55,19 @@ function snapshotGit(state: RepoState, message: string): GitCommit {
   for (const f of Object.values(state.files)) {
     if (f.tracked && f.pointerMd5) pointers[f.path] = f.pointerMd5;
   }
-  const files = [...state.gitStaged];
+  const files = [...new Set(state.gitStaged)];
+  const blobs: Record<string, string> = {};
+  for (const p of files) {
+    const f = state.files[p];
+    if (f) blobs[p] = f.contentId;
+  }
+  const outs: Record<string, string> = {};
+  for (const stage of state.pipeline) {
+    for (const o of stage.outs) {
+      const f = state.files[o];
+      if (f?.present && !f.tracked) outs[o] = f.contentId;
+    }
+  }
   const commit: GitCommit = {
     hash: commitHash(`${message}|${state.gitCommits.length}|${JSON.stringify(pointers)}|${files.join(',')}`),
     message,
@@ -60,6 +76,8 @@ function snapshotGit(state: RepoState, message: string): GitCommit {
     params: { ...state.params },
     metrics: { ...state.metrics },
     files,
+    blobs,
+    outs,
   };
   state.gitCommits.push(commit);
   state.gitStaged = [];
@@ -75,7 +93,23 @@ function requireInit(state: RepoState): CommandResult | null {
 
 function markPipelineDirtyIfInputChanged(state: RepoState, path: string): void {
   for (const stage of state.pipeline) {
-    if (stage.deps.includes(path)) stage.upToDate = false;
+    if (stage.deps.includes(path)) {
+      stage.upToDate = false;
+      const stale = (stage.stale ??= { deps: [], params: [] });
+      if (!stale.deps.includes(path)) stale.deps.push(path);
+    }
+  }
+}
+
+/** Mark the stages that read param `key` as stale (falls back to every stage with params). */
+function markPipelineDirtyIfParamChanged(state: RepoState, key: string): void {
+  const reads = (p: string) => p === key || key.startsWith(`${p}.`) || p.startsWith(`${key}.`);
+  let hit = state.pipeline.filter((s) => s.params.some(reads));
+  if (!hit.length) hit = state.pipeline.filter((s) => s.params.length);
+  for (const stage of hit) {
+    stage.upToDate = false;
+    const stale = (stage.stale ??= { deps: [], params: [] });
+    if (!stale.params.includes(key)) stale.params.push(key);
   }
 }
 
@@ -93,23 +127,44 @@ function syntheticMetrics(stage: PipelineStage, state: RepoState): void {
   }
 }
 
-function parseStageAdd(args: string[]): { name?: string; deps: string[]; outs: string[]; params: string[]; metrics: string[]; cmd: string } {
-  const deps: string[] = [];
-  const outs: string[] = [];
-  const params: string[] = [];
-  const metrics: string[] = [];
-  let name: string | undefined;
-  const rest: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === '-n' || a === '--name') name = args[++i];
-    else if (a === '-d' || a === '--deps') deps.push(args[++i]);
-    else if (a === '-o' || a === '--outs' || a === '-O' || a === '--outs-no-cache') outs.push(args[++i]);
-    else if (a === '-p' || a === '--params') params.push(args[++i]);
-    else if (a === '-m' || a === '--metrics' || a === '-M' || a === '--metrics-no-cache') metrics.push(args[++i]);
-    else rest.push(a);
+interface ParsedStage {
+  name?: string;
+  deps: string[];
+  outs: string[];
+  params: string[];
+  metrics: string[];
+  noCache: string[];
+  wdir?: string;
+  alwaysChanged: boolean;
+  cmd: string;
+}
+
+/** Options come first; the first bare token starts the stage command (argparse REMAINDER). */
+function parseStageAdd(args: string[]): ParsedStage {
+  const out: ParsedStage = { deps: [], outs: [], params: [], metrics: [], noCache: [], alwaysChanged: false, cmd: '' };
+  let i = 0;
+  for (; i < args.length; i++) {
+    const a = args[i]!;
+    if (!a.startsWith('-')) break;
+    if (a === '-n' || a === '--name') out.name = args[++i];
+    else if (a === '-d' || a === '--deps') out.deps.push(args[++i]!);
+    else if (a === '-o' || a === '--outs') out.outs.push(args[++i]!);
+    else if (a === '-O' || a === '--outs-no-cache') {
+      const o = args[++i]!;
+      out.outs.push(o);
+      out.noCache.push(o);
+    } else if (a === '-p' || a === '--params') out.params.push(args[++i]!);
+    else if (a === '-m' || a === '--metrics') out.metrics.push(args[++i]!);
+    else if (a === '-M' || a === '--metrics-no-cache') {
+      const m = args[++i]!;
+      out.metrics.push(m);
+      out.noCache.push(m);
+    } else if (a === '-w' || a === '--wdir') out.wdir = args[++i];
+    else if (a === '--always-changed') out.alwaysChanged = true;
+    else if (['--plots', '--plots-no-cache', '--desc'].includes(a)) i++;
   }
-  return { name, deps, outs, params, metrics, cmd: rest.join(' ') };
+  out.cmd = args.slice(i).join(' ');
+  return out;
 }
 
 function runPipelineFrom(state: RepoState, stageName: string): string[] {
@@ -128,6 +183,42 @@ function runPipelineFrom(state: RepoState, stageName: string): string[] {
   };
   visit(stageName);
   return order;
+}
+
+/**
+ * Emulates a training script that already contains the DVCLive calls
+ * (`from dvclive import Live` ... `live.log_metric(...)` ... `live.next_step()`).
+ * Does nothing unless the level marked the script as instrumented.
+ */
+function runDvcLive(state: RepoState, cmd: string): string[] {
+  if (!state.live.instrumented || !/train/.test(cmd)) return [];
+  const lr = Number(state.params.lr ?? state.params['train.lr'] ?? 0.1);
+  const n = Number(state.params.n_estimators ?? state.params['train.n_est'] ?? 10);
+  const steps = 5;
+  const acc: number[] = [];
+  const loss: number[] = [];
+  for (let i = 1; i <= steps; i++) {
+    const a = Math.min(0.99, 0.5 + (n * 0.003 + (lr > 0 && lr < 0.3 ? 0.05 : 0)) * i);
+    acc.push(Number(a.toFixed(4)));
+    loss.push(Number((1 - a).toFixed(4)));
+  }
+  state.live.active = true;
+  state.live.step = steps;
+  state.live.metrics = { ...state.live.metrics, acc, loss };
+  state.plots['acc'] = acc;
+  state.plots['loss'] = loss;
+  state.metrics['acc'] = acc[steps - 1]!;
+  state.metrics['loss'] = loss[steps - 1]!;
+  if (!state.live.plotData.includes('dvclive/plots/metrics/acc.tsv')) state.live.plotData.push('dvclive/plots/metrics/acc.tsv');
+  for (const p of ['dvclive/metrics.json', 'dvclive/plots/metrics/acc.tsv', 'dvclive/plots/metrics/loss.tsv', 'dvclive/params.yaml']) {
+    if (!state.files[p]) state.files[p] = makeFile(p, 'metrics');
+    state.files[p]!.contentId = fakeMd5(`dvclive:${p}:${JSON.stringify(state.params)}`);
+  }
+  return [
+    `DVCLive: Live(dir='dvclive') writing metrics and plots (${steps} steps via live.next_step())`,
+    `  live.log_metric('acc', ${acc[steps - 1]})  live.log_metric('loss', ${loss[steps - 1]})`,
+    '  files: dvclive/metrics.json, dvclive/plots/metrics/acc.tsv, dvclive/plots/metrics/loss.tsv',
+  ];
 }
 
 function reproStage(state: RepoState, stage: PipelineStage): string[] {
@@ -155,6 +246,8 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
   if (stage.lastRunSig === sig || state.runCache.includes(sig)) {
     logs.push(`Stage '${stage.name}' restored from run cache (same inputs/params) — skip work.`);
     stage.upToDate = true;
+    stage.stale = undefined;
+    stage.locked = true;
     stage.lastRunSig = sig;
     if (!state.runCache.includes(sig)) state.runCache.push(sig);
     return logs;
@@ -165,9 +258,12 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
     const dirOut = isDirOut(out);
     const contentId = fakeMd5(`out:${out}:${stage.cmd}:${JSON.stringify(state.params)}`);
     const existing = state.files[out];
+    // DVC git-ignores cached outputs; metrics files (cache: false) stay visible to Git.
+    const ignoredByGit = !stage.metrics.includes(out) && !(state.stageMeta[stage.name]?.noCache ?? []).includes(out);
     if (existing) {
       existing.contentId = contentId;
       existing.present = true;
+      if (ignoredByGit) existing.gitignored = true;
       if (existing.tracked) {
         existing.pointerMd5 = contentId;
         existing.dirty = false;
@@ -178,6 +274,7 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
         contentId,
         present: true,
         tracked: false,
+        gitignored: ignoredByGit,
       });
     }
     if (dirOut) {
@@ -198,8 +295,11 @@ function reproStage(state: RepoState, stage: PipelineStage): string[] {
   state.plots['loss'] = Array.from({ length: 6 }, (_, i) => Number((1 / (1 + (n / 20) * (i + 1))).toFixed(4)));
   state.plots['acc'] = state.plots['loss']!.map((v) => Number((1 - v).toFixed(4)));
   stage.upToDate = true;
+  stage.stale = undefined;
+  stage.locked = true;
   stage.lastRunSig = sig;
   if (!state.runCache.includes(sig)) state.runCache.push(sig);
+  logs.push(...runDvcLive(state, stage.cmd));
   logs.push(`Stage '${stage.name}' is up to date (outputs regenerated).`);
   if (stage.metrics.length) {
     logs.push(`metrics: ${JSON.stringify(state.metrics)}`);
@@ -294,9 +394,123 @@ function gitCheckoutPartial(state: RepoState, commitRef: string, paths: string[]
   return ok(lines.join('\n') + `\nRun \`dvc checkout\` if data files must be restored from cache.`);
 }
 
+interface ParsedArgs {
+  /** non-option tokens */
+  pos: string[];
+  /** every option seen (as typed) */
+  flags: string[];
+  /** value of options that take one, keyed by the spelling that was typed */
+  vals: Record<string, string>;
+  has: (...names: string[]) => boolean;
+  val: (...names: string[]) => string | undefined;
+}
+
+/** Tiny argv parser: `valFlags` consume the next token; `-wc` style bundles are expanded. */
+function parseArgv(args: string[], valFlags: string[] = []): ParsedArgs {
+  const pos: string[] = [];
+  const flags: string[] = [];
+  const vals: Record<string, string> = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (!a.startsWith('-') || a === '-' || /^-\d/.test(a)) {
+      pos.push(a);
+      continue;
+    }
+    if (valFlags.includes(a)) {
+      flags.push(a);
+      vals[a] = args[++i] ?? '';
+      continue;
+    }
+    if (/^-[A-Za-z]{2,}$/.test(a) && !valFlags.includes(`-${a[1]}`)) {
+      for (const ch of a.slice(1)) flags.push(`-${ch}`);
+      continue;
+    }
+    flags.push(a);
+  }
+  return {
+    pos,
+    flags,
+    vals,
+    has: (...names) => names.some((n) => flags.includes(n)),
+    val: (...names) => names.map((n) => vals[n]).find((v) => v !== undefined),
+  };
+}
+
+const TRANSFER_VAL_FLAGS = ['-r', '--remote', '-j', '--jobs'];
+
+/** Resolve `-r/--remote` (or the default remote). Returns an error text when it cannot. */
+function resolveRemote(
+  state: RepoState,
+  requested: string | undefined,
+  verb: string,
+): { name: string } | { error: string } {
+  if (requested) {
+    const r = state.remotes.find((x) => x.name === requested);
+    if (!r) {
+      return { error: `ERROR: failed to ${verb} - remote '${requested}' does not exist. See \`dvc remote list\`.` };
+    }
+    return { name: r.name };
+  }
+  const def = defaultRemote(state);
+  if (!def) {
+    return {
+      error: [
+        'ERROR: no remote specified. Setup default remote with',
+        '    dvc remote default <remote>',
+        'or use:',
+        `    dvc ${verb.split(' ')[0]} -r <remote>`,
+        'To add a remote: `dvc remote add -d <name> <url>`.',
+      ].join('\n'),
+    };
+  }
+  return { name: def.name };
+}
+
+/** Tracked files selected by command targets (paths, .dvc files, directories or stage names). */
+function targetFiles(state: RepoState, targets: string[]): { files: WorkspaceFile[] } | { error: string } {
+  const all = Object.values(state.files).filter((f) => f.tracked && f.pointerMd5);
+  if (!targets.length) return { files: all };
+  const picked = new Map<string, WorkspaceFile>();
+  for (const raw of targets) {
+    const t = raw.replace(/\/+$/, '').replace(/\.dvc$/, '');
+    const stage = state.pipeline.find((s) => s.name === t);
+    const hits = all.filter((f) => f.path === t || f.path.startsWith(`${t}/`) || (stage && stage.outs.includes(f.path)));
+    if (!hits.length && !stage) {
+      return { error: `ERROR: '${raw}' does not exist as an output of a .dvc file or stage.` };
+    }
+    for (const f of hits) picked.set(f.path, f);
+  }
+  return { files: [...picked.values()] };
+}
+
+function pipelineStatusLines(state: RepoState): string[] {
+  const out: string[] = [];
+  for (const s of state.pipeline) {
+    if (s.frozen || s.upToDate) continue;
+    out.push(`${s.name}:`);
+    const st = s.stale;
+    if (st && (st.deps.length || st.params.length)) {
+      if (st.deps.length) {
+        out.push('\tchanged deps:');
+        for (const d of st.deps) out.push(`\t\tmodified:           ${d}`);
+      }
+      if (st.params.length) {
+        out.push('\tchanged params:', '\t\tparams.yaml:');
+        for (const k of st.params) out.push(`\t\t\tmodified:           ${k}`);
+      }
+    } else if (!s.locked) {
+      out.push('\tchanged outs:');
+      for (const o of s.outs) out.push(`\t\tnot in cache:       ${o}`);
+    } else {
+      out.push('\tchanged deps:', '\t\tmodified:           (an input changed since the last run)');
+    }
+  }
+  return out;
+}
+
 function statusLines(state: RepoState): string {
   if (!state.initialized) return 'ERROR: not a DVC repository.';
-  const lines: string[] = [];
+  const lines: string[] = [...pipelineStatusLines(state)];
   const dirty = computeDirtyPaths(state);
   for (const path of dirty) {
     const f = state.files[path];
@@ -317,6 +531,141 @@ function statusLines(state: RepoState): string {
   }
   if (!lines.length) return 'Data and pipelines are up to date.';
   return lines.join('\n');
+}
+
+/** `dvc status --cloud`: compare the local cache with one remote. */
+function cloudStatusLines(state: RepoState, remoteName: string, files: WorkspaceFile[]): string {
+  const store = remoteStore(state, remoteName);
+  const lines: string[] = [];
+  for (const f of files) {
+    const md5 = f.pointerMd5!;
+    const inCache = state.cache.includes(md5);
+    const onRemote = store.includes(md5);
+    if (inCache && !onRemote) lines.push(`\tnew:            ${f.path}`);
+    else if (!inCache && onRemote) lines.push(`\tdeleted:        ${f.path}`);
+    else if (!inCache && !onRemote) lines.push(`\tmissing:        ${f.path}`);
+  }
+  if (!lines.length) return `Cache and remote '${remoteName}' are in sync.`;
+  return [
+    `Comparing the local cache with remote '${remoteName}':`,
+    ...lines,
+    '(new = only in cache, push it; deleted = only on the remote, pull it; missing = nowhere)',
+  ].join('\n');
+}
+
+type Finish = (st: RepoState, res: CommandResult) => { state: RepoState; result: CommandResult };
+
+function sampleBytes(path: string): string {
+  if (path.endsWith('.xml')) return '<xml><sample id="1" feature="0.82"/><sample id="2" feature="0.91"/></xml>';
+  if (path.endsWith('.csv')) return 'id,feature,label\n1,0.82,0\n2,0.91,1';
+  return `<${path}: 1,024 bytes>`;
+}
+
+function storageUrl(state: RepoState, md5: string): string {
+  const remote = defaultRemote(state);
+  const base = (remote?.url ?? 's3://ml-team/dvcstore').replace(/\/+$/, '');
+  return `${base}/files/md5/${md5.slice(0, 2)}/${md5.slice(2)}`;
+}
+
+/** `python -c "..."` snippets that call dvc.api, and `python <script>` runs. */
+function runPython(state: RepoState, args: string[], finish: Finish): { state: RepoState; result: CommandResult } {
+  if (args[0] === '-c') {
+    const code = args.slice(1).join(' ');
+    const m = /dvc\.api\.(read|open|get_url|params_show)\(\s*(?:(['"])([^'"]*)\2)?/.exec(code);
+    if (!m) {
+      if (/dvc\.api|dvc\b/.test(code)) {
+        return { state, result: fail('AttributeError: module \'dvc.api\' has no such function. Real ones: read, open, get_url, params_show, metrics_show, exp_show.') };
+      }
+      return finish(state, ok('(python -c ran; nothing printed)'));
+    }
+    const fn = m[1]!;
+    const path = m[3];
+    const printed = /print\s*\(/.test(code);
+    if (fn === 'params_show') {
+      const body = JSON.stringify(state.params, null, 2);
+      return finish(state, ok(printed ? body : '# dvc.api.params_show() returned the params dict (wrap it in print() to see it)'));
+    }
+    const f = path ? state.files[path] : undefined;
+    const readable =
+      !!f &&
+      (f.present ||
+        (f.tracked && !!f.pointerMd5 && (state.cache.includes(f.pointerMd5) || state.remoteObjects.includes(f.pointerMd5))));
+    if (!path || !f || !readable) {
+      return {
+        state,
+        result: fail(
+          `dvc.exceptions.PathMissingError: The path '${path ?? ''}' does not exist in the target repository neither as a DVC output nor as a Git-tracked file.`,
+        ),
+      };
+    }
+    if (fn === 'get_url') {
+      if (!f.tracked || !f.pointerMd5) {
+        return { state, result: fail(`dvc.exceptions.OutputNotFoundError: Unable to find DVC file with output '${path}'`) };
+      }
+      const url = storageUrl(state, f.pointerMd5);
+      return finish(state, ok(printed ? url : `# dvc.api.get_url('${path}') returned ${url}`));
+    }
+    const body = sampleBytes(path);
+    if (printed) return finish(state, ok(body));
+    return finish(
+      state,
+      ok(`# dvc.api.${fn}('${path}') streamed ${f.isDir ? 'a directory' : '1,024 bytes'} from the cache/remote; the workspace was not touched.`),
+    );
+  }
+
+  const script = args[0];
+  if (!script) return { state, result: fail('Python 3.11 (simulated): use `python -c "..."` or `python src/train.py`.') };
+  const f = state.files[script];
+  if (!f || !f.present) {
+    return { state, result: fail(`python: can't open file '${script}': [Errno 2] No such file or directory`) };
+  }
+  if (/train/.test(script)) {
+    const lines = [`Training with params ${JSON.stringify(state.params)}`];
+    const live = runDvcLive(state, 'train');
+    if (live.length) lines.push(...live);
+    else lines.push('Training finished. This src/train.py has no DVCLive calls, so nothing was logged to dvclive/.');
+    return finish(state, ok(lines.join('\n')));
+  }
+  return finish(state, ok(`Ran ${script}`));
+}
+
+/** True for a stage output that DVC caches (and therefore adds to .gitignore). */
+function isCachedStageOut(state: RepoState, path: string): boolean {
+  return state.pipeline.some(
+    (s) => s.outs.includes(path) && !s.metrics.includes(path) && !(state.stageMeta[s.name]?.noCache ?? []).includes(path),
+  );
+}
+
+/** dvc.lock is the execution receipt: refreshed by repro, exp run and exp apply. */
+function writeLock(state: RepoState): void {
+  state.files['dvc.lock'] = makeFile('dvc.lock', 'yaml', {
+    contentId: fakeMd5(`lock:${pipelineSignature(state)}:${JSON.stringify(state.params)}:${JSON.stringify(state.metrics)}`),
+  });
+}
+
+/** Store the current params, metrics and pipeline outputs as a new experiment. */
+function recordExperiment(state: RepoState, name?: string): ExperimentRun {
+  const id = expId(JSON.stringify(state.params) + state.experiments.length);
+  const outputs: Record<string, string> = {};
+  const stageSigs: Record<string, string> = {};
+  for (const s of state.pipeline) {
+    stageSigs[s.name] = stageRunSig(s, state);
+    for (const o of s.outs) {
+      const f = state.files[o];
+      if (f) outputs[o] = f.contentId;
+    }
+  }
+  const run: ExperimentRun = {
+    id,
+    name: name ?? id,
+    commitRef: state.gitCommits[state.gitCommits.length - 1]?.hash ?? 'HEAD',
+    params: { ...state.params },
+    metrics: { ...state.metrics },
+    outputs,
+    stageSigs,
+  };
+  state.experiments.push(run);
+  return run;
 }
 
 export function executeCommand(prev: RepoState, rawInput: string): { state: RepoState; result: CommandResult } {
@@ -358,6 +707,20 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state: lastState, result: ok(outs.join('\n')) };
   }
 
+  // `<command> > file`: run the command, write its stdout into the workspace file
+  const redirect = /^(.*\S)\s+>\s*(\S+)\s*$/.exec(raw);
+  if (redirect && !/^echo\b/.test(raw)) {
+    const inner = executeCommandInner(prev, redirect[1]!);
+    if (!inner.result.ok) return inner;
+    const target = redirect[2]!;
+    const text = inner.result.output.split('\n\n── Why:')[0]!;
+    inner.state.files[target] = makeFile(target, 'code', {
+      contentId: fakeMd5(`redirect:${target}:${text}`),
+      text,
+    });
+    return { state: inner.state, result: ok('') };
+  }
+
   const tokens = tokenize(raw);
   const cmd = tokens[0];
   const args = tokens.slice(1);
@@ -368,11 +731,12 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       result: ok(
         [
           'DVC commands: init, add, status, commit, checkout, remote, push, pull, fetch,',
-          '  config (--local), stage (with --foreach/--wdir/--always-changed), repro, dag, freeze, unfreeze,',
-          '  metrics, params, plots --template, exp (run --queue|diff|push|pull|branch), queue, live, get, import,',
-          '  update, api (read|get-url|open|params), cml (runner launch --single-shot), remove, gc, diff, version',
-          'Git (simulated): init, add, commit, log, status, checkout',
-          'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls, python (dvc.api)',
+          '  config (--local), stage add (--wdir/--always-changed), repro, dag, freeze, unfreeze,',
+          '  metrics, params, plots --template, exp (run --queue|diff|apply|push|pull|branch), queue, get, import,',
+          '  update (imports only), remove, gc (-w|-A|-c), diff, version',
+          'Git (simulated): init, add, commit [--amend], log, status, checkout, remote',
+          'Separate tools: cml (comment create, runner launch); Python: python src/train.py, python -c "import dvc.api; ..."',
+          'Workspace simulators: edit <path>, rm <path>, cat <path> (dvc.yaml|dvc.lock|params.yaml), ls, dvc metrics show --md > report.md',
           'Meta: levels, help/ui/tour, curriculum, concepts|glossary, quiz, steps, hint, show goal, reset, undo, sandbox, clear',
         ].join('\n'),
       ),
@@ -413,6 +777,28 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (cmd === 'cat') {
     const path = args[0];
     if (!path) return { state, result: fail('Usage: cat <path>') };
+    if (path === 'src/train.py' && state.live.instrumented) {
+      return {
+        state,
+        result: ok(
+          [
+            'import yaml',
+            'from dvclive import Live',
+            '',
+            'params = yaml.safe_load(open("params.yaml"))',
+            '',
+            'with Live() as live:',
+            '    live.log_param("lr", params["lr"])',
+            '    for epoch in range(5):',
+            '        acc, loss = train_one_epoch(params)',
+            '        live.log_metric("acc", acc)',
+            '        live.log_metric("loss", loss)',
+            '        live.next_step()',
+          ].join('\n'),
+        ),
+      };
+    }
+    if (path === 'dvc.yaml' && state.dvcYaml) return { state, result: ok(state.dvcYaml) };
     if (path === 'dvc.yaml' && state.pipeline.length) {
       const yaml: string[] = ['stages:'];
       for (const s of state.pipeline) {
@@ -464,6 +850,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     }
     const f = state.files[path];
     if (!f || !f.present) return { state, result: fail(`cat: ${path}: No such file`) };
+    if (f.text !== undefined) return { state, result: ok(f.text) };
     if (path.endsWith('.dvc')) {
       const dataPath = path.replace(/\.dvc$/, '');
       const data = state.files[dataPath];
@@ -526,7 +913,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         if (kv) {
           setParam(state, kv.key, kv.value);
           f.contentId = fakeMd5(`params:${JSON.stringify(state.params)}`);
-          for (const s of state.pipeline) if (s.params.length) s.upToDate = false;
+          markPipelineDirtyIfParamChanged(state, kv.key);
           return { state, result: ok(`Updated ${path}: ${kv.key}=${kv.value}`) };
         }
       }
@@ -556,21 +943,24 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (cmd === 'git') {
     const sub = args[0];
     if (sub === 'init') {
+      const already = isGitRepo(state);
       ensureGit(state);
-      return { state, result: ok('Initialized empty Git repository.') };
+      return {
+        state,
+        result: ok(already ? 'Reinitialized existing Git repository.' : 'Initialized empty Git repository.'),
+      };
     }
     if (sub === 'status') {
-      const staged = state.gitStaged.length ? state.gitStaged : [];
-      const committed = new Set(state.gitCommits.flatMap((c) => Object.keys(c.pointers)));
-      const unstaged = Object.values(state.files)
-        .filter((f) => f.present && !f.gitignored && !f.tracked)
-        .filter((f) => {
-          // hide .dvc meta once Initialize DVC is committed
-          if (f.path === '.dvc/config' || f.path === '.dvc/.gitignore') {
-            return !state.gitCommits.some((c) => c.message.includes('Initialize DVC'));
-          }
-          return !committed.has(f.path);
-        })
+      const tree = gitTree(state);
+      const staged = state.gitStaged;
+      const present = Object.values(state.files).filter(
+        (f) => f.present && !f.gitignored && !isCachedStageOut(state, f.path),
+      );
+      const untracked = present
+        .filter((f) => !(f.path in tree) && !staged.includes(f.path))
+        .map((f) => f.path);
+      const modified = present
+        .filter((f) => f.path in tree && tree[f.path] !== null && tree[f.path] !== f.contentId && !staged.includes(f.path))
         .map((f) => f.path);
       const ptrModified = Object.values(state.files)
         .filter((f) => f.tracked && f.dirty)
@@ -581,11 +971,12 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           [
             'On branch main',
             staged.length
-              ? `Changes to be committed:\n${staged.map((s) => `\t${s}`).join('\n')}`
+              ? `Changes to be committed:\n${[...new Set(staged)].map((s) => `\t${s}`).join('\n')}`
               : 'No changes added to commit.',
+            modified.length ? `Changes not staged for commit:\n${modified.map((s) => `\tmodified: ${s}`).join('\n')}` : null,
             ptrModified.length ? `modified: ${ptrModified.join(', ')}` : null,
-            unstaged.length
-              ? `Untracked files:\n${unstaged.map((s) => `\t${s}`).join('\n')}\n\nNext: git add <file> && git commit -m "..."`
+            untracked.length
+              ? `Untracked files:\n${untracked.map((s) => `\t${s}`).join('\n')}\n\nNext: git add <file> && git commit -m "..."`
               : null,
           ]
             .filter(Boolean)
@@ -600,75 +991,140 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         .map((c) => `commit ${c.hash}\n    ${c.message}`);
       return { state, result: ok(lines.join('\n\n') || 'No commits yet') };
     }
+    if (sub === 'remote') {
+      const rsub = args[1];
+      if (!rsub || rsub === '-v') {
+        const names = state.gitRemotes ?? [];
+        if (!names.length) return { state, result: ok('') };
+        const lines =
+          rsub === '-v'
+            ? names.flatMap((n) => [`${n}\thttps://github.com/acme/ml-project.git (fetch)`, `${n}\thttps://github.com/acme/ml-project.git (push)`])
+            : names;
+        return { state, result: ok(lines.join('\n')) };
+      }
+      if (rsub === 'add') {
+        const [name, url] = args.slice(2);
+        if (!name || !url) return { state, result: fail('usage: git remote add <name> <url>') };
+        if ((state.gitRemotes ?? []).includes(name)) return { state, result: fail(`error: remote ${name} already exists.`) };
+        state.gitRemotes = [...(state.gitRemotes ?? []), name];
+        return { state, result: ok(`Added Git remote '${name}' → ${url}\n(A Git remote is not a DVC remote: it holds refs and code, DVC data goes to \`dvc remote\`.)`) };
+      }
+      if (rsub === 'remove' || rsub === 'rm') {
+        const name = args[2];
+        if (!name || !(state.gitRemotes ?? []).includes(name)) return { state, result: fail(`error: No such remote: '${name ?? ''}'`) };
+        state.gitRemotes = (state.gitRemotes ?? []).filter((n) => n !== name);
+        return { state, result: ok('') };
+      }
+      return { state, result: fail('usage: git remote [-v] | add <name> <url> | remove <name>') };
+    }
     if (sub === 'add') {
-      const paths = args.slice(1);
-      if (!paths.length) return { state, result: fail('Nothing specified, nothing added.') };
+      const rest = args.slice(1);
+      const flagArgs = rest.filter((a) => a.startsWith('-') && a !== '.');
+      const paths = rest.filter((a) => !a.startsWith('-'));
+      const addAll = flagArgs.includes('-A') || flagArgs.includes('--all');
+      if (!paths.length && !addAll) return { state, result: fail('Nothing specified, nothing added.') };
+      const tree = gitTree(state);
+      // DVC git-ignores cached stage outputs even when the fixture never wrote the .gitignore entry
+      const gitIgnored = (f: WorkspaceFile) => f.gitignored || isCachedStageOut(state, f.path);
+      const isChanged = (f: WorkspaceFile) =>
+        f.present && !gitIgnored(f) && (!(f.path in tree) || (tree[f.path] !== null && tree[f.path] !== f.contentId));
       const added: string[] = [];
-      for (const p of paths) {
+      const ignored: string[] = [];
+      const warnings: string[] = [];
+      const stage = (p: string) => {
+        if (!state.gitStaged.includes(p)) state.gitStaged.push(p);
+        if (!added.includes(p)) added.push(p);
+      };
+      const targets = addAll && !paths.length ? ['.'] : paths;
+      for (const p of targets) {
+        if (p === '.' || p === './') {
+          for (const f of Object.values(state.files)) if (isChanged(f)) stage(f.path);
+          continue;
+        }
         if (p === '.dvc' || p === '.dvc/') {
           if (!state.initialized) return { state, result: fail(`fatal: pathspec '${p}' did not match any files`) };
           for (const meta of ['.dvc/config', '.dvc/.gitignore']) {
-            if (!state.gitStaged.includes(meta) && !state.gitCommits.some((c) => c.message.includes('Initialize DVC'))) {
-              state.gitStaged.push(meta);
-              added.push(meta);
-            } else if (!state.gitStaged.includes(meta) && state.initialized) {
-              // still allow staging if not in any commit content — use staged list
-              if (!state.gitCommits.some((c) => c.message === 'Initialize DVC')) {
-                state.gitStaged.push(meta);
-                added.push(meta);
-              } else {
-                state.gitStaged.push(meta);
-                added.push(meta + ' (already tracked)');
-              }
-            }
+            if (!state.files[meta]) state.files[meta] = makeFile(meta, 'meta');
+            const committed = state.gitCommits.some((c) => c.files?.includes(meta));
+            if (!committed) stage(meta);
           }
           continue;
         }
-        if (p.endsWith('.dvc')) {
-          const dataPath = p.slice(0, -4);
-          const f = state.files[dataPath];
-          if (!f || !f.tracked) return { state, result: fail(`fatal: pathspec '${p}' did not match any files`) };
-          state.gitStaged.push(p);
-          added.push(p);
+        const f = state.files[p];
+        if (f && f.present) {
+          if (gitIgnored(f)) {
+            ignored.push(p);
+            continue;
+          }
+          stage(p);
+          if (f.kind === 'data' && !f.tracked && !state.generated.includes(p)) {
+            warnings.push(
+              `WARNING: ${p} looks like a data file. Git would store every version of it forever.\n` +
+                `  Prefer \`dvc add ${p}\`: Git then tracks only the small ${p}.dvc pointer.`,
+            );
+          }
+          continue;
+        }
+        const dir = p.replace(/\/+$/, '');
+        const under = Object.values(state.files).filter((x) => x.present && x.path.startsWith(`${dir}/`));
+        if (under.length) {
+          const hits = under.filter(isChanged);
+          for (const x of hits) stage(x.path);
+          if (!hits.length && under.every((x) => gitIgnored(x))) ignored.push(p);
+          continue;
+        }
+        if (p.endsWith('.dvc') && state.files[p.slice(0, -4)]?.tracked) {
+          stage(p);
           continue;
         }
         if (p === 'params.yaml' || p === 'dvc.yaml' || p === 'dvc.lock' || p === 'src/train.py') {
-          state.gitStaged.push(p);
-          added.push(p);
-          continue;
-        }
-        if (state.files[p] && !state.files[p].gitignored) {
-          state.gitStaged.push(p);
-          added.push(p);
+          stage(p);
           continue;
         }
         return { state, result: fail(`fatal: pathspec '${p}' did not match any files`) };
       }
-      return { state, result: ok(added.length ? `Staged:\n  ${added.join('\n  ')}` : 'Nothing staged.') };
+      if (ignored.length) {
+        return {
+          state,
+          result: fail(
+            [
+              'The following paths are ignored by one of your .gitignore files:',
+              ...ignored,
+              'hint: Use -f if you really want to add them.',
+              'hint: DVC git-ignores tracked data and cached outputs on purpose: commit the .dvc pointer or dvc.lock instead.',
+            ].join('\n'),
+          ),
+        };
+      }
+      const lines = [added.length ? `Staged:\n  ${added.join('\n  ')}` : 'Nothing staged.', ...warnings];
+      return { state, result: ok(lines.join('\n')) };
     }
     if (sub === 'commit') {
+      const amend = args.includes('--amend');
       const msgIdx = args.indexOf('-m');
-      if (msgIdx === -1 || !args[msgIdx + 1]) return { state, result: fail('error: switch `m` requires a value') };
+      const hasMsg = msgIdx !== -1 && Boolean(args[msgIdx + 1]);
+      if (!hasMsg && !amend) return { state, result: fail('error: switch `m` requires a value') };
+      if (amend) {
+        const last = state.gitCommits[state.gitCommits.length - 1];
+        if (!last || last.hash === '0000000') return { state, result: fail('fatal: You have nothing to amend.') };
+        state.gitCommits.pop();
+        state.gitStaged = [...new Set([...(last.files ?? []), ...state.gitStaged])];
+        const message = hasMsg ? args.slice(msgIdx + 1).join(' ').replace(/^["']|["']$/g, '') : last.message;
+        const c = snapshotGit(state, message);
+        return finish(state, ok(`[${c.hash}] ${message} (amended)`));
+      }
       const message = args.slice(msgIdx + 1).join(' ').replace(/^["']|["']$/g, '');
       if (!state.gitStaged.length) {
-        // After a wrong-message commit the index is empty. If this project has
-        // DVC metadata (or tracked pointers), re-stage them so the learner can
-        // retry the commit message without "losing" earlier steps.
-        const restage: string[] = [];
-        if (state.initialized) {
-          if (!state.files['.dvc/config']) state.files['.dvc/config'] = makeFile('.dvc/config', 'meta');
-          if (!state.files['.dvc/.gitignore']) state.files['.dvc/.gitignore'] = makeFile('.dvc/.gitignore', 'meta');
-          restage.push('.dvc/config', '.dvc/.gitignore');
-        }
-        for (const f of Object.values(state.files)) {
-          if (f.tracked) restage.push(`${f.path}.dvc`);
-        }
-        const ranGitAdd = (state.commandHistory ?? []).some((c) => /^git\s+add\b/.test(c.trim()));
-        if (!restage.length && !ranGitAdd) {
-          return { state, result: fail('nothing to commit, working tree clean (stage .dvc files first)') };
-        }
-        if (!restage.length) restage.push('.dvc/config', '.dvc/.gitignore');
-        state.gitStaged = [...new Set(restage)];
+        return {
+          state,
+          result: fail(
+            [
+              'On branch main',
+              'nothing to commit — the index is empty (no changes added to commit).',
+              'Stage the files first with `git add <paths>`. Typo in the last commit message? `git commit --amend -m "..."` rewrites it.',
+            ].join('\n'),
+          ),
+        };
       }
       const c = snapshotGit(state, message);
       return finish(state, ok(`[${c.hash}] ${message}`));
@@ -714,10 +1170,10 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state, result: fail(`git: '${sub}' is not supported in this simulator.`) };
   }
 
-  // ── cml (Continuous Machine Learning) ───────────────────────
+  // ── cml (Continuous Machine Learning) — a separate CLI, not a DVC subcommand ──
   if (cmd === 'cml') {
-    const subCmd = args[0];
-    if (subCmd === 'runner') {
+    const [group, action] = args;
+    if (group === 'runner') {
       const isSingleShot = args.includes('--single-shot');
       const cloudArg = args.find((a) => a.startsWith('--cloud=') || a.startsWith('--cloud'));
       const cloudType = args.find((a) => a.startsWith('--cloud-type=') || a.startsWith('--cloud-type'));
@@ -734,36 +1190,41 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         ),
       );
     }
-    const body = args.join(' ') || 'metrics update';
-    return finish(
+    if (group === 'comment' && action === 'create') {
+      const file = args.slice(2).find((a) => !a.startsWith('-'));
+      if (!file) {
+        return { state, result: fail('Error: Not enough non-option arguments: got 0, need at least 1 (cml comment create <markdown-file>)') };
+      }
+      const f = state.files[file];
+      if (!f || !f.present) {
+        return {
+          state,
+          result: fail(
+            `Error: ENOENT: no such file or directory, open '${file}'\nBuild the report first, e.g. \`dvc metrics show --md > ${file}\`.`,
+          ),
+        };
+      }
+      return finish(
+        state,
+        ok(
+          [
+            `CML: posting ${file} as a comment on the current pull request (simulated; CI provides REPO_TOKEN).`,
+            'https://github.com/acme/ml-project/pull/12#issuecomment-1234567',
+          ].join('\n'),
+        ),
+      );
+    }
+    return {
       state,
-      ok(
-        [
-          `CML report comment posted (simulated): ${body}`,
-          'Typical CI: checkout → dvc pull → dvc repro → cml comment with metrics/plots',
-          'See cml.dev for GitHub/GitLab actions templates.',
-        ].join('\n'),
+      result: fail(
+        'cml: unknown command. The CML CLI offers e.g. `cml comment create <report.md>`, `cml runner launch ...`, `cml pr create`, `cml check create`.',
       ),
-    );
+    };
   }
 
-  // ── python / dvc.api simulation ─────────────────────────────
-  if (cmd === 'python') {
-    const rawLine = args.join(' ');
-    return finish(
-      state,
-      ok(
-        [
-          `Python 3.11 execution (simulated)${rawLine ? `: python ${rawLine}` : ''}:`,
-          '>>> import dvc.api',
-          '>>> url = dvc.api.get_url("data/data.xml", rev="HEAD")',
-          '>>> print(url)',
-          's3://ml-team/dvcstore/files/md5/a1/b2c3d4e5f6',
-          '>>> data = dvc.api.read("data/data.xml")',
-          'Successfully loaded 1,024 bytes directly into Python process without local git clone/pull.',
-        ].join('\n'),
-      ),
-    );
+  // ── python: dvc.api one-liners and the training script ──────
+  if (cmd === 'python' || cmd === 'python3') {
+    return runPython(state, args, finish);
   }
 
   // ── dvc ─────────────────────────────────────────────────────
@@ -780,24 +1241,101 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state, result: ok('3.x (LearnDVC simulator)') };
   }
 
+  // Names that look like DVC subcommands but are not: point learners at the real tool.
+  if (sub === 'live') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc live'. DVCLive is a Python library, not a DVC subcommand.",
+          'Instrument the training script with `from dvclive import Live` (live.log_metric(...), live.next_step()),',
+          'run it with `dvc exp run` or `python src/train.py`, then inspect with `dvc exp show` / `dvc plots show`.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'api') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc api'. `dvc.api` is the Python API, not a CLI command.",
+          'Use it from Python: dvc.api.read(), dvc.api.open(), dvc.api.get_url(), dvc.api.params_show().',
+          "Example: python -c \"import dvc.api; print(dvc.api.read('data/data.xml'))\"",
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'cml') {
+    return {
+      state,
+      result: fail(
+        [
+          "ERROR: unknown command 'dvc cml'. CML is a separate CLI, not a DVC subcommand.",
+          'Install it next to DVC in CI and call it directly: `cml comment create report.md`.',
+        ].join('\n'),
+      ),
+    };
+  }
+  if (sub === 'stage' && (args.includes('--foreach') || args.includes('--matrix'))) {
+    const flag = args.includes('--foreach') ? '--foreach' : '--matrix';
+    return {
+      state,
+      result: fail(
+        [
+          `ERROR: unrecognized arguments: ${flag}`,
+          '`foreach` and `matrix` exist only inside dvc.yaml; `dvc stage add` has no such option.',
+          'Write the stage template in dvc.yaml (see https://dvc.org/doc/user-guide/project-structure/dvcyaml-files#foreach-stages).',
+        ].join('\n'),
+      ),
+    };
+  }
+  const unknownFlag = findUnknownFlag(sub, args.slice(1));
+  if (unknownFlag) {
+    return { state, result: fail(`ERROR: unrecognized arguments: ${unknownFlag}\nTry \`dvc ${sub} --help\` for the options this command accepts.`) };
+  }
+
   if (sub === 'init') {
     if (state.initialized) return { state, result: fail('ERROR: DVC already initialized (existing .dvc directory).') };
-    ensureGit(state);
+    const noScm = args.includes('--no-scm');
+    if (!noScm && !isGitRepo(state)) {
+      return {
+        state,
+        result: fail(
+          [
+            'ERROR: failed to initiate DVC - this directory is not inside of a Git repository.',
+            'Run `git init` first, or use `dvc init --no-scm` if you do not want to use any SCM.',
+          ].join('\n'),
+        ),
+      };
+    }
     state.initialized = true;
-    state.files['.dvc/config'] = makeFile('.dvc/config', 'meta');
-    state.files['.dvc/.gitignore'] = makeFile('.dvc/.gitignore', 'meta');
-    return finish(state, ok(
-      [
-        'Initialized DVC local workspace.',
-        '',
-        'Created:',
-        '  .dvc/config',
-        '  .dvc/.gitignore',
-        '',
-        'DVC alone is not enough — Git must version this metadata.',
-      ].join('\n'),
-    ));
+    const created = ['.dvc/config', '.dvc/.gitignore', '.dvcignore'];
+    for (const p of created) {
+      if (!state.files[p]) state.files[p] = makeFile(p, 'meta');
+    }
+    if (!noScm) {
+      for (const p of created) if (!state.gitStaged.includes(p)) state.gitStaged.push(p);
+    }
+    return finish(
+      state,
+      ok(
+        [
+          'Initialized DVC repository.',
+          '',
+          'Created:',
+          '  .dvc/config',
+          '  .dvc/.gitignore',
+          '  .dvcignore',
+          '',
+          noScm
+            ? 'No SCM: nothing was staged. Without Git you lose the history that ties code to data versions.'
+            : 'DVC staged these files with Git (`git status` shows them). Commit them: git commit -m "Initialize DVC"',
+        ].join('\n'),
+      ),
+    );
   }
+
 
   if (sub === 'config') {
     const isLocal = args.includes('--local');
@@ -875,19 +1413,29 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   }
 
   if (sub === 'status') {
+    const p = parseArgv(args.slice(1), TRANSFER_VAL_FLAGS);
+    if (p.has('-c', '--cloud')) {
+      const err = requireInit(state);
+      if (err) return { state, result: err };
+      const rr = resolveRemote(state, p.val('-r', '--remote'), 'status');
+      if ('error' in rr) return { state, result: fail(rr.error) };
+      const tf = targetFiles(state, p.pos);
+      if ('error' in tf) return { state, result: fail(tf.error) };
+      return finish(state, ok(cloudStatusLines(state, rr.name, tf.files)));
+    }
     return finish(state, ok(statusLines(state)));
   }
 
   if (sub === 'add') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const flags = args.slice(1).filter((a) => a.startsWith('-'));
-    const noCommit = flags.includes('--no-commit') || flags.includes('-O');
-    const rawPath = args.slice(1).filter((a) => !a.startsWith('-'))[0];
+    const p = parseArgv(args.slice(1), ['--file', '-o', '--out', '-r', '--remote', '-j', '--remote-jobs', '--desc', '--type', '--label', '--meta']);
+    const noCommit = p.has('--no-commit');
+    const rawPath = p.pos[0];
     if (!rawPath) return { state, result: fail('Usage: dvc add [--no-commit] <path>') };
     const path = rawPath.replace(/\/+$/, '');
     let f = state.files[path];
-    const isDir = Boolean(f?.isDir || Object.keys(state.files).some((p) => p.startsWith(`${path}/`)));
+    const isDir = Boolean(f?.isDir || Object.keys(state.files).some((x) => x.startsWith(`${path}/`)));
     if (!f && isDir) {
       f = makeFile(path, 'data', { isDir: true });
       state.files[path] = f;
@@ -910,7 +1458,8 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       contentId: fakeMd5(`dvcfile:${path}:${md5}`),
       present: true,
     });
-    const gitignorePath = `${path.split('/')[0]}/.gitignore`;
+    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    const gitignorePath = dir ? `${dir}/.gitignore` : '.gitignore';
     if (!state.files[gitignorePath]) {
       state.files[gitignorePath] = makeFile(gitignorePath, 'meta', {
         gitignored: false,
@@ -928,10 +1477,14 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         noCommit
           ? '--no-commit: pointer updated but cache object NOT committed yet. Run `dvc commit`.'
           : `${path} is now gitignored — Git will track the pointer, not the bytes.`,
-        `Next in Git: git add ${path}.dvc ${gitignorePath}`,
+        '',
+        'To track the changes with git, run:',
+        '',
+        `\tgit add ${path}.dvc ${gitignorePath}`,
       ].join('\n'),
     ));
   }
+
 
   if (sub === 'commit') {
     const err = requireInit(state);
@@ -1007,26 +1560,30 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       if (state.remotes.some((r) => r.name === name)) {
         return { state, result: fail(`ERROR: remote '${name}' already exists.`) };
       }
-      if (isDefault) {
-        for (const r of state.remotes) r.isDefault = false;
-      }
-      state.remotes.push({ name, url, isDefault: isDefault || state.remotes.length === 0 });
-      return finish(state, ok(`Added remote '${name}' → ${url}${isDefault || state.remotes.length === 1 ? ' (default)' : ''}`));
+      const first = state.remotes.length === 0;
+      state.remotes.push({ name, url, isDefault: false });
+      if (isDefault || first) setDefaultRemote(state, name);
+      return finish(state, ok(`Added remote '${name}' → ${url}${isDefault || first ? ' (default)' : ''}`));
     }
     if (rsub === 'default') {
       const name = args[2];
       const remote = state.remotes.find((r) => r.name === name);
       if (!remote) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
-      for (const r of state.remotes) r.isDefault = r.name === name;
+      setDefaultRemote(state, name);
       return { state, result: ok(`Default remote: ${name}`) };
     }
     if (rsub === 'remove') {
       const name = args[2];
-      const before = state.remotes.length;
+      const target = state.remotes.find((r) => r.name === name);
+      if (!target) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
+      const wasDefault = defaultRemote(state)?.name === name;
       state.remotes = state.remotes.filter((r) => r.name !== name);
-      if (state.remotes.length === before) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
-      if (state.remotes.length && !state.remotes.some((r) => r.isDefault)) {
-        state.remotes[0].isDefault = true;
+      if (state.remoteStores) delete state.remoteStores[name];
+      if (wasDefault && state.remotes.length) {
+        const next = state.remotes[0]!;
+        next.isDefault = true;
+        state.remoteObjects = state.remoteStores?.[next.name] ?? [];
+        if (state.remoteStores) delete state.remoteStores[next.name];
       }
       return { state, result: ok(`Removed remote '${name}'`) };
     }
@@ -1064,9 +1621,13 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'push') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const remote = defaultRemote(state);
-    if (!remote) return { state, result: fail('ERROR: no remote configured. Use `dvc remote add -d <name> <url>`.') };
-    const tracked = Object.values(state.files).filter((f) => f.tracked && f.pointerMd5);
+    const p = parseArgv(args.slice(1), TRANSFER_VAL_FLAGS);
+    const rr = resolveRemote(state, p.val('-r', '--remote'), 'push data to the cloud');
+    if ('error' in rr) return { state, result: fail(rr.error) };
+    const tf = targetFiles(state, p.pos);
+    if ('error' in tf) return { state, result: fail(tf.error) };
+    const store = remoteStore(state, rr.name);
+    const tracked = tf.files;
     if (!tracked.length) return { state, result: ok('Nothing to push.') };
     let pushed = 0;
     const lines: string[] = [];
@@ -1084,41 +1645,43 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           continue;
         }
       }
-      if (state.cache.includes(md5) && !state.remoteObjects.includes(md5)) {
-        addRemoteObject(state, md5);
+      if (state.cache.includes(md5) && !store.includes(md5)) {
+        store.push(md5);
         pushed++;
-        lines.push(`pushed ${f.path} (${shortMd5(md5)}…) → ${remote.name}`);
-      } else if (state.remoteObjects.includes(md5)) {
-        lines.push(`${f.path} already on remote`);
+        lines.push(`pushed ${f.path} (${shortMd5(md5)}…) → ${rr.name}`);
+      } else if (store.includes(md5)) {
+        lines.push(`${f.path} already on remote '${rr.name}'`);
       }
     }
     if (!pushed && !lines.length) return finish(state, ok('Everything is up to date.'));
-    return finish(state, ok(lines.join('\n') || `Pushed ${pushed} object(s) to ${remote.name}`));
+    return finish(state, ok(lines.join('\n') || `Pushed ${pushed} object(s) to ${rr.name}`));
   }
 
   if (sub === 'fetch' || sub === 'pull') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const remote = defaultRemote(state);
-    if (!remote) return { state, result: fail('ERROR: no remote configured.') };
-    const tracked = Object.values(state.files).filter((f) => f.tracked && f.pointerMd5);
+    const p = parseArgv(args.slice(1), TRANSFER_VAL_FLAGS);
+    const rr = resolveRemote(state, p.val('-r', '--remote'), `${sub} data from the cloud`);
+    if ('error' in rr) return { state, result: fail(rr.error) };
+    const tf = targetFiles(state, p.pos);
+    if ('error' in tf) return { state, result: fail(tf.error) };
+    const store = remoteStore(state, rr.name);
     const lines: string[] = [];
-    for (const f of tracked) {
+    for (const f of tf.files) {
       const md5 = f.pointerMd5!;
-      if (state.remoteObjects.includes(md5)) {
+      if (!state.cache.includes(md5) && store.includes(md5)) {
         addCache(state, md5);
-        lines.push(`${sub === 'pull' ? 'pulled' : 'fetched'} ${f.path} (${shortMd5(md5)}…)`);
-        if (sub === 'pull') {
-          restoreWorkspaceFromPointer(state, f.path);
-        }
+        lines.push(`${sub === 'pull' ? 'pulled' : 'fetched'} ${f.path} (${shortMd5(md5)}…) ← ${rr.name}`);
       } else if (state.cache.includes(md5)) {
         lines.push(`${f.path} already in cache`);
       } else {
-        lines.push(`WARNING: ${f.path} (md5 ${shortMd5(md5)}…) not on remote`);
+        lines.push(`WARNING: ${f.path} (md5 ${shortMd5(md5)}…) not on remote '${rr.name}'`);
       }
+      if (sub === 'pull' && state.cache.includes(md5)) restoreWorkspaceFromPointer(state, f.path, store);
     }
-    return { state, result: ok(lines.join('\n') || 'Everything is up to date.') };
+    return finish(state, ok(lines.join('\n') || 'Everything is up to date.'));
   }
+
 
   if (sub === 'remove' || sub === 'destroy') {
     const err = requireInit(state);
@@ -1146,21 +1709,73 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'gc') {
     const err = requireInit(state);
     if (err) return { state, result: err };
+    const p = parseArgv(args.slice(1), ['-r', '--remote', '-j', '--jobs', '-p', '--projects', '--rev', '-n', '--num']);
+    const workspace = p.has('-w', '--workspace');
+    const allBranches = p.has('-a', '--all-branches');
+    const allTags = p.has('-T', '--all-tags');
+    const allCommits = p.has('-A', '--all-commits');
+    const allExps = p.has('--all-experiments');
+    if (!workspace && !allBranches && !allTags && !allCommits && !allExps) {
+      return {
+        state,
+        result: fail(
+          [
+            'ERROR: Either of `-w|--workspace`, `-a|--all-branches`, `-T|--all-tags`, `-A|--all-commits`, `--all-experiments`',
+            'needs to be set. Nothing was removed.',
+            'Pick the scope of objects to KEEP: -w keeps only what the workspace uses, -A keeps every commit.',
+          ].join('\n'),
+        ),
+      };
+    }
     const keep = new Set<string>();
-    for (const f of Object.values(state.files)) {
-      if (f.tracked && f.pointerMd5) keep.add(f.pointerMd5);
+    if (workspace) {
+      for (const f of Object.values(state.files)) {
+        if (f.tracked && f.pointerMd5) keep.add(f.pointerMd5);
+      }
+      for (const stage of state.pipeline) {
+        for (const o of stage.outs) {
+          const f = state.files[o];
+          if (f?.present && !f.tracked) keep.add(f.contentId);
+        }
+      }
     }
-    for (const c of state.gitCommits) {
+    const keepCommit = (c: GitCommit | undefined) => {
+      if (!c) return;
       for (const md5 of Object.values(c.pointers)) keep.add(md5);
+      for (const md5 of Object.values(c.outs ?? {})) keep.add(md5);
+    };
+    if (allCommits) for (const c of state.gitCommits) keepCommit(c);
+    // The simulator has one branch (main): its tip is HEAD. There are no tags.
+    if (allBranches) keepCommit(state.gitCommits[state.gitCommits.length - 1]);
+    if (allExps) {
+      for (const e of state.experiments) for (const md5 of Object.values(e.outputs ?? {})) keep.add(md5);
+      for (const f of Object.values(state.files)) if (f.tracked && f.pointerMd5) keep.add(f.pointerMd5);
     }
-    const before = state.cache.length;
+    void allTags;
     const removed = state.cache.filter((m) => !keep.has(m));
     state.cache = state.cache.filter((m) => keep.has(m));
-    return {
-      state,
-      result: ok(removed.length ? `Removed ${before - state.cache.length} unused cache object(s).` : 'Nothing to collect.'),
-    };
+    const lines = [
+      removed.length
+        ? `Removed ${removed.length} unused cache object(s) (kept: ${[workspace && 'workspace', allBranches && 'branch tips', allTags && 'tags', allCommits && 'all commits', allExps && 'experiments'].filter(Boolean).join(', ')}).`
+        : 'Nothing to collect in the local cache.',
+    ];
+    if (p.has('-c', '--cloud')) {
+      const rr = resolveRemote(state, p.val('-r', '--remote'), 'garbage collect the remote');
+      if ('error' in rr) return { state, result: fail(rr.error) };
+      const store = remoteStore(state, rr.name);
+      const gone = store.filter((m) => !keep.has(m));
+      store.splice(0, store.length, ...store.filter((m) => keep.has(m)));
+      lines.push(
+        gone.length
+          ? `Removed ${gone.length} object(s) from remote '${rr.name}' as well (--cloud).`
+          : `Nothing to collect on remote '${rr.name}'.`,
+      );
+    } else if (removed.length) {
+      lines.push('The remote storage was not touched: use --cloud (-c) to clean it too.');
+    }
+    return finish(state, ok(lines.join('\n')));
   }
+
 
   if (sub === 'stage') {
     const err = requireInit(state);
@@ -1184,21 +1799,8 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         }
       }
       const outDirs = parsed.outs.filter((o) => isDirOut(o));
-      // stage flags from raw args (advanced course surface)
-      const alwaysChanged = args.includes('--always-changed');
-      const noCache: string[] = [];
+      const { alwaysChanged, noCache, wdir } = parsed;
       const external: string[] = [];
-      const wIdx = args.indexOf('--wdir');
-      const wdir = wIdx >= 0 ? args[wIdx + 1] : undefined;
-      const foreachIdx = args.indexOf('--foreach');
-      const foreachList =
-        foreachIdx >= 0
-          ? (args[foreachIdx + 1] ?? '').split(',').filter(Boolean)
-          : [];
-      for (let i = 2; i < args.length; i++) {
-        if (args[i] === '--outs-no-cache' && args[i + 1]) noCache.push(args[i + 1]!);
-        if ((args[i] === '-O' || args[i] === '--outs-no-cache') && args[i + 1]) noCache.push(args[i + 1]!);
-      }
       for (const o of parsed.outs) {
         if (o.includes('://') || o.startsWith('s3://') || o.startsWith('gs://')) external.push(o);
       }
@@ -1219,16 +1821,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         noCache,
         external,
         wdir,
-        foreach: foreachList,
       };
-      if (foreachList.length) {
-        for (const key of foreachList) {
-          const expanded = `${parsed.name}[${key}]`;
-          if (!state.pipeline.some((s) => s.name === expanded)) {
-            state.pipeline.push({ ...stage, name: expanded, upToDate: false });
-          }
-        }
-      }
       state.files['dvc.yaml'] = makeFile('dvc.yaml', 'yaml', {
         contentId: fakeMd5(`dvc.yaml:${pipelineSignature(state)}`),
       });
@@ -1279,9 +1872,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         logs.push(...reproStage(state, s));
       }
     }
-    state.files['dvc.lock'] = makeFile('dvc.lock', 'yaml', {
-      contentId: fakeMd5(`lock:${pipelineSignature(state)}:${JSON.stringify(state.metrics)}`),
-    });
+    writeLock(state);
     return finish(state, ok(logs.join('\n')));
   }
 
@@ -1361,73 +1952,6 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     return { state, result: fail('Usage: dvc metrics show|diff') };
   }
 
-  if (sub === 'live') {
-    // DVCLive-style instrumentation (simulated API surface used in courses).
-    const lsub = args[1] ?? 'status';
-    if (lsub === 'start' || lsub === 'init') {
-      state.live = { active: true, step: 0, metrics: {}, images: [], plotData: [] };
-      return finish(state, ok('DVCLive: Live(dir="dvclive_logs") started (simulated).\nIn real code: with Live() as live: ...'));
-    }
-    if (lsub === 'log') {
-      const kind = args[2]; // metric|image|plot|param
-      const kv = args[3];
-      if (!state.live.active) state.live.active = true;
-      state.live.step += 1;
-      if (kind === 'metric' && kv) {
-        const p = parseKeyValue(kv);
-        if (!p) return { state, result: fail('Usage: dvc live log metric name=value') };
-        const arr = state.live.metrics[p.key] ?? [];
-        arr.push(Number(p.value));
-        state.live.metrics[p.key] = arr;
-        state.metrics[`live:${p.key}`] = Number(p.value);
-        state.plots[p.key] = arr;
-        return finish(state, ok(`live.log_metric('${p.key}', ${p.value})  step=${state.live.step}`));
-      }
-      if (kind === 'image' && kv) {
-        state.live.images.push(kv);
-        return finish(state, ok(`live.log_image('${kv}')`));
-      }
-      if (kind === 'plot' && kv) {
-        state.live.plotData.push(kv);
-        state.plots[kv.split('/').pop() ?? kv] = [0.2, 0.35, 0.5, 0.72];
-        return finish(state, ok(`live.log_plot('${kv}')  (series registered for plots show)`));
-      }
-      if (kind === 'param' && kv) {
-        const p = parseKeyValue(kv);
-        if (p) setParam(state, p.key, p.value);
-        return finish(state, ok(`live.log_param('${p?.key}', ${p?.value})`));
-      }
-      return { state, result: fail('Usage: dvc live log metric|image|plot|param …') };
-    }
-    if (lsub === 'report' || lsub === 'make-report') {
-      return finish(
-        state,
-        ok(
-          [
-            'DVCLive HTML report (simulated): dvclive_reports/report.html',
-            `  metrics steps: ${state.live.step}`,
-            `  series: ${Object.keys(state.live.metrics).join(', ') || '(none)'}`,
-            `  images: ${state.live.images.length}  plots: ${state.live.plotData.length}`,
-            'In real projects Live.make_report() writes browsable HTML + dvc.yaml metrics/plots hooks.',
-          ].join('\n'),
-        ),
-      );
-    }
-    return {
-      state,
-      result: ok(
-        [
-          'DVCLive (simulated API used in courses):',
-          '  dvc live start',
-          '  dvc live log metric acc=0.92',
-          '  dvc live log image confusion.png',
-          '  dvc live log plot roc.json',
-          '  dvc live log param lr=0.05',
-          '  dvc live report',
-        ].join('\n'),
-      ),
-    };
-  }
 
   if (sub === 'queue') {
     const qsub = args[1] ?? 'status';
@@ -1450,15 +1974,8 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
         for (const [k, v] of Object.entries(q.params)) setParam(state, k, v);
         for (const st of state.pipeline) st.upToDate = false;
         for (const st of state.pipeline) logs.push(...reproStage(state, st));
-        const id = expId(JSON.stringify(q.params) + state.experiments.length);
-        state.experiments.push({
-          id,
-          name: id,
-          commitRef: state.gitCommits[state.gitCommits.length - 1]?.hash ?? 'HEAD',
-          params: { ...state.params },
-          metrics: { ...state.metrics },
-        });
-        logs.push(`  finished ${id}`);
+        const run = recordExperiment(state);
+        logs.push(`  finished ${run.id}`);
       }
       state.expQueue = [];
       return finish(state, ok(logs.join('\n')));
@@ -1473,11 +1990,27 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'update') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const path = args[1];
-    if (!path) return { state, result: fail('Usage: dvc update <path.dvc>') };
+    const up = parseArgv(args.slice(1), ['--rev', '-j', '--jobs', '-r', '--remote']);
+    const path = up.pos[0];
+    if (!path) return { state, result: fail('Usage: dvc update [--rev <rev>] <path.dvc>') };
     const dataPath = path.endsWith('.dvc') ? path.slice(0, -4) : path;
     const f = state.files[dataPath];
-    if (!f || !f.tracked) return { state, result: fail(`ERROR: '${path}' is not an imported .dvc target.`) };
+    if (!f || !f.tracked) return { state, result: fail(`ERROR: '${path}' does not exist or is not a DVC-tracked output.`) };
+    if (!f.importedFrom) {
+      return {
+        state,
+        result: fail(
+          [
+            `ERROR: failed to update '${path}' - the .dvc file is not an import.`,
+            '`dvc update` only works on .dvc files created by `dvc import` or `dvc import-url`.',
+            'To record a new version of data you track yourself, run `dvc add` again.',
+          ].join('\n'),
+        ),
+      };
+    }
+    const newRev = up.val('--rev');
+    const oldRev = f.importedFrom.rev;
+    if (newRev) f.importedFrom = { ...f.importedFrom, rev: newRev };
     const v = (state.dataVersions[dataPath] ?? 0) + 1;
     state.dataVersions[dataPath] = v;
     f.contentId = fakeMd5(`import:${dataPath}:v${v}`);
@@ -1485,114 +2018,22 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     f.present = true;
     f.dirty = false;
     addCache(state, f.contentId);
-    return finish(state, ok(`Updated ${path} from upstream → md5 ${shortMd5(f.contentId)}…`));
-  }
-
-  if (sub === 'api') {
-    const asub = args[1];
-    if (asub === 'read') {
-      const path = args[2] || 'data/data.xml';
-      return finish(
-        state,
-        ok(
-          [
-            `[dvc.api.read] Streaming content of '${path}' from remote (rev=HEAD):`,
-            `<xml><sample id="1" feature="0.82"/><sample id="2" feature="0.91"/></xml>`,
-            `Direct byte stream loaded in Python memory without touching local workspace.`,
-          ].join('\n'),
-        ),
-      );
-    }
-    if (asub === 'get-url' || asub === 'get_url') {
-      const path = args[2] || 'data/data.xml';
-      return finish(
-        state,
-        ok(
-          [
-            `[dvc.api.get_url] Direct storage URL for '${path}':`,
-            `s3://mybucket/dvcstore/files/md5/a1/b2c3d4e5f6`,
-            `External frameworks (PyTorch DataLoader, TF Dataset) stream directly from cloud object store.`,
-          ].join('\n'),
-        ),
-      );
-    }
-    if (asub === 'open') {
-      const path = args[2] || 'data/data.xml';
-      return finish(
-        state,
-        ok(
-          [
-            `[dvc.api.open] Context manager opened '${path}':`,
-            `with dvc.api.open('${path}', mode='r', repo='...') as fd:`,
-            `    data = fd.read()`,
-            `Streamed 1,024 bytes. Local workspace untouched.`,
-          ].join('\n'),
-        ),
-      );
-    }
-    if (asub === 'params' || asub === 'params_show') {
-      return finish(
-        state,
-        ok(
-          `[dvc.api.params_show] Current repository params at HEAD:\n${JSON.stringify(state.params, null, 2)}`,
-        ),
-      );
-    }
     return finish(
       state,
       ok(
-        [
-          'dvc.api (Python SDK) — programmatic data and model access:',
-          '  dvc.api.read(path, repo=..., rev=..., remote=...)     # Load content directly into Python memory',
-          '  dvc.api.get_url(path, repo=..., rev=...)             # Direct cloud URL (S3/GCS/Azure)',
-          '  dvc.api.open(path, repo=..., rev=...)                # Standard file-like context manager',
-          '  dvc.api.params_show(repo=..., rev=...)               # Read params at any Git tag/branch',
-          '',
-          'Simulator commands: `dvc api read [path]`, `dvc api get-url [path]`, `dvc api open [path]`, `dvc api params`',
-        ].join('\n'),
-      ),
-    );
-  }
-
-  if (sub === 'cml') {
-    if (args[1] === 'runner') {
-      const isSingleShot = args.includes('--single-shot');
-      const cloudArg = args.find((a) => a.startsWith('--cloud=') || a.startsWith('--cloud'));
-      const cloudType = args.find((a) => a.startsWith('--cloud-type=') || a.startsWith('--cloud-type'));
-      return finish(
-        state,
-        ok(
-          [
-            'CML Cloud Runner Provisioning:',
-            `  Provider:   ${cloudArg ? cloudArg.replace(/^--cloud=?/, '') : 'AWS EC2'}`,
-            `  Instance:   ${cloudType ? cloudType.replace(/^--cloud-type=?/, '') : 'g4dn.xlarge (1x NVIDIA T4 GPU)'}`,
-            `  Lifecycle:  ${isSingleShot ? 'Single-shot (auto-terminates upon job completion — 0$ idle cost)' : 'Persistent'}`,
-            '  Status:     Provisioned -> Connected to GitHub Actions -> Running job -> Cleaned up',
-          ].join('\n'),
-        ),
-      );
-    }
-    const body = args.slice(1).join(' ') || 'metrics update';
-    return finish(
-      state,
-      ok(
-        [
-          `CML report comment posted (simulated): ${body}`,
-          'Typical CI: checkout → dvc pull → dvc repro → cml comment with metrics/plots',
-          'See cml.dev for GitHub/GitLab actions templates.',
-        ].join('\n'),
+        `Updated ${path} from ${f.importedFrom.url}${newRev ? ` (rev ${oldRev ?? 'HEAD'} → ${newRev})` : ''} → md5 ${shortMd5(f.contentId)}…`,
       ),
     );
   }
 
   if (sub === 'plots') {
     const plsub = args[1] ?? 'show';
-    const tIdx = args.indexOf('--template');
+    const tIdx = args.findIndex((a) => a === '--template' || a === '-t');
     const template = tIdx >= 0 ? args[tIdx + 1] : undefined;
     const series = state.plots;
     const render = (label: string) => {
       const names = Object.keys(series);
-      if (!names.length) return `No plots data. Run \`dvc repro\` or \`dvc live log plot …\` first.`;
+      if (!names.length) return `No plots data. Run \`dvc repro\`, \`dvc exp run\` or your DVCLive-instrumented script first.`;
       const lines = [label + (template ? `  template=${template}` : ''), `templates: simple | linear | confusion | scatter`];
       for (const name of names) {
         const pts = series[name] ?? [];
@@ -1613,29 +2054,24 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   if (sub === 'get' || sub === 'import' || sub === 'import-url') {
     const err = requireInit(state);
     if (err) return { state, result: err };
-    const url = args[1];
-    const outIdx = args.indexOf('-o');
-    const positionalOut = args[2] && !args[2].startsWith('-') ? args[2] : undefined;
-    const out = outIdx >= 0 ? args[outIdx + 1] : positionalOut ?? (sub === 'import-url' ? 'data/imported.bin' : 'data/registry.xml');
+    const gp = parseArgv(args.slice(1), ['-o', '--out', '--rev', '-j', '--jobs']);
+    const url = gp.pos[0];
+    const positionalOut = gp.pos[1];
+    const out = gp.val('-o', '--out') ?? positionalOut ?? (sub === 'import-url' ? 'data/imported.bin' : 'data/registry.xml');
     if (!url && sub !== 'import-url') {
       return { state, result: fail(`Usage: dvc ${sub} <url> [-o <path>]`) };
     }
     const md5 = fakeMd5(`${sub}:${url ?? 'url'}:${out}`);
+    const tracks = sub === 'import' || sub === 'import-url';
     state.files[out] = makeFile(out, 'data', {
       contentId: md5,
-      tracked: false,
+      tracked: tracks,
+      pointerMd5: tracks ? md5 : undefined,
       present: true,
-      gitignored: true,
+      gitignored: tracks,
+      importedFrom: tracks ? { url: url ?? '', path: positionalOut, rev: gp.val('--rev') } : undefined,
     });
-    if (sub === 'import') {
-      // import also records .dvc and tracks
-      state.files[out] = makeFile(out, 'data', {
-        contentId: md5,
-        tracked: true,
-        pointerMd5: md5,
-        present: true,
-        gitignored: true,
-      });
+    if (tracks) {
       state.files[`${out}.dvc`] = makeFile(`${out}.dvc`, 'dvc');
       addCache(state, md5);
     }
@@ -1648,12 +2084,13 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           sub === 'get'
             ? '  get = copy without tracking (data registry pattern)'
             : sub === 'import'
-              ? '  import = versioned dependency on an external DVC project (creates .dvc)'
-              : '  import-url = track external URL as data',
+              ? `  import = versioned dependency on an external DVC project (creates ${out}.dvc, refresh it with \`dvc update ${out}.dvc\`)`
+              : `  import-url = track an external URL as data (creates ${out}.dvc, refresh it with \`dvc update ${out}.dvc\`)`,
         ].join('\n'),
       ),
     );
   }
+
 
   if (sub === 'exp') {
     const err = requireInit(state);
@@ -1673,31 +2110,53 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       return { state, result: ok([header, ...rows].join('\n')) };
     }
     if (esub === 'diff') {
-      const a = state.experiments[state.experiments.length - 2];
-      const b = state.experiments[state.experiments.length - 1];
-      if (!a || !b) return { state, result: fail('Need at least two experiments for `dvc exp diff`.') };
-      const keys = [...new Set([...Object.keys(a.params), ...Object.keys(b.params), ...Object.keys(a.metrics), ...Object.keys(b.metrics)])];
-      const lines = [`${a.id} → ${b.id}`];
+      const refs = args.slice(2).filter((a) => !a.startsWith('-'));
+      const find = (name: string) => state.experiments.find((e) => e.id === name || e.name === name || e.id.startsWith(name));
+      const head = state.gitCommits[state.gitCommits.length - 1];
+      type Side = { label: string; params: Record<string, string | number>; metrics: Record<string, number> };
+      const baseline: Side = { label: 'HEAD', params: head?.params ?? {}, metrics: head?.metrics ?? {} };
+      const workspace: Side = { label: 'workspace', params: state.params, metrics: state.metrics };
+      const resolve = (name: string): Side | undefined => {
+        if (name === 'HEAD') return baseline;
+        if (name === 'workspace') return workspace;
+        const e = find(name);
+        return e ? { label: e.name ?? e.id, params: e.params, metrics: e.metrics } : undefined;
+      };
+      // no arguments: workspace vs the HEAD baseline (the DVC default)
+      const a = refs[0] ? resolve(refs[0]) : baseline;
+      const b = refs[1] ? resolve(refs[1]) : refs[0] ? workspace : workspace;
+      if (!a) return { state, result: fail(`ERROR: experiment '${refs[0]}' not found.`) };
+      if (!b) return { state, result: fail(`ERROR: experiment '${refs[1]}' not found.`) };
+      const lines = [`Path\t\tMetric/Param\t${a.label}\t${b.label}\tChange`];
+      const keys = new Set([
+        ...Object.keys(a.params), ...Object.keys(b.params), ...Object.keys(a.metrics), ...Object.keys(b.metrics),
+      ]);
       for (const k of keys) {
-        const va = (a.params[k] ?? a.metrics[k]) as string | number;
-        const vb = (b.params[k] ?? b.metrics[k]) as string | number;
-        if (va !== vb) lines.push(`  ${k}: ${va} → ${vb}`);
+        const isMetric = k in a.metrics || k in b.metrics;
+        const va = (isMetric ? a.metrics[k] : a.params[k]) as string | number | undefined;
+        const vb = (isMetric ? b.metrics[k] : b.params[k]) as string | number | undefined;
+        if (va === vb) continue;
+        const change = typeof va === 'number' && typeof vb === 'number' ? (vb - va).toFixed(4) : '—';
+        lines.push(`${isMetric ? 'metrics.json' : 'params.yaml'}\t${k}\t${va ?? '—'}\t${vb ?? '—'}\t${change}`);
       }
+      if (lines.length === 1) lines.push(`(no differences between ${a.label} and ${b.label})`);
       return { state, result: ok(lines.join('\n')) };
     }
     if (esub === 'run') {
       if (!state.pipeline.length) return { state, result: fail('ERROR: experiments need a pipeline. Add a stage first.') };
       const sets: Record<string, string | number> = {};
       let queued = false;
+      let expName: string | undefined;
       for (let i = 2; i < args.length; i++) {
         if (args[i] === '--queue') queued = true;
         if (args[i] === '--run-all') {
           return executeCommand(state, 'dvc queue start');
         }
-        if (args[i] === '-S' || args[i] === '--set-param' || args[i] === '-s') {
+        if (args[i] === '-S' || args[i] === '--set-param') {
           const kv = parseKeyValue(args[++i] ?? '');
           if (kv) sets[kv.key] = kv.value;
         }
+        if (args[i] === '-n' || args[i] === '--name') expName = args[++i];
       }
       if (queued) {
         const id = expId(`q${state.expQueue.length}${JSON.stringify(sets)}`);
@@ -1709,8 +2168,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
           ),
         );
       }
-      // apply param changes
-      for (const [k, v] of Object.entries(sets)) state.params[k] = v;
+      // the run happens in the workspace: params.yaml is modified, stages re-run
+      for (const [k, v] of Object.entries(sets)) {
+        state.params[k] = v;
+        markPipelineDirtyIfParamChanged(state, k);
+      }
       state.files['params.yaml'] = makeFile('params.yaml', 'params', {
         contentId: fakeMd5(`params:${JSON.stringify(state.params)}`),
       });
@@ -1719,17 +2181,12 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       for (const s of state.pipeline) {
         logs.push(...reproStage(state, s));
       }
-      const id = expId(JSON.stringify(state.params) + state.experiments.length);
-      const run = {
-        id,
-        name: id,
-        commitRef: state.gitCommits[state.gitCommits.length - 1]?.hash ?? 'HEAD',
-        params: { ...state.params },
-        metrics: { ...state.metrics },
-      };
-      state.experiments.push(run);
-      logs.push(`Queued experiment ${id}`);
-      logs.push(`Check results with \`dvc exp show\``);
+      writeLock(state);
+      const run = recordExperiment(state, expName);
+      logs.push(`Reproduced experiment(s): ${run.name}`);
+      logs.push('Experiment results have been applied to your workspace (params.yaml is now modified).');
+      logs.push(`To promote an experiment to a Git branch run:\n\n\tdvc exp branch ${run.name} <branch>`);
+      logs.push('Check results with `dvc exp show`.');
       return finish(state, ok(logs.join('\n')));
     }
     if (esub === 'apply') {
@@ -1743,26 +2200,68 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       state.files['params.yaml'] = makeFile('params.yaml', 'params', {
         contentId: fakeMd5(`params:${JSON.stringify(state.params)}`),
       });
-      for (const s of state.pipeline) s.upToDate = false;
-      return { state, result: ok(`Applied experiment ${run.id}\nparams: ${JSON.stringify(state.params)}`) };
+      // outputs come back too: restore every snapshotted file from the experiment
+      for (const [path, contentId] of Object.entries(run.outputs ?? {})) {
+        const f = state.files[path];
+        if (f) {
+          f.contentId = contentId;
+          f.present = true;
+          if (f.tracked) f.pointerMd5 = contentId;
+        } else {
+          state.files[path] = makeFile(path, 'data', { contentId, present: true });
+        }
+        addCache(state, contentId);
+      }
+      for (const s of state.pipeline) {
+        const sig = run.stageSigs?.[s.name];
+        if (sig) {
+          s.lastRunSig = sig;
+          s.upToDate = stageRunSig(s, state) === sig;
+          s.stale = s.upToDate ? undefined : s.stale;
+          if (s.upToDate) s.locked = true;
+        } else {
+          s.upToDate = false;
+        }
+      }
+      writeLock(state);
+      return {
+        state,
+        result: ok(
+          `Changes for experiment '${run.name ?? run.id}' have been applied to your current workspace.\nparams: ${JSON.stringify(state.params)}\nParams, metrics and outputs are restored; commit them with Git to make the winner the new baseline.`,
+        ),
+      };
     }
-    if (esub === 'push') {
-      const remote = args[2] || defaultRemote(state)?.name || 'origin';
+    if (esub === 'push' || esub === 'pull') {
+      const target = args.slice(2).find((a) => !a.startsWith('-')) ?? 'origin';
+      const gitRemotes = state.gitRemotes ?? [];
+      if (!gitRemotes.includes(target)) {
+        const isDvcRemote = state.remotes.some((r) => r.name === target);
+        return {
+          state,
+          result: fail(
+            isDvcRemote
+              ? [
+                  `ERROR: '${target}' is a DVC remote (data storage), not a Git remote.`,
+                  `\`dvc exp ${esub}\` moves experiment refs through a Git remote such as \`origin\` (see \`git remote -v\`);`,
+                  'the experiment data itself goes to the DVC remote with the usual `dvc push` mechanism (-r selects it).',
+                ].join('\n')
+              : `ERROR: unknown Git remote '${target}'. Known Git remotes: ${gitRemotes.join(', ') || '(none)'}. Add one with \`git remote add <name> <url>\`.`,
+          ),
+        };
+      }
       return finish(
         state,
         ok(
-          `Pushed ${state.experiments.length || 1} experiment(s) to remote '${remote}' (refs/exps synced).\nTeam members can now review runs with \`dvc exp pull\`.`,
+          esub === 'push'
+            ? `Pushed ${state.experiments.length || 1} experiment(s) to Git remote '${target}' (refs/exps synced).\nTeam members can now review runs with \`dvc exp pull ${target}\`.`
+            : `Pulled experiment refs from Git remote '${target}' (refs/exps synced).\nView shared team experiments with \`dvc exp show\`.`,
         ),
       );
     }
-    if (esub === 'pull') {
-      const remote = args[2] || defaultRemote(state)?.name || 'origin';
-      return finish(
-        state,
-        ok(
-          `Pulled experiment refs from remote '${remote}' (refs/exps synced).\nView shared team experiments with \`dvc exp show\`.`,
-        ),
-      );
+    if (esub === 'list') {
+      if (!state.experiments.length) return { state, result: ok('No experiments to list.') };
+      const base = state.gitCommits[state.gitCommits.length - 1]?.hash ?? 'HEAD';
+      return { state, result: ok([`${base}:`, ...state.experiments.map((e) => `\t${e.name ?? e.id} [${e.id}]`)].join('\n')) };
     }
     if (esub === 'branch') {
       const id = args[2] || (state.experiments[state.experiments.length - 1]?.id ?? 'exp-latest');
@@ -1770,12 +2269,13 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       return finish(
         state,
         ok(
-          `Created Git branch '${branchName}' from experiment '${id}'.\nGit branch is ready for push and Pull Request review.`,
+          `Created Git branch '${branchName}' from experiment '${id}'.\nTo switch to the new branch run:\n\n\tgit checkout ${branchName}\nThe branch is ready for push and Pull Request review.`,
         ),
       );
     }
     return { state, result: fail('Usage: dvc exp [run|show|apply|diff|push|pull|branch]') };
   }
+
 
   return { state, result: fail(`ERROR: unknown command 'dvc ${sub}'. Type \`help\`.`) };
 }

@@ -19,6 +19,10 @@ export interface WorkspaceFile {
   gitignored: boolean;
   /** True when this path represents a directory of files (.dir manifest). */
   isDir?: boolean;
+  /** Set by `dvc import` / `dvc import-url`: the upstream this .dvc file points at. */
+  importedFrom?: { url: string; path?: string; rev?: string };
+  /** Text content of files written by shell redirection (`dvc metrics show --md > report.md`). */
+  text?: string;
 }
 
 export interface DvcPointer {
@@ -46,6 +50,10 @@ export interface PipelineStage {
   outDirs?: string[];
   /** Signature of last successful run — powers the run cache. */
   lastRunSig?: string;
+  /** Why the stage is stale (filled by `edit`, read by `dvc status`, cleared by repro). */
+  stale?: { deps: string[]; params: string[] };
+  /** True once the stage has been reproduced at least once (dvc.lock has an entry). */
+  locked?: boolean;
 }
 
 export interface ExperimentRun {
@@ -54,6 +62,10 @@ export interface ExperimentRun {
   commitRef: string;
   params: Record<string, string | number>;
   metrics: Record<string, number>;
+  /** Pipeline outputs (path -> content id) as the experiment left them in the workspace. */
+  outputs?: Record<string, string>;
+  /** Run signature of every stage after the experiment ran. */
+  stageSigs?: Record<string, string>;
 }
 
 export interface GitCommit {
@@ -67,6 +79,10 @@ export interface GitCommit {
   metrics: Record<string, number>;
   /** Paths that were staged when this commit was created. */
   files: string[];
+  /** Content id of every staged path at commit time (used by `git add .`). */
+  blobs?: Record<string, string>;
+  /** Cached pipeline outputs (path -> content id) referenced by this commit (dvc.lock). */
+  outs?: Record<string, string>;
 }
 
 export interface RepoState {
@@ -76,8 +92,12 @@ export interface RepoState {
   files: Record<string, WorkspaceFile>;
   /** md5 present in .dvc/cache */
   cache: string[];
-  /** md5 present in remote storage */
+  /** md5 present in the default remote's storage (other remotes live in remoteStores). */
   remoteObjects: string[];
+  /** Object storage of the non-default remotes, keyed by remote name. */
+  remoteStores?: Record<string, string[]>;
+  /** Git remotes (`git remote add`); `dvc exp push/pull` talk to these, not to DVC remotes. */
+  gitRemotes?: string[];
   pipeline: PipelineStage[];
   params: Record<string, string | number>;
   metrics: Record<string, number>;
@@ -103,12 +123,16 @@ export interface RepoState {
     metrics: Record<string, number[]>;
     images: string[];
     plotData: string[];
+    /** True when src/train.py already contains the DVCLive `Live()` calls. */
+    instrumented?: boolean;
   };
   /** Queued experiment specs (exp run --queue). */
   expQueue: { params: Record<string, string | number>; id: string }[];
   /** Paths ignored via .dvcignore. */
   dvcIgnore: string[];
   /** Extra pipeline metadata from stage flags. */
+  /** Hand-written dvc.yaml shown by `cat dvc.yaml` (foreach / matrix stages, which `dvc stage add` cannot create). */
+  dvcYaml?: string;
   stageMeta: Record<string, { alwaysChanged?: boolean; noCache?: string[]; external?: string[]; wdir?: string; desc?: string; foreach?: string[] }>;
 }
 

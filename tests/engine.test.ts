@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { executeCommand } from '../src/engine/commands';
-import { emptyState, sandboxState } from '../src/engine/state';
+import { emptyState, ensureGit, sandboxState } from '../src/engine/state';
 import { evaluateGoal } from '../src/engine/compare';
 import { allLevels } from '../src/levels';
+
+// `dvc init` needs a Git repository, so the fresh-project fixtures start with `git init` done.
+function gitRepo() {
+  const s = emptyState();
+  ensureGit(s);
+  return s;
+}
 
 function runAll(state = emptyState(), commands: string[]) {
   let s = state;
@@ -17,13 +24,13 @@ function runAll(state = emptyState(), commands: string[]) {
 
 describe('engine basics', () => {
   it('initializes DVC and stages internal files', () => {
-    const { state } = runAll(emptyState(), ['dvc init', 'git add .dvc', 'git commit -m "Initialize DVC"']);
+    const { state } = runAll(gitRepo(), ['dvc init', 'git commit -m "Initialize DVC"']);
     expect(state.initialized).toBe(true);
     expect(state.gitCommits.some((c) => c.message.includes('Initialize DVC'))).toBe(true);
   });
 
   it('dvc add creates pointer, cache entry, and gitignore', () => {
-    const { state } = runAll(emptyState(), [
+    const { state } = runAll(gitRepo(), [
       'dvc init',
       'dvc add data/data.xml',
     ]);
@@ -175,19 +182,22 @@ describe('level solutions solve goals', () => {
     expect(step2.result.output).toContain('WARNING');
   });
 
-  it('dvc api subcommands stream and inspect without workspace checkout', () => {
-    const state = sandboxState();
-    const readStep = executeCommand(state, 'dvc api read data/data.xml');
+  it('dvc.api is reached from Python one-liners; there is no `dvc api` command', () => {
+    const state = executeCommand(sandboxState(), 'dvc add data/data.xml').state;
+    const readStep = executeCommand(state, `python -c "import dvc.api; dvc.api.read('data/data.xml')"`);
     expect(readStep.result.ok).toBe(true);
     expect(readStep.result.output).toContain('dvc.api.read');
 
-    const urlStep = executeCommand(state, 'dvc api get-url data/data.xml');
+    const urlStep = executeCommand(state, `python -c "import dvc.api; print(dvc.api.get_url('data/data.xml'))"`);
     expect(urlStep.result.ok).toBe(true);
-    expect(urlStep.result.output).toContain('s3://');
+    expect(urlStep.result.output).toContain('/tmp/dvcstore/files/md5/');
 
-    const openStep = executeCommand(state, 'dvc api open data/data.xml');
+    const openStep = executeCommand(state, `python -c "import dvc.api; dvc.api.open('data/data.xml')"`);
     expect(openStep.result.ok).toBe(true);
-    expect(openStep.result.output).toContain('Context manager');
+    expect(openStep.result.output).toContain('dvc.api.open');
+
+    const cli = executeCommand(state, 'dvc api read data/data.xml');
+    expect(cli.result.ok).toBe(false);
   });
 
   it('cml runner launch provisions single-shot GPU runners', () => {

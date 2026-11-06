@@ -29,26 +29,28 @@ describe('sticky checklist across all level packs', () => {
     expect(doneFor(s, 'basics-2', 'git add')).toBe(true);
     expect(doneFor(s, 'basics-2', 'git commit')).toBe(false);
 
-    s = executeCommand(s, 'git commit -m "Add raw data"').state;
+    // The index is empty now (real Git: "nothing to commit"); the typo is fixed with --amend.
+    expect(executeCommand(s, 'git commit -m "Add raw data"').result.ok).toBe(false);
+    s = executeCommand(s, 'git commit --amend -m "Add raw data"').state;
     expect(solutionComplete(s, level.solution)).toBe(true);
   });
 
-  it('basics-3: dvc commit stays after a bad git commit retry', () => {
+  it('basics-3: dvc add stays after a bad git commit retry', () => {
     const level = getLevel('basics-3')!;
     let s = structuredClone(level.startState);
-    for (const c of ['edit data/data.xml', 'dvc commit', 'git add data/data.xml.dvc']) {
+    for (const c of ['edit data/data.xml', 'dvc add data/data.xml', 'git add data/data.xml.dvc']) {
       s = executeCommand(s, c).state;
     }
     expect(doneFor(s, 'basics-3', 'edit')).toBe(true);
-    expect(doneFor(s, 'basics-3', 'dvc commit')).toBe(true);
+    expect(doneFor(s, 'basics-3', 'dvc add')).toBe(true);
 
-    s = executeCommand(s, 'git commit').state; // failed: maybe ok if restaged
+    s = executeCommand(s, 'git commit').state; // fails: no message
     s = executeCommand(s, 'git commit -m "oops"').state;
     expect(doneFor(s, 'basics-3', 'edit')).toBe(true);
-    expect(doneFor(s, 'basics-3', 'dvc commit')).toBe(true);
+    expect(doneFor(s, 'basics-3', 'dvc add')).toBe(true);
     expect(doneFor(s, 'basics-3', 'git add')).toBe(true);
 
-    s = executeCommand(s, 'git commit -m "Dataset updates"').state;
+    s = executeCommand(s, 'git commit --amend -m "Dataset updates"').state;
     expect(solutionComplete(s, level.solution)).toBe(true);
   });
 

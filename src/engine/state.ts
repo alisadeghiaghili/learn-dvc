@@ -8,6 +8,8 @@ export function emptyState(): RepoState {
     files: {},
     cache: [],
     remoteObjects: [],
+    remoteStores: {},
+    gitRemotes: [],
     pipeline: [],
     params: {},
     metrics: {},
@@ -49,7 +51,14 @@ export function makeFile(
   };
 }
 
+/** The simulator models "this directory is a Git repository" as having at least one entry in the log. */
+export function isGitRepo(state: RepoState): boolean {
+  return state.gitCommits.length > 0;
+}
+
 export function ensureGit(state: RepoState): void {
+  if (!state.gitRemotes) state.gitRemotes = [];
+  if (!state.gitRemotes.includes('origin')) state.gitRemotes.push('origin');
   if (!state.gitCommits.length) {
     state.gitCommits.push({
       hash: '0000000',
@@ -101,6 +110,39 @@ export function addRemoteObject(state: RepoState, md5: string): void {
 
 export function defaultRemote(state: RepoState) {
   return state.remotes.find((r) => r.isDefault) ?? state.remotes[0];
+}
+
+/**
+ * Object storage of one DVC remote. The default remote's view is `state.remoteObjects`
+ * (kept for goals and the board); every other remote has its own list in `remoteStores`.
+ */
+export function remoteStore(state: RepoState, name: string): string[] {
+  if (defaultRemote(state)?.name === name) return state.remoteObjects;
+  if (!state.remoteStores) state.remoteStores = {};
+  if (!state.remoteStores[name]) state.remoteStores[name] = [];
+  return state.remoteStores[name]!;
+}
+
+/** Make `name` the default remote and swap the storage views accordingly. */
+export function setDefaultRemote(state: RepoState, name: string | undefined): void {
+  const old = defaultRemote(state);
+  const switching = Boolean(old && old.name !== name);
+  if (!state.remoteStores) state.remoteStores = {};
+  if (switching && old) state.remoteStores[old.name] = state.remoteObjects;
+  for (const r of state.remotes) r.isDefault = r.name === name;
+  if (switching && name) {
+    state.remoteObjects = state.remoteStores[name] ?? [];
+    delete state.remoteStores[name];
+  }
+}
+
+/** Path -> content id of everything Git knows about (null = committed, content not recorded). */
+export function gitTree(state: RepoState): Record<string, string | null> {
+  const tree: Record<string, string | null> = {};
+  for (const c of state.gitCommits) {
+    for (const p of c.files ?? []) tree[p] = c.blobs?.[p] ?? null;
+  }
+  return tree;
 }
 
 export function sandboxState(): RepoState {
@@ -183,10 +225,14 @@ export function removeWorkspaceFile(state: RepoState, path: string): boolean {
   return true;
 }
 
-export function restoreWorkspaceFromPointer(state: RepoState, path: string): boolean {
+export function restoreWorkspaceFromPointer(
+  state: RepoState,
+  path: string,
+  remoteObjects: string[] = state.remoteObjects,
+): boolean {
   const f = state.files[path];
   if (!f || !f.tracked || !f.pointerMd5) return false;
-  if (!state.cache.includes(f.pointerMd5) && !state.remoteObjects.includes(f.pointerMd5)) {
+  if (!state.cache.includes(f.pointerMd5) && !remoteObjects.includes(f.pointerMd5)) {
     return false;
   }
   f.present = true;
