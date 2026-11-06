@@ -409,7 +409,7 @@ export const transferLevels: LevelDef[] = [
       {
         title: 'Keeping dvc.lock honest in review',
         markdown:
-          'Treat `dvc.lock` as generated output: a PR that edits it by hand is suspicious. Two cheap CI guards: `dvc status` must print “Data and pipelines are up to date.” after checkout, and `dvc repro` on the PR must leave the file unchanged (`git diff --exit-code dvc.lock`). `dvc repro --dry` shows what would run without running it.',
+          'Treat `dvc.lock` as machine-written output: a PR that edits it by hand is suspicious. Two cheap CI guards: `dvc status` must print “Data and pipelines are up to date.” after checkout, and `dvc repro` on the PR must leave the file unchanged (`git diff --exit-code dvc.lock`). `dvc repro --dry` shows what would run without running it.',
       },
     ],
     startState: pipelineRepo(),

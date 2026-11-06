@@ -244,11 +244,11 @@ export const campLevels: LevelDef[] = [
     par: 4,
     hint: 'cat dvc.yaml; dvc stage list; dvc repro; dvc dag',
     objective:
-      'Read a `dvc.yaml` whose **foreach** expands one definition over a dictionary, reproduce every generated stage and read the DAG.',
+      'Read a `dvc.yaml` whose **foreach** expands one definition over a dictionary, reproduce every stage it produces and read the DAG.',
     learning: [
       'foreach expands one definition into many stages (featurize@a, featurize@b) — it is written in dvc.yaml, not via dvc stage add',
       '${key} and ${item.field} fill the template from each entry',
-      'Each generated stage has its own outs and invalidation; one DAG shows them all',
+      'Each stage the template produces has its own outs and invalidation; one DAG shows them all',
     ],
     fieldNotes: ['foreach beats copy-paste YAML for per-model / per-region jobs'],
     startDialog: [

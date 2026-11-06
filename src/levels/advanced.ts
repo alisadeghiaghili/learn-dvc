@@ -1141,7 +1141,7 @@ export const advancedLevels: LevelDef[] = [
       {
         title: 'Resolving dvc.lock conflicts',
         markdown:
-          '`dvc.lock` is generated, so a conflict there is not settled line by line. Take either side (`git checkout --ours dvc.lock`), re-run `dvc repro` — stages whose inputs match are skipped through the run cache — review the diff and commit. Conflicts in `dvc.yaml` or `params.yaml` need a human decision first, because they change what should run.',
+          '`dvc.lock` is written by DVC, so a conflict there is not settled line by line. Take either side (`git checkout --ours dvc.lock`), re-run `dvc repro` — stages whose inputs match are skipped through the run cache — review the diff and commit. Conflicts in `dvc.yaml` or `params.yaml` need a human decision first, because they change what should run.',
       },
     ],
     startState: (() => {
