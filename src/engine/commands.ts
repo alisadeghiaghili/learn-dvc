@@ -1279,6 +1279,9 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
   // ── git simulation ──────────────────────────────────────────
   if (cmd === 'git') {
     const sub = args[0];
+    if (!sub) {
+      return { state, result: fail('usage: git <command> [<args>]\nSupported here: init, add, commit, status, log, checkout, push, tag, remote, merge') };
+    }
     if (sub === 'init') {
       const already = isGitRepo(state);
       ensureGit(state);
@@ -2147,6 +2150,11 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     }
     if (rsub === 'default') {
       const name = args[2];
+      if (!name) {
+        // like real DVC: without a name, print the current default
+        const def = state.remotes.find((r) => r.isDefault);
+        return def ? { state, result: ok(def.name) } : { state, result: fail('ERROR: no default remote set. See `dvc remote default <name>`.') };
+      }
       const remote = state.remotes.find((r) => r.name === name);
       if (!remote) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
       setDefaultRemote(state, name);
@@ -2154,6 +2162,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
     }
     if (rsub === 'remove') {
       const name = args[2];
+      if (!name) return { state, result: fail('Usage: dvc remote remove <name>') };
       const target = state.remotes.find((r) => r.name === name);
       if (!target) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
       const wasDefault = defaultRemote(state)?.name === name;
@@ -2174,6 +2183,7 @@ function executeCommandInner(prev: RepoState, rawInput: string): { state: RepoSt
       const name = cleanArgs[0];
       const key = cleanArgs[1];
       const value = cleanArgs[2];
+      if (!name) return { state, result: fail('Usage: dvc remote modify [--local] <name> <key> <value>') };
       const remote = state.remotes.find((r) => r.name === name);
       if (!remote) return { state, result: fail(`ERROR: remote '${name}' doesn't exist.`) };
       if (!key) return { state, result: fail('Usage: dvc remote modify [--local] <name> <key> <value>') };
