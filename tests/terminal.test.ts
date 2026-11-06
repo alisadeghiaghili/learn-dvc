@@ -110,7 +110,9 @@ describe('rendering', () => {
   });
 
   it('trims the transcript to the latest 300 lines once it passes 400', () => {
-    for (let i = 0; i < 401; i++) term.push('out', `line ${i}`);
+    term.setLog(Array.from({ length: 400 }, (_x, i) => ({ kind: 'out' as const, text: `line ${i}` })));
+    expect(term.getLog()).toHaveLength(400);
+    term.push('out', 'line 400');
     const lines = term.getLog();
     expect(lines).toHaveLength(300);
     expect(lines[0]!.text).toBe('line 101');
