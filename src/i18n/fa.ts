@@ -20,9 +20,9 @@ export const fa: Catalog = {
       title: 'dvc init',
       lines: [
         'DVC افزونه‌ی گیت برای داده است، جایگزین گیت نیست.',
-        'Init فقط متادیتای محلی زیر .dvc/ می‌سازد (config، قواعد ignore).',
+        'به یک مخزن Git نیاز دارد (یا --no-scm) و فقط متادیتای محلی می‌سازد: .dvc/config، .dvc/.gitignore و .dvcignore.',
         'هنوز هیچ دیتاستی version نشده — فقط workflow را روشن کردید.',
-        'این فایل‌های کوچک را باید با گیت commit کنید تا تیم setup یکسان داشته باشد.',
+        'dvc init همین فایل‌های کوچک را خودش stage کرده است؛ commit‌شان کنید تا تیم setup یکسان داشته باشد.',
       ],
     },
     'dvc-add': {
@@ -46,9 +46,9 @@ export const fa: Catalog = {
     'dvc-commit': {
       title: 'dvc commit',
       lines: [
-        'pointer فایل .dvc را روی هش فعلی می‌نویسد و مطمئن می‌شود شیء در cache هست.',
-        'این commit سمت داده است. بعدش هنوز باید pointer را با git commit کنید.',
-        'بدون dvc commit، گیت pointerی ثبت می‌کند که دیگر به داده نمی‌خواند.',
+        'pointer فایل .dvc (یا dvc.lock) را به هش فعلی فایل به‌روز می‌کند و مطمئن می‌شود شیء در cache هست.',
+        'این commit سمت داده است برای فایل‌هایی که درجا عوض شده‌اند یا با --no-commit اضافه شده‌اند؛ برای فایل ساده‌ی ردگیری‌شده، dvc add همین کار را می‌کند.',
+        'بعد از آن باز هم pointer را با git commit کنید — وگرنه Git pointerی ثبت می‌کند که دیگر با داده نمی‌خواند.',
       ],
     },
     'dvc-remote-add': {
@@ -111,16 +111,17 @@ export const fa: Catalog = {
     'dvc-exp-run': {
       title: 'dvc exp run',
       lines: [
-        'pipeline را در بافت آزمایش اجرا می‌کند، بدون شلوغی شاخه.',
+        'pipeline را به‌صورت یک آزمایش اجرا می‌کند و نتیجه را در workspace شما می‌گذارد.',
         'پارامترهای -S / params.yaml همراه metrics برای مقایسه ثبت می‌شوند.',
-        'آزمایش‌ها first-class هستند: list، diff، اعمال برنده در فضای کاری.',
+        'هر اجرا زیر refs/exps ذخیره می‌شود: فهرست کنید، diff بگیرید، برنده را apply کنید.',
       ],
     },
     'dvc-exp-apply': {
       title: 'dvc exp apply',
       lines: [
-        'پارامتر/metrics یک آزمایش انتخاب‌شده را به فضای کاری می‌آورد.',
-        'از همین مسیر «اجرای برنده» baseline جدید می‌شود، بدون تایپ دوباره‌ی مقادیر.',
+        'پارامتر، metrics و فایل‌های خروجی یک آزمایش را به workspace برمی‌گرداند.',
+        'بعد از آن stageها به‌روزند — به dvc repro نیازی نیست.',
+        'params.yaml و dvc.lock را commit کنید تا برنده baseline جدید شود.',
       ],
     },
     edit: {
@@ -148,11 +149,11 @@ export const fa: Catalog = {
       ],
     },
     'dvc-live': {
-      title: 'dvc live (DVCLive)',
+      title: 'DVCLive (کتابخانه‌ی پایتون)',
       lines: [
-        'DVCLive پایتون را ابزارک‌گذاری می‌کند (Live / log_metric / log_plot / make_report).',
-        'اسکالرها metrics می‌شوند؛ سری‌ها plot؛ گزارش HTML برای انسان.',
-        'دوره‌های رسمی این را پل از نوت‌بوک به exp show/plots می‌دانند.',
+        'DVCLive را اسکریپت آموزش import می‌کند: `from dvclive import Live` و بعد live.log_metric / log_plot / log_image / make_report.',
+        'مقدارهای اسکالر در dvclive/metrics.json می‌روند؛ هر live.next_step() یک نقطه به plotها اضافه می‌کند.',
+        'این مسیرها را زیر metrics: / plots: در dvc.yaml بنویسید تا exp show / plots show آن‌ها را ببینند.',
       ],
     },
     'exp-queue': {
@@ -165,15 +166,16 @@ export const fa: Catalog = {
     'dvc-update': {
       title: 'dvc update',
       lines: [
-        'هدف importشده‌ی .dvc را به آخرین نسخه‌ی upstream registry تازه می‌کند.',
-        'بعد اگر import وابستگی pipeline بود repro کنید.',
+        'یک target واردشده‌ی .dvc را به آخرین نسخه‌ی upstream (یا یک --rev جدید) به‌روز می‌کند.',
+        'فقط روی فایل‌های .dvc که با dvc import یا dvc import-url ساخته شده‌اند کار می‌کند؛ برای داده‌ای که خودتان dvc add کرده‌اید دوباره dvc add بزنید.',
+        'بعد اگر import وابستگی pipeline است repro کنید.',
       ],
     },
     cml: {
       title: 'CML',
       lines: [
-        'CML از CI روی PRهای GitHub/GitLab درباره metrics/plot نظر می‌گذارد.',
-        'اسکلت CI: checkout → dvc pull → dvc repro → cml comment.',
+        'CML از CI گزارش را روی PRهای GitHub/GitLab می‌گذارد. ابزار جداگانه‌ای است (`cml comment create report.md`) و زیرفرمان dvc نیست.',
+        'اسکلت CI: checkout → dvc pull → dvc repro → dvc metrics show --md > report.md → cml comment create.',
       ],
     },
     'dvc-freeze': {
@@ -210,9 +212,9 @@ export const fa: Catalog = {
     'dvc-gc': {
       title: 'dvc gc',
       lines: [
-        'اشیای cache بدون ارجاع workspace/Git را حذف می‌کند.',
-        'قبل از gc چیزی را که تولید لازم دارد push کنید — وگرنه آخرین نسخه را می‌کشید.',
-        'CI runner: همان SHA که shipping می‌شود را gc کنید، نه کل انبار را.',
+        'اشیای cache بیرون از دامنه‌ای را که نگه می‌دارید حذف می‌کند: -w workspace، -A همه‌ی commitها، -a نوک branchها، -T tagها.',
+        'بدون پرچم دامنه اجرا نمی‌شود؛ -c / --cloud از remote هم حذف می‌کند.',
+        'قبل از gc چیزی را که تولید لازم دارد push کنید — وگرنه آخرین نسخه را پاک می‌کنید.',
       ],
     },
     'dvc-plots': {
@@ -229,14 +231,6 @@ export const fa: Catalog = {
         'params diff = نیت. metrics diff = اثر.',
         'هر دو را در بدنه‌ی PR بگذارید. ریویور نوت‌بوک باز نکند.',
         'بدون حرکت metric ادغام نکنید.',
-      ],
-    },
-    'dvc-api': {
-      title: 'dvc.api',
-      lines: [
-        'API پایتون برای خواندن داده‌ی ردگیری‌شده / exp_show از مخزن DVC.',
-        'اپ و نوت‌بوک بایت را قرض می‌گیرند بدون بازنویسی فضای کاری.',
-        'قرارداد md5 همچنان معتبر است — commit را pin کنید.',
       ],
     },
     'dvc-config': {
@@ -256,11 +250,11 @@ export const fa: Catalog = {
       ],
     },
     'dvc-exp-share': {
-      title: 'همگام‌سازی آزمایش‌ها با dvc exp push / pull / branch',
+      title: 'dvc exp push / pull / branch',
       lines: [
-        'آزمایش‌ها در رفرنس‌های مخفی گیت (refs/exps) ذخیره می‌شوند تا تاریخچه و برنچ‌ها شلوغ نشوند.',
-        '`dvc exp push` و `dvc exp pull` نتایج و هایپرپارامترها را میان اعضای تیم سینک می‌کنند.',
-        '`dvc exp branch <id> <branch>` یک آزمایش پیروز را مستقیماً به شاخه گیت برای Pull Request تبدیل می‌کند.',
+        'آزمایش‌ها در refهای سفارشی گیت (refs/exps) می‌مانند تا ریپوی تیم پر از branch نشود.',
+        '`dvc exp push <git_remote>` و `dvc exp pull <git_remote>` از یک Git remote مثل origin استفاده می‌کنند — نه remote DVC.',
+        '`dvc exp branch <id> <branch>` آزمایش تأییدشده را مستقیم به یک branch عادی گیت برای ریویوی PR تبدیل می‌کند.',
       ],
     },
     'python-dvc-api': {
@@ -291,7 +285,7 @@ export const fa: Catalog = {
     },
     dirty: {
       title: 'داده‌ی تغییریافته (dirty)',
-      body: 'بایت‌های فضای کاری ≠ md5 pointer (یا فایل نیست). dvc status نشان می‌دهد. راه‌حل: dvc commit (نسخه‌ی جدید) یا dvc checkout (دور ریختن دریفت).',
+      body: 'بایت‌های فضای کاری ≠ md5 pointer (یا فایل نیست). dvc status نشان می‌دهد. راه‌حل: dvc add (پذیرفتن نسخه‌ی جدید) یا dvc checkout (دور ریختن دریفت).',
     },
     checkout: {
       title: 'بازیابی نسخه در فضای کاری',
@@ -315,7 +309,7 @@ export const fa: Catalog = {
     },
     exp: {
       title: 'آزمایش‌ها',
-      body: 'dvc exp run خط لوله را با پارامتر/metrics ثبت‌شده اجرا می‌کند بدون انفجار شاخه. exp apply پیکربندی برنده را به فضای کاری می‌آورد؛ بعد آرتیفکت‌ها repro.',
+      body: 'dvc exp run خط لوله را با پارامتر/metrics ثبت‌شده اجرا می‌کند بدون انفجار شاخه. exp apply پارامتر، metrics و خروجی‌های برنده را به فضای کاری برمی‌گرداند؛ params.yaml و dvc.lock را commit کنید تا baseline شود.',
     },
     'run-cache': {
       title: 'run cache',
@@ -355,11 +349,11 @@ export const fa: Catalog = {
     },
     foreach: {
       title: 'مرحله‌های foreach / ماتریسی',
-      body: 'dvc stage add --foreach یک stage را به چندتا باز می‌کند (مثلاً per-model). جایگزین سطح دوره برای copy-paste stage.',
+      body: 'foreach و matrix را در dvc.yaml می‌نویسید — dvc stage add چنین گزینه‌ای ندارد. یک قالب به چند stage باز می‌شود (train@50 و train@100): جایگزین copy-paste کردن stageها.',
     },
     'external-outs': {
       title: 'داده‌ی خارجی / no-cache',
-      body: 'deps/outs می‌توانند بیرون پروژه باشند (s3://…). cache: false / -O وقتی DVC نباید بایت کپی کند. داده‌ی خارجی را با import-url ردگیری/به‌روزرسانی کنید.',
+      body: 'deps/outs می‌توانند بیرون پروژه باشند (s3://…) — قابلیتی خاص. -O / cache: false چیز دیگری است: فایل در workspace می‌ماند و هشش ردگیری می‌شود، اما بایت‌هایش بیرون از cache می‌مانند. برای داده‌ای که در bucket است import-url بهتر است.',
     },
     api: {
       title: 'dvc.api',
@@ -387,7 +381,7 @@ export const fa: Catalog = {
     },
     gc: {
       title: 'جمع‌آوری زباله',
-      body: 'dvc gc اشیای cache را که workspace/refهای گیتی که نگه می‌دارید به آن‌ها ارجاع نمی‌دهند حذف می‌کند. بعد از gc اگر هش ارجاعی فقط روی remote بود شاید dvc pull لازم باشد.',
+      body: 'dvc gc اشیای cache را که بیرون از دامنه‌ای هستند که نگه می‌دارید حذف می‌کند (-w workspace، -A همه‌ی commitها، -a/-T branchها/tagها)؛ با -c remote هم پاک می‌شود. بعد از gc اگر هش ارجاعی فقط روی remote بود شاید dvc pull لازم باشد.',
     },
     'api-handson': {
       title: 'dvc.api در اپ‌های تولید',
@@ -423,7 +417,7 @@ export const fa: Catalog = {
     },
     'exp-lifecycle': {
       title: 'چرخه حیات آزمایش‌ها (push / pull / branch)',
-      body: 'دی‌وی‌سی آزمایش‌ها را در رفرنس‌های مخفی گیت (refs/exps) ذخیره می‌کند تا شاخه‌های ریپو شلوغ نشوند. با `dvc exp push` و `dvc exp pull` نتایج و هایپرپارامترها بین اعضای تیم سینک می‌شوند. وقتی آزمایشی برنده شد، با `dvc exp branch` به یک برنچ رسمی گیت تبدیل می‌شود تا برای Pull Request ارسال گردد.',
+      body: 'دی‌وی‌سی آزمایش‌ها را در رفرنس‌های مخفی گیت (refs/exps) ذخیره می‌کند تا شاخه‌های ریپو شلوغ نشوند. `dvc exp push <git_remote>` و `dvc exp pull` اجراها را از طریق یک Git remote مثل origin بین اعضای تیم سینک می‌کنند (نه remote DVC). وقتی آزمایشی برنده شد، با `dvc exp branch` به یک برنچ رسمی گیت تبدیل می‌شود تا برای Pull Request ارسال گردد.',
     },
     'pipeline-matrix': {
       title: 'پایپ‌لاین‌های ماتریسی و foreach در dvc.yaml',
@@ -729,7 +723,7 @@ export const fa: Catalog = {
         q: 'بعد از exp apply چه چیزی تا تولید باقی است؟',
         a: [
           'هیچ — apply یعنی deploy',
-          'dvc repro آرتیفکت‌ها، dvc push، git commit release',
+          'git commit برای params.yaml و dvc.lock، dvc push برای آرتیفکت‌ها',
           'تغییر نام شاخه',
         ],
         correct: 1,

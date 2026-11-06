@@ -20,9 +20,9 @@ export const en: Catalog = {
       title: 'dvc init',
       lines: [
         'DVC is a Git extension for data, not a replacement for Git.',
-        'Init only creates local metadata under .dvc/ (config, ignore rules).',
+        'It needs a Git repository (or --no-scm) and only creates local metadata: .dvc/config, .dvc/.gitignore, .dvcignore.',
         'No dataset is versioned yet — you just enabled the workflow.',
-        'Those tiny files must be committed with Git so teammates get the same DVC setup.',
+        'dvc init already staged those tiny files; commit them so teammates get the same DVC setup.',
       ],
     },
     'dvc-add': {
@@ -46,9 +46,9 @@ export const en: Catalog = {
     'dvc-commit': {
       title: 'dvc commit',
       lines: [
-        'Updates the .dvc pointer to the current file hash and ensures cache has the object.',
-        'This is the data-side commit. You still git commit the pointer afterward.',
-        'Without dvc commit, Git would record a pointer that no longer matches the data.',
+        'Updates the .dvc pointer (or dvc.lock) to the current file hash and ensures the cache has the object.',
+        'It is the data-side commit for files changed in place or added with --no-commit; for a plain tracked file, dvc add does the same job.',
+        'You still git commit the pointer afterward — otherwise Git records a pointer that no longer matches the data.',
       ],
     },
     'dvc-remote-add': {
@@ -111,16 +111,17 @@ export const en: Catalog = {
     'dvc-exp-run': {
       title: 'dvc exp run',
       lines: [
-        'Runs the pipeline in an experiment context without branch spam.',
+        'Runs the pipeline as an experiment and leaves the results in your workspace.',
         'Params from -S / params.yaml are recorded with metrics for comparison.',
-        'Experiments are first-class: list, diff, apply winners back to the workspace.',
+        'Every run is saved under refs/exps: list it, diff it, apply the winner.',
       ],
     },
     'dvc-exp-apply': {
       title: 'dvc exp apply',
       lines: [
-        'Promotes a chosen experiment’s params/metrics into the workspace.',
-        'That is how a “winning run” becomes the new baseline without retyping values.',
+        'Restores an experiment’s params, metrics and output files into the workspace.',
+        'Stages are then up to date — no dvc repro needed.',
+        'Commit params.yaml and dvc.lock to make the winner the new baseline.',
       ],
     },
     edit: {
@@ -148,11 +149,11 @@ export const en: Catalog = {
       ],
     },
     'dvc-live': {
-      title: 'dvc live (DVCLive)',
+      title: 'DVCLive (Python library)',
       lines: [
-        'DVCLive instruments Python (Live / log_metric / log_plot / make_report).',
-        'Scalars become metrics; series become plots; HTML report for humans.',
-        'Official courses treat this as the bridge from notebook to exp show/plots.',
+        'DVCLive is imported by the training script: `from dvclive import Live`, then live.log_metric / log_plot / log_image / make_report.',
+        'Scalars become dvclive/metrics.json; every live.next_step() adds a point to the plots.',
+        'List those paths under metrics: / plots: in dvc.yaml and exp show / plots show pick them up.',
       ],
     },
     'exp-queue': {
@@ -165,15 +166,16 @@ export const en: Catalog = {
     'dvc-update': {
       title: 'dvc update',
       lines: [
-        'Refreshes an imported .dvc target to the latest upstream registry version.',
+        'Refreshes an imported .dvc target to the latest upstream version (or a new --rev).',
+        'It only works on .dvc files created by dvc import or dvc import-url; for data you dvc add yourself, run dvc add again.',
         'Then repro if the import is a pipeline dep.',
       ],
     },
     cml: {
       title: 'CML',
       lines: [
-        'CML comments metrics/plots on GitHub/GitLab PRs from CI.',
-        'CI skeleton: checkout → dvc pull → dvc repro → cml comment.',
+        'CML posts reports to GitHub/GitLab PRs from CI. It is a separate CLI (`cml comment create report.md`), not a dvc subcommand.',
+        'CI skeleton: checkout → dvc pull → dvc repro → dvc metrics show --md > report.md → cml comment create.',
       ],
     },
     'dvc-freeze': {
@@ -210,9 +212,9 @@ export const en: Catalog = {
     'dvc-gc': {
       title: 'dvc gc',
       lines: [
-        'Removes cache objects not referenced by the workspace/Git refs you keep.',
+        'Removes cache objects outside the scope you keep: -w workspace, -A all commits, -a branch tips, -T tags.',
+        'Without a scope flag it refuses to run; -c / --cloud also deletes from the remote.',
         'Push what production still needs before you gc — or you delete the only copy.',
-        'CI runners should gc the SHA they ship, not the whole warehouse.',
       ],
     },
     'dvc-plots': {
@@ -229,14 +231,6 @@ export const en: Catalog = {
         'params diff = intent. metrics diff = effect.',
         'Paste both into the ML PR body — reviewers should not open the notebook.',
         'No metric movement means do not merge vibes.',
-      ],
-    },
-    'dvc-api': {
-      title: 'dvc.api',
-      lines: [
-        'Python API to read tracked data / exp_show from a DVC repo.',
-        'Apps and notebooks borrow bytes without rewriting the workspace.',
-        'Still honor the md5 contract — pin the commit you read.',
       ],
     },
     'dvc-config': {
@@ -259,7 +253,7 @@ export const en: Catalog = {
       title: 'dvc exp push / pull / branch',
       lines: [
         'Experiments live in custom Git refs (refs/exps), avoiding branch sprawl in team repositories.',
-        '`dvc exp push` and `dvc exp pull` synchronize experiment runs and metrics across team members.',
+        '`dvc exp push <git_remote>` and `dvc exp pull <git_remote>` use a Git remote such as origin — not a DVC remote.',
         '`dvc exp branch <id> <branch>` promotes a validated experiment directly into a standard Git branch for PR review.',
       ],
     },
@@ -291,7 +285,7 @@ export const en: Catalog = {
     },
     dirty: {
       title: 'Dirty data',
-      body: 'Workspace bytes ≠ pointer md5 (or file missing). dvc status surfaces this. Fix: dvc commit (accept new version) or dvc checkout (discard drift).',
+      body: 'Workspace bytes ≠ pointer md5 (or file missing). dvc status surfaces this. Fix: dvc add (accept the new version) or dvc checkout (discard drift).',
     },
     checkout: {
       title: 'Materialize version',
@@ -315,7 +309,7 @@ export const en: Catalog = {
     },
     exp: {
       title: 'Experiments',
-      body: 'dvc exp run executes the pipeline with recorded params/metrics without branch explosion. exp apply promotes a winner’s config into the workspace; then repro artifacts.',
+      body: 'dvc exp run executes the pipeline with recorded params/metrics without branch explosion. exp apply restores a winner’s params, metrics and outputs into the workspace; commit params.yaml and dvc.lock to make it the baseline.',
     },
     'run-cache': {
       title: 'Run cache',
@@ -355,11 +349,11 @@ export const en: Catalog = {
     },
     foreach: {
       title: 'foreach / matrix stages',
-      body: 'dvc stage add --foreach expands one stage into many (e.g. per-model). Course-level alternative to copy-pasting stages.',
+      body: 'foreach and matrix are written in dvc.yaml — dvc stage add has no such option. One template expands into many stages (train@50, train@100): the alternative to copy-pasting stages.',
     },
     'external-outs': {
       title: 'External data / no-cache',
-      body: 'Deps/outs may live outside the project (s3://…). Use cache: false / -O when DVC must not copy bytes. update/track external datasets with import-url.',
+      body: 'Deps/outs may live outside the project (s3://…) — a niche feature. -O / cache: false is something else: the file stays in the workspace and its hash is tracked, but its bytes stay out of the cache. For data in a bucket prefer dvc import-url.',
     },
     api: {
       title: 'dvc.api',
@@ -387,7 +381,7 @@ export const en: Catalog = {
     },
     gc: {
       title: 'Garbage collection',
-      body: 'dvc gc removes cache objects not referenced by current workspace/Git refs you keep. After gc you may need dvc pull if a referenced hash was on remote only.',
+      body: 'dvc gc removes cache objects outside the scope you keep (-w workspace, -A all commits, -a/-T branches/tags); add -c to clean the remote too. After gc you may need dvc pull if a referenced hash was only on the remote.',
     },
     'api-handson': {
       title: 'dvc.api in production apps',
@@ -423,7 +417,7 @@ export const en: Catalog = {
     },
     'exp-lifecycle': {
       title: 'Experiment Lifecycle (push / pull / branch)',
-      body: 'DVC stores experiments in hidden Git references (refs/exps) so repositories stay uncluttered. `dvc exp push <remote>` and `dvc exp pull` share experimental runs across team members. Once an experiment is validated, `dvc exp branch <exp-id> <branch-name>` converts it into a standard Git branch ready for Pull Request review.',
+      body: 'DVC stores experiments in hidden Git references (refs/exps) so repositories stay uncluttered. `dvc exp push <git_remote>` and `dvc exp pull` share experimental runs through a Git remote such as origin (not a DVC remote). Once an experiment is validated, `dvc exp branch <exp-id> <branch-name>` converts it into a standard Git branch ready for Pull Request review.',
     },
     'pipeline-matrix': {
       title: 'Matrix & Foreach Pipelines',
@@ -699,7 +693,7 @@ export const en: Catalog = {
       },
       {
         q: 'After exp apply, what still must happen before prod?',
-        a: ['Nothing — apply deploys', 'dvc repro artifacts, dvc push, git commit the release', 'Rename the branch'],
+        a: ['Nothing — apply deploys', 'git commit params.yaml + dvc.lock, dvc push the artifacts', 'Rename the branch'],
         correct: 1,
       },
       {
