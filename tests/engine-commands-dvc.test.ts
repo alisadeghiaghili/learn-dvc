@@ -242,6 +242,21 @@ describe('dvc add / commit / checkout / remove', () => {
     expect(state.files['data/data.xml.dvc']).toBeUndefined();
   });
 
+  it('dvc remove detaches the output from pipeline stages and marks them out of date', () => {
+    const s = setup(withPipeline(), 'dvc repro');
+    Object.assign(s.files['model.pkl']!, { tracked: true, pointerMd5: s.files['model.pkl']!.contentId });
+    const { last, state } = run(s, 'dvc remove model.pkl');
+    expect(last.text).toBe('Removed DVC tracking for model.pkl');
+    expect(state.pipeline[0]!.outs).toEqual([]);
+    expect(state.pipeline[0]!.upToDate).toBe(false);
+  });
+
+  it('git checkout of a path-like name that is not a revision is rejected', () => {
+    const { last } = run(repo(), 'git checkout feature/login');
+    expect(last.result.ok).toBe(false);
+    expect(last.text).toBe("ERROR: unexpected git checkout target 'feature/login'");
+  });
+
   it('dvc destroy is refused', () => {
     const { last } = run(repo(), 'dvc destroy');
     expect(last.result.ok).toBe(false);
